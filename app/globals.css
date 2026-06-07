@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+:root {
+  --terminal-bg: #080b12;
+  --terminal-sidebar: #0a0e17;
+  --terminal-surface: #0f1419;
+  --terminal-elevated: #151b24;
+  --terminal-border: #1e2736;
+  --terminal-border-strong: #2a3548;
+  --terminal-text: #e8edf4;
+  --terminal-muted: #7a8ba3;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --profit: #22c55e;
+  --loss: #ef4444;
+  --warning: #f59e0b;
+}
+
+@theme inline {
+  --color-terminal-bg: var(--terminal-bg);
+  --color-terminal-sidebar: var(--terminal-sidebar);
+  --color-terminal-surface: var(--terminal-surface);
+  --color-terminal-elevated: var(--terminal-elevated);
+  --color-terminal-border: var(--terminal-border);
+  --color-terminal-border-strong: var(--terminal-border-strong);
+  --color-terminal-text: var(--terminal-text);
+  --color-terminal-muted: var(--terminal-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-profit: var(--profit);
+  --color-loss: var(--loss);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--terminal-bg);
+  color: var(--terminal-text);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Scrollbar styling for terminal feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--terminal-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--terminal-border-strong);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--terminal-muted);
+}
