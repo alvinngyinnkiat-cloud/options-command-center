@@ -26,7 +26,11 @@ import {
   buildUsMarketData,
 } from "@/lib/ticker-positions/market-aggregate";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import {
+  MOCK_USER_ID,
+  warnMissingDevUserIdForWrite,
+  withSupabaseQuery,
+} from "@/lib/supabase/resolve-user";
 import { getLatestDailySnapshot } from "@/lib/supabase/queries/daily-portfolio-snapshots";
 import { listDividendRecordRows } from "@/lib/supabase/queries/dividend-records";
 import { getMonthlyContributionTrackerData } from "@/lib/supabase/queries/monthly-contributions";
@@ -187,16 +191,27 @@ async function persistFinancialGoalRow(
     return upsertMockFinancialGoal({ ...row, user_id: userId });
   }
 
-  const supabase = await createClient();
-  const payload = { ...row, user_id: userId, updated_at: new Date().toISOString() };
-  const { data, error } = await supabase
-    .from("financial_goals")
-    .upsert(payload as never)
-    .select()
-    .single();
+  return withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const payload = {
+        ...row,
+        user_id: effectiveUserId,
+        updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await supabase
+        .from("financial_goals")
+        .upsert(payload as never)
+        .select()
+        .single();
 
-  if (error) throw new Error(error.message);
-  return data as FinancialGoal;
+      if (error) throw new Error(error.message);
+      return data as FinancialGoal;
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      return upsertMockFinancialGoal({ ...row, user_id: MOCK_USER_ID });
+    }
+  );
 }
 
 async function logGoalChanges(
@@ -227,9 +242,17 @@ async function logGoalChanges(
       continue;
     }
 
-    const supabase = await createClient();
-    const { id: _id, ...insertPayload } = change;
-    await supabase.from("financial_goal_changes").insert(insertPayload as never);
+    await withSupabaseQuery(
+      async ({ userId: effectiveUserId, supabase }) => {
+        const { id: _id, ...insertPayload } = change;
+        await supabase
+          .from("financial_goal_changes")
+          .insert({ ...insertPayload, user_id: effectiveUserId } as never);
+      },
+      () => {
+        appendMockGoalChange({ ...change, user_id: MOCK_USER_ID });
+      }
+    );
   }
 }
 
@@ -252,28 +275,32 @@ export async function listFinancialGoalRows(
       .map(normalizeGoalRow);
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("financial_goals")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .order("created_at", { ascending: true });
+  return withSupabaseQuery(
+    async ({ userId: queryUserId, supabase }) => {
+      const { data, error } = await supabase
+        .from("financial_goals")
+        .select("*")
+        .eq("user_id", queryUserId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true });
 
-  if (error) throw new Error(error.message);
+      if (error) return [];
 
-  if (!data?.length) {
-    await seedDefaultGoals(userId);
-    const { data: seeded } = await supabase
-      .from("financial_goals")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("is_active", true)
-      .order("created_at", { ascending: true });
-    return (seeded ?? []).map((r) => normalizeGoalRow(r as FinancialGoal));
-  }
+      if (!data?.length) {
+        await seedDefaultGoals(queryUserId);
+        const { data: seeded } = await supabase
+          .from("financial_goals")
+          .select("*")
+          .eq("user_id", queryUserId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: true });
+        return (seeded ?? []).map((r) => normalizeGoalRow(r as FinancialGoal));
+      }
 
-  return (data as FinancialGoal[]).map(normalizeGoalRow);
+      return (data as FinancialGoal[]).map(normalizeGoalRow);
+    },
+    () => []
+  );
 }
 
 export async function getFinancialGoalsManagementData(userId: string) {
@@ -294,16 +321,20 @@ export async function getGoalChangeHistory(
     return getMockGoalChanges(userId).map(mapChangeRow);
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("financial_goal_changes")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(50);
+  return withSupabaseQuery(
+    async ({ userId: queryUserId, supabase }) => {
+      const { data, error } = await supabase
+        .from("financial_goal_changes")
+        .select("*")
+        .eq("user_id", queryUserId)
+        .order("created_at", { ascending: false })
+        .limit(50);
 
-  if (error || !data) return [];
-  return (data as FinancialGoalChange[]).map(mapChangeRow);
+      if (error || !data) return [];
+      return (data as FinancialGoalChange[]).map(mapChangeRow);
+    },
+    () => []
+  );
 }
 
 export async function createFinancialGoalRecord(
@@ -355,14 +386,21 @@ export async function deleteFinancialGoalRecord(
     return;
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("financial_goals")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", userId);
+  await withSupabaseQuery(
+    async ({ userId: queryUserId, supabase }) => {
+      const { error } = await supabase
+        .from("financial_goals")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", queryUserId);
 
-  if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      deleteMockFinancialGoal(id);
+    }
+  );
 }
 
 export function financialGoalToFormInput(goal: FinancialGoal): FinancialGoalFormInput {

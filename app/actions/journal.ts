@@ -7,8 +7,7 @@ import {
   persistJournalEntry,
   removeJournalEntry,
 } from "@/lib/supabase/queries/trading-journal";
-import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 async function finish(): Promise<JournalActionResult> {
@@ -18,20 +17,11 @@ async function finish(): Promise<JournalActionResult> {
   return { success: true, data };
 }
 
-async function resolveUserId(): Promise<string | undefined> {
-  if (!isSupabaseConfigured()) return undefined;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id;
-}
-
 export async function createJournalEntry(
   input: JournalFormInput
 ): Promise<JournalActionResult> {
   try {
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const row = journalRowFromForm(input, userId);
     await persistJournalEntry(row, userId);
     return finish();
@@ -49,7 +39,7 @@ export async function updateJournalEntry(
   createdAt?: string
 ): Promise<JournalActionResult> {
   try {
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const row = journalRowFromForm(input, userId, id, createdAt);
     await persistJournalEntry(row, userId);
     return finish();
@@ -65,7 +55,7 @@ export async function deleteJournalEntry(
   id: string
 ): Promise<JournalActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await removeJournalEntry(id, userId);
     return finish();
   } catch (e) {

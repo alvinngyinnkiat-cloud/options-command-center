@@ -25,7 +25,16 @@ import {
   updateMockDailyPortfolioSnapshot,
 } from "@/lib/mock/daily-portfolio-snapshots-store";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import {
+  MOCK_USER_ID,
+  isSupabaseRlsError,
+  isValidSupabaseUserId,
+  resolveSupabaseReadUserId,
+  resolveSupabaseServerAccess,
+  resolveSupabaseWriteUserId,
+  warnMissingDevUserIdForWrite,
+} from "@/lib/supabase/resolve-user";
+import { getServerSupabaseClient } from "@/lib/supabase/server-write";
 import type {
   DailyPortfolioSnapshot as DailyPortfolioSnapshotRow,
   DailyPortfolioSnapshotWrite,
@@ -34,6 +43,11 @@ import type {
 export interface DailyPortfolioRecordFormInput {
   snapshotDate: string;
   portfolioValueSgd: number;
+  clientCurrentValueSgd: number;
+  tradingCashUsd: number;
+  tradingCashSgd: number;
+  cryptoCashSgd: number;
+  cryptoValueSgd: number;
   notes: string | null;
 }
 
@@ -51,6 +65,22 @@ function buildHistoryData(
     milestones: buildMilestones(snapshots, asOfDate),
     dataSource,
   };
+}
+
+function mockSystemSnapshot(
+  userId: string,
+  payload: ReturnType<typeof buildDailySnapshotPayload>,
+  existingCreatedAt?: string
+): DailyPortfolioSnapshotRow {
+  return upsertMockDailyPortfolioSnapshot({
+    id: crypto.randomUUID(),
+    user_id: userId,
+    ...payload,
+    is_manual_entry: false,
+    entered_by: "system",
+    created_at: existingCreatedAt ?? new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
 }
 
 export async function upsertDailyPortfolioSnapshot(input: {
@@ -75,7 +105,7 @@ export async function upsertDailyPortfolioSnapshot(input: {
   if (!isSupabaseConfigured()) {
     return upsertMockDailyPortfolioSnapshot({
       id: crypto.randomUUID(),
-      user_id: input.userId,
+      user_id: input.userId === MOCK_USER_ID ? MOCK_USER_ID : input.userId,
       ...payload,
       is_manual_entry: false,
       entered_by: "system",
@@ -84,11 +114,19 @@ export async function upsertDailyPortfolioSnapshot(input: {
     });
   }
 
-  const supabase = await createClient();
+  const access = await resolveSupabaseServerAccess();
+  if (!access) {
+    warnMissingDevUserIdForWrite();
+    return mockSystemSnapshot(MOCK_USER_ID, payload);
+  }
+
+  const supabase = await getServerSupabaseClient(access);
+  const effectiveUserId = access.userId;
+
   const { data: existing } = await supabase
     .from("daily_portfolio_snapshots")
     .select("id, created_at, notes, is_manual_entry")
-    .eq("user_id", input.userId)
+    .eq("user_id", effectiveUserId)
     .eq("snapshot_date", payload.snapshot_date)
     .maybeSingle();
 
@@ -109,51 +147,86 @@ export async function upsertDailyPortfolioSnapshot(input: {
     return manualRow as DailyPortfolioSnapshotRow;
   }
 
-  const writable: DailyPortfolioSnapshotWrite = {
+  const rpcPayload = {
     id: existingRow?.id ?? crypto.randomUUID(),
-    user_id: input.userId,
+    user_id: effectiveUserId,
     ...payload,
     notes: existingRow?.notes ?? payload.notes ?? null,
-    is_manual_entry: false,
-    entered_by: "system",
     created_at: existingRow?.created_at ?? new Date().toISOString(),
-    updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
-    .from("daily_portfolio_snapshots")
-    .upsert(writable as never, { onConflict: "user_id,snapshot_date" })
-    .select("*")
-    .single();
+  if (access.mode === "dev-service-role") {
+    const writable: DailyPortfolioSnapshotWrite = {
+      ...rpcPayload,
+      is_manual_entry: false,
+      entered_by: "system",
+      updated_at: new Date().toISOString(),
+    };
 
-  if (error) throw new Error(error.message);
+    const { data, error } = await supabase
+      .from("daily_portfolio_snapshots")
+      .upsert(writable as never, { onConflict: "user_id,snapshot_date" })
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data as DailyPortfolioSnapshotRow;
+  }
+
+  const { data, error } = await supabase.rpc(
+    "upsert_system_daily_portfolio_snapshot",
+    { p_payload: rpcPayload } as never
+  );
+
+  if (error) {
+    if (isSupabaseRlsError(error.message)) {
+      warnMissingDevUserIdForWrite();
+      return mockSystemSnapshot(MOCK_USER_ID, payload, existingRow?.created_at);
+    }
+    throw new Error(error.message);
+  }
+
   return data as DailyPortfolioSnapshotRow;
 }
 
 async function fetchDailySnapshotsFromDb(
   userId: string
 ): Promise<DailyPortfolioSnapshotRow[]> {
-  const supabase = await createClient();
+  if (!isValidSupabaseUserId(userId)) {
+    return [];
+  }
+
+  const access = await resolveSupabaseServerAccess();
+  if (!access || access.userId !== userId) {
+    return [];
+  }
+
+  const supabase = await getServerSupabaseClient(access);
   const { data, error } = await supabase
     .from("daily_portfolio_snapshots")
     .select("*")
     .eq("user_id", userId)
     .order("snapshot_date", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (error) return [];
   return (data ?? []) as DailyPortfolioSnapshotRow[];
 }
 
 export async function getLatestDailySnapshotValue(
   userId?: string
 ): Promise<number | null> {
-  if (!isSupabaseConfigured() || !userId) {
+  if (!isSupabaseConfigured() || !userId || !isValidSupabaseUserId(userId)) {
     const rows = getMockDailyPortfolioSnapshots();
     const latest = rows[rows.length - 1];
     return latest ? Number(latest.portfolio_value_sgd) : null;
   }
 
-  const supabase = await createClient();
+  const access = await resolveSupabaseServerAccess();
+  if (!access || access.userId !== userId) {
+    return null;
+  }
+
+  const supabase = await getServerSupabaseClient(access);
   const { data } = await supabase
     .from("daily_portfolio_snapshots")
     .select("portfolio_value_sgd")
@@ -247,15 +320,23 @@ export async function getPortfolioHistoryData(input: {
     return buildHistoryData(snapshots, "mock", asOfDate);
   }
 
-  await ensureDailyPortfolioSnapshot({
-    userId: input.userId,
-    metrics: input.metrics,
-    trades: input.trades,
-    capitalPools,
-    asOfDate,
-  });
+  const effectiveUserId = await resolveSupabaseWriteUserId(input.userId);
+  if (effectiveUserId) {
+    await ensureDailyPortfolioSnapshot({
+      userId: effectiveUserId,
+      metrics: input.metrics,
+      trades: input.trades,
+      capitalPools,
+      asOfDate,
+    });
+  } else {
+    warnMissingDevUserIdForWrite();
+  }
 
-  const rows = await fetchDailySnapshotsFromDb(input.userId);
+  const readUserId = await resolveSupabaseReadUserId(input.userId);
+  const rows = readUserId
+    ? await fetchDailySnapshotsFromDb(readUserId)
+    : [];
   const snapshots = rows.map(mapDailySnapshotRow);
   return buildHistoryData(snapshots, "supabase", asOfDate);
 }
@@ -266,7 +347,11 @@ export async function listDailyPortfolioSnapshots(
   if (!isSupabaseConfigured()) {
     return getMockDailyPortfolioSnapshots().map(mapDailySnapshotRow);
   }
-  const rows = await fetchDailySnapshotsFromDb(userId);
+  const readUserId = await resolveSupabaseReadUserId(userId);
+  if (!readUserId) {
+    return [];
+  }
+  const rows = await fetchDailySnapshotsFromDb(readUserId);
   return rows.map(mapDailySnapshotRow);
 }
 
@@ -288,11 +373,21 @@ export async function getSnapshotIdByDate(
     return match?.id ?? null;
   }
 
-  const supabase = await createClient();
+  const readUserId = await resolveSupabaseReadUserId(userId);
+  if (!readUserId) {
+    return null;
+  }
+
+  const access = await resolveSupabaseServerAccess();
+  if (!access || access.userId !== readUserId) {
+    return null;
+  }
+
+  const supabase = await getServerSupabaseClient(access);
   const { data } = await supabase
     .from("daily_portfolio_snapshots")
     .select("id")
-    .eq("user_id", userId)
+    .eq("user_id", readUserId)
     .eq("snapshot_date", snapshotDate)
     .maybeSingle();
 
@@ -314,11 +409,21 @@ export async function snapshotDateExists(
     );
   }
 
-  const supabase = await createClient();
+  const readUserId = await resolveSupabaseReadUserId(userId);
+  if (!readUserId) {
+    return false;
+  }
+
+  const access = await resolveSupabaseServerAccess();
+  if (!access || access.userId !== readUserId) {
+    return false;
+  }
+
+  const supabase = await getServerSupabaseClient(access);
   let query = supabase
     .from("daily_portfolio_snapshots")
     .select("id")
-    .eq("user_id", userId)
+    .eq("user_id", readUserId)
     .eq("snapshot_date", snapshotDate);
 
   if (excludeId) {
@@ -367,13 +472,23 @@ export async function persistDailyPortfolioRecord(input: {
     capitalPools,
   });
 
+  const snapshotPayload = {
+    ...autoPayload,
+    snapshot_date: form.snapshotDate,
+    portfolio_value_sgd: form.portfolioValueSgd,
+    client_current_value_sgd: form.clientCurrentValueSgd,
+    usd_cash: form.tradingCashUsd,
+    sgd_cash: form.tradingCashSgd,
+    usd_cash_sgd_equivalent: 0,
+    crypto_cash_sgd: form.cryptoCashSgd,
+    crypto_value_sgd: form.cryptoValueSgd,
+    notes: form.notes,
+  };
+
   if (!isSupabaseConfigured()) {
     if (resolvedRecordId) {
       const updated = updateMockDailyPortfolioSnapshot(resolvedRecordId, {
-        ...autoPayload,
-        snapshot_date: form.snapshotDate,
-        portfolio_value_sgd: form.portfolioValueSgd,
-        notes: form.notes,
+        ...snapshotPayload,
         is_manual_entry: true,
         entered_by: "user",
         updated_at: new Date().toISOString(),
@@ -385,9 +500,7 @@ export async function persistDailyPortfolioRecord(input: {
     return upsertMockDailyPortfolioSnapshot({
       id: crypto.randomUUID(),
       user_id: userId,
-      ...autoPayload,
-      portfolio_value_sgd: form.portfolioValueSgd,
-      notes: form.notes,
+      ...snapshotPayload,
       is_manual_entry: true,
       entered_by: "user",
       created_at: new Date().toISOString(),
@@ -395,16 +508,56 @@ export async function persistDailyPortfolioRecord(input: {
     });
   }
 
-  const supabase = await createClient();
+  const access = await resolveSupabaseServerAccess();
+  if (!access) {
+    warnMissingDevUserIdForWrite();
+    if (resolvedRecordId) {
+      const updated = updateMockDailyPortfolioSnapshot(resolvedRecordId, {
+        ...snapshotPayload,
+        is_manual_entry: true,
+        entered_by: "user",
+        updated_at: new Date().toISOString(),
+      });
+      if (!updated) throw new Error("Record not found.");
+      return updated;
+    }
+    return upsertMockDailyPortfolioSnapshot({
+      id: crypto.randomUUID(),
+      user_id: MOCK_USER_ID,
+      ...snapshotPayload,
+      is_manual_entry: true,
+      entered_by: "user",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  const supabase = await getServerSupabaseClient(access);
+  const effectiveUserId = access.userId;
   const rpcPayload = {
     id: resolvedRecordId ?? crypto.randomUUID(),
-    user_id: userId,
-    ...autoPayload,
-    snapshot_date: form.snapshotDate,
-    portfolio_value_sgd: form.portfolioValueSgd,
-    notes: form.notes,
+    user_id: effectiveUserId,
+    ...snapshotPayload,
     created_at: new Date().toISOString(),
   };
+
+  if (access.mode === "dev-service-role") {
+    const writable: DailyPortfolioSnapshotWrite = {
+      ...rpcPayload,
+      is_manual_entry: true,
+      entered_by: "user",
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from("daily_portfolio_snapshots")
+      .upsert(writable as never, { onConflict: "user_id,snapshot_date" })
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data as DailyPortfolioSnapshotRow;
+  }
 
   const { data, error } = await supabase.rpc(
     "upsert_manual_daily_portfolio_snapshot",
@@ -424,12 +577,19 @@ export async function removeDailyPortfolioSnapshot(
     return;
   }
 
-  const supabase = await createClient();
+  const access = await resolveSupabaseServerAccess();
+  if (!access) {
+    warnMissingDevUserIdForWrite();
+    deleteMockDailyPortfolioSnapshot(recordId);
+    return;
+  }
+
+  const supabase = await getServerSupabaseClient(access);
   const { error } = await supabase
     .from("daily_portfolio_snapshots")
     .delete()
     .eq("id", recordId)
-    .eq("user_id", userId);
+    .eq("user_id", access.userId);
 
   if (error) throw new Error(error.message);
 }

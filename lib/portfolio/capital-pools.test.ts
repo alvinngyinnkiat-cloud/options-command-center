@@ -40,7 +40,38 @@ describe("capital pools", () => {
     const cash = extractTradingCash(holdings);
     expect(cash.brokerSgdCash).toBe(10_000);
     expect(cash.brokerUsdCashNative).toBe(5_000);
-    expect(cash.tradingCashSgd).toBe(16_750);
+    expect(cash.tradingCashSgd).toBe(10_000);
+  });
+
+  it("uses manual trading cash when provided", () => {
+    const pools = buildCapitalPoolsBreakdown({
+      holdings: [],
+      cryptoRows: [],
+      usEtfValueSgd: 0,
+      usStockValueSgd: 0,
+      sgStockValueSgd: 0,
+      openTrades: [],
+      clientSummary: {
+        totalClientCapital: 0,
+        allocatedTradesCount: 0,
+        totalClientProfit: 0,
+        totalClientLoss: 0,
+        totalClientNetPl: 0,
+        totalMySharePl: 0,
+        clientSharePaid: 0,
+        clientShareOwed: 0,
+        totalPaidToClient: 0,
+        outstandingAmountOwed: 0,
+        lifetimeTradeProfit: 0,
+        lifetimeClientShare: 0,
+        lifetimeMyShare: 0,
+      },
+      tradeAllocations: [],
+      manualTradingCash: { tradingCashUsd: 18_000, tradingCashSgd: 12_000 },
+    });
+    expect(pools.tradingCashSgd).toBe(12_000);
+    expect(pools.cash.brokerUsdCashNative).toBe(18_000);
+    expect(pools.tradingCapital).toBe(12_000);
   });
 
   it("splits crypto holdings and crypto cash", () => {

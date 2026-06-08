@@ -17,6 +17,7 @@ import type {
 import type { WatchlistCategory } from "@/lib/watchlist/categories";
 import { getWatchlistScannerData } from "@/lib/supabase/queries/watchlist-scanner";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { SupportResistance, WatchlistItem } from "@/types/database";
@@ -55,32 +56,13 @@ export async function addWatchlistTicker(
   }
 
   try {
+    const userId = await requireUserId();
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      const current = buildMockScannerRows();
-      if (current.some((r) => r.ticker === normalized)) {
-        return { success: false, error: `${normalized} is already on the watchlist.` };
-      }
-      return {
-        success: true,
-        rows: attachScoresToRows(
-          sortScannerRows([
-            ...current,
-            buildMockScannerRow(normalized, current.length, undefined, category),
-          ])
-        ),
-        dataSource: "mock",
-      };
-    }
 
     const { data: existing } = await supabase
       .from("watchlist")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("ticker", normalized)
       .maybeSingle();
 
@@ -91,7 +73,7 @@ export async function addWatchlistTicker(
     const { data: maxOrder } = await supabase
       .from("watchlist")
       .select("sort_order")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .order("sort_order", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -100,7 +82,7 @@ export async function addWatchlistTicker(
 
     const insertPayload: WatchlistItem = {
       id: crypto.randomUUID(),
-      user_id: user.id,
+      user_id: userId,
       ticker: normalized,
       display_name: null,
       sort_order: sortOrder,
@@ -141,23 +123,14 @@ export async function removeWatchlistTicker(
   }
 
   try {
+    const userId = await requireUserId();
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      const next = attachScoresToRows(
-        buildMockScannerRows().filter((r) => r.watchlistId !== watchlistId)
-      );
-      return { success: true, rows: next, dataSource: "mock" };
-    }
 
     const { error } = await supabase
       .from("watchlist")
       .delete()
       .eq("id", watchlistId)
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
 
     if (error) {
       return { success: false, error: error.message };
@@ -207,20 +180,14 @@ export async function saveSupportResistance(
   }
 
   try {
+    const userId = await requireUserId();
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { success: false, error: "Not authenticated." };
-    }
 
     const { data: watchlistItem } = await supabase
       .from("watchlist")
       .select("id")
       .eq("id", input.watchlistId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (!watchlistItem) {
@@ -240,7 +207,7 @@ export async function saveSupportResistance(
 
     const payload: SupportResistance = {
       id: existingId,
-      user_id: user.id,
+      user_id: userId,
       watchlist_id: input.watchlistId,
       ticker: input.ticker,
       timeframe,

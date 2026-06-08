@@ -28,8 +28,7 @@ export function applyMockGeneratedSnapshotColumns(
   row: Omit<DailyPortfolioSnapshotWrite, "is_manual_entry" | "entered_by" | "updated_at"> &
     Partial<Pick<DailyPortfolioSnapshotWrite, "is_manual_entry" | "entered_by" | "updated_at">>
 ): DailyPortfolioSnapshotRow {
-  const trading_cash_sgd =
-    Number(row.usd_cash_sgd_equivalent) + Number(row.sgd_cash);
+  const trading_cash_sgd = Number(row.sgd_cash);
   const trading_capital_sgd =
     Number(row.us_etf_value_sgd) +
     Number(row.us_stock_value_sgd) +
@@ -66,7 +65,6 @@ export function buildDailySnapshotPayload(input: {
   const tradingCash = capitalPools
     ? {
         brokerUsdCashNative: capitalPools.cash.brokerUsdCashNative,
-        brokerUsdCashSgdEquivalent: capitalPools.cash.brokerUsdCashSgdEquivalent,
         brokerSgdCash: capitalPools.cash.brokerSgdCash,
       }
     : extractTradingCash(metrics.holdings);
@@ -97,7 +95,7 @@ export function buildDailySnapshotPayload(input: {
     crypto_value_sgd: cryptoHoldingsSgd,
     usd_cash: tradingCash.brokerUsdCashNative,
     sgd_cash: tradingCash.brokerSgdCash,
-    usd_cash_sgd_equivalent: tradingCash.brokerUsdCashSgdEquivalent,
+    usd_cash_sgd_equivalent: 0,
     crypto_cash_sgd: cryptoCashSgd,
     us_etf_value_sgd: usEtfValueSgd,
     us_stock_value_sgd: usStockValueSgd,

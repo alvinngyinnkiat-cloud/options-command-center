@@ -12,8 +12,7 @@ import {
   recordClientPayment,
   removeProfitSharingClient,
 } from "@/lib/supabase/queries/client-profit-sharing";
-import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import {
   markAllocationPaid,
 } from "@/lib/supabase/queries/client-profit-sharing";
@@ -28,15 +27,6 @@ async function finish(
   return { success: true, data };
 }
 
-async function resolveUserId(): Promise<string | undefined> {
-  if (!isSupabaseConfigured()) return undefined;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id;
-}
-
 export async function saveClientProfile(
   input: ClientProfileFormInput,
   existingId?: string,
@@ -47,7 +37,7 @@ export async function saveClientProfile(
     if (input.clientSharePct + input.mySharePct !== 100) {
       return { success: false, error: "Client and my share must total 100%." };
     }
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const row = clientRowFromForm(
       input,
       userId,
@@ -69,7 +59,7 @@ export async function deleteClientProfile(
   id: string
 ): Promise<ClientProfitSharingActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await removeProfitSharingClient(id, userId);
     return finish();
   } catch (e) {
@@ -86,7 +76,7 @@ export async function toggleTradeInClientPool(
   included: boolean
 ): Promise<ClientProfitSharingActionResult> {
   try {
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const now = new Date().toISOString();
     const row: ClientTradeAllocation = {
       id: crypto.randomUUID(),
@@ -115,7 +105,7 @@ export async function markClientAllocationPaid(
   allocationId: string
 ): Promise<ClientProfitSharingActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await markAllocationPaid(allocationId, userId);
     return finish();
   } catch (e) {
@@ -134,7 +124,7 @@ export async function payClient(
     if (amount <= 0) {
       return { success: false, error: "Payment amount must be positive." };
     }
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await recordClientPayment(clientId, amount, userId);
     return finish(clientId);
   } catch (e) {

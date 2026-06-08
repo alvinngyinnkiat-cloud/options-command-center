@@ -13,7 +13,7 @@ import { getFinancialGoalsData } from "@/lib/supabase/queries/goals";
 import { getStockEtfTrackerData } from "@/lib/supabase/queries/stock-etf-holdings";
 import { getTickerPositionManagerData } from "@/lib/supabase/queries/ticker-positions";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 export type DividendActionResult =
@@ -30,19 +30,10 @@ export type DividendSyncResult =
     }
   | { success: false; error: string };
 
-async function resolveUserId(): Promise<string> {
-  if (!isSupabaseConfigured()) return "mock-user";
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? "mock-user";
-}
-
 async function finish(
   providerSource?: "fmp" | "alpha_vantage" | "mock"
 ): Promise<DividendTrackerData> {
-  const userId = await resolveUserId();
+  const userId = await requireUserId();
   const data = await getDividendTrackerData(userId, providerSource);
   revalidatePath("/dividends");
   revalidatePath("/");
@@ -57,7 +48,7 @@ export async function createDividend(
   input: DividendFormInput
 ): Promise<DividendActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await createDividendRecord(input, userId);
     return { success: true, data: await finish() };
   } catch (e) {
@@ -73,7 +64,7 @@ export async function updateDividend(
   input: DividendFormInput
 ): Promise<DividendActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await updateDividendRecord(id, input, userId);
     return { success: true, data: await finish() };
   } catch (e) {
@@ -88,7 +79,7 @@ export async function deleteDividend(
   id: string
 ): Promise<DividendActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await removeDividendRecord(id, userId);
     return { success: true, data: await finish() };
   } catch (e) {
@@ -101,7 +92,7 @@ export async function deleteDividend(
 
 export async function syncDividendsFromApi(): Promise<DividendSyncResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     const syncResult = await syncDividendsForUser(userId);
     const data = await finish(syncResult.providerSource);
     return { success: true, data, ...syncResult };
@@ -125,7 +116,7 @@ export async function markDividendReceived(
 }
 
 export async function refreshDividendDependentData() {
-  const userId = await resolveUserId();
+  const userId = await requireUserId();
   const [stockData, tickerData, goalsData, dividendData] = await Promise.all([
     getStockEtfTrackerData(),
     getTickerPositionManagerData(),

@@ -125,7 +125,7 @@ export function CapitalLiquidityCheck({ base }: CapitalLiquidityCheckProps) {
         <Field
           label="USD Cash (Broker)"
           value={formatNativeValue(result.cash.cashUsdNative, "USD")}
-          sub="US stocks · options · buying power"
+          sub="US stocks · options · buying power (reference)"
         />
         <Field
           label="Trading Cash Available"
@@ -155,7 +155,7 @@ export function CapitalLiquidityCheck({ base }: CapitalLiquidityCheckProps) {
           valueClassName={
             result.usdTradingBuyingPower >= 0 ? "text-profit" : "text-loss"
           }
-          sub="US Stocks & Options (USD) − Current Open Risk"
+          sub="USD Cash − Current Open Risk"
         />
       </Section>
 

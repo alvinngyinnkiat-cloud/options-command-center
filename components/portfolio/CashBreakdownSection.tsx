@@ -65,9 +65,8 @@ export function CashBreakdownSection({ pools }: CashBreakdownSectionProps) {
               />
             </div>
             <p className="text-[10px] text-terminal-muted">
-              USD {cash.brokerUsdCashNative.toLocaleString()} (SGD eq.{" "}
-              {formatSGD(cash.brokerUsdCashSgdEquivalent)}) · SGD{" "}
-              {cash.brokerSgdCash.toLocaleString()}
+              USD {cash.brokerUsdCashNative.toLocaleString()} (reference only) ·
+              SGD {cash.brokerSgdCash.toLocaleString()}
             </p>
           </CardContent>
         </Card>
@@ -161,7 +160,7 @@ export function PortfolioSummarySection({ pools }: PortfolioSummarySectionProps)
         <StatCard
           label="Trading Cash"
           value={formatSGD(pools.tradingCashSgd)}
-          change="Broker USD + SGD"
+          change="Manual SGD only — USD shown separately"
           changeType="neutral"
         />
         <StatCard

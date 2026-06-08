@@ -6,8 +6,13 @@ import {
   getMockCryptoHoldings,
   upsertMockCryptoHolding,
 } from "@/lib/mock/crypto-store";
+import { readSupabasePrimary } from "@/lib/supabase/data-access";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import {
+  MOCK_USER_ID,
+  warnMissingDevUserIdForWrite,
+  withSupabaseQuery,
+} from "@/lib/supabase/resolve-user";
 import type { CryptoHolding } from "@/types/database";
 
 function buildData(
@@ -22,111 +27,105 @@ function buildData(
   };
 }
 
+async function fetchCryptoRows(_userId: string): Promise<CryptoHolding[]> {
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const { data, error } = await supabase
+        .from("crypto_holdings")
+        .select("*")
+        .eq("user_id", userId)
+        .order("current_value_sgd", { ascending: false });
+
+      if (error) return [];
+      return (data ?? []) as CryptoHolding[];
+    },
+    () => []
+  );
+}
+
 export async function getCryptoHoldingsRows(): Promise<CryptoHolding[]> {
-  if (!isSupabaseConfigured()) {
-    return getMockCryptoHoldings();
-  }
-
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return getMockCryptoHoldings();
-
-    const { data, error } = await supabase
-      .from("crypto_holdings")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("current_value_sgd", { ascending: false });
-
-    if (error || !data?.length) return getMockCryptoHoldings();
-    return data as CryptoHolding[];
-  } catch {
-    return getMockCryptoHoldings();
-  }
+  const { value } = await readSupabasePrimary({
+    module: "getCryptoHoldingsRows",
+    mock: () => getMockCryptoHoldings(),
+    empty: () => [],
+    read: fetchCryptoRows,
+  });
+  return value;
 }
 
 export async function getCryptoTrackerData(): Promise<CryptoTrackerData> {
-  if (!isSupabaseConfigured()) {
-    return buildData(getMockCryptoHoldings(), "mock");
-  }
-
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return buildData(getMockCryptoHoldings(), "mock");
-    }
-
-    const { data, error } = await supabase
-      .from("crypto_holdings")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("current_value_sgd", { ascending: false });
-
-    if (error || !data?.length) {
-      return buildData(getMockCryptoHoldings(), "mock");
-    }
-
-    return buildData(data as CryptoHolding[], "supabase");
-  } catch {
-    return buildData(getMockCryptoHoldings(), "mock");
-  }
+  const { value, dataSource } = await readSupabasePrimary({
+    module: "getCryptoTrackerData",
+    mock: () => buildData(getMockCryptoHoldings(), "mock"),
+    empty: () => buildData([], "supabase"),
+    read: async (userId) => buildData(await fetchCryptoRows(userId), "supabase"),
+  });
+  return { ...value, dataSource };
 }
 
 export async function persistCryptoHolding(
   row: CryptoHolding,
   userId?: string
 ): Promise<CryptoHolding> {
-  if (!isSupabaseConfigured() || !userId) {
-    return upsertMockCryptoHolding({ ...row, user_id: userId ?? "mock-user" });
+  if (!isSupabaseConfigured()) {
+    return upsertMockCryptoHolding({ ...row, user_id: userId ?? MOCK_USER_ID });
   }
 
-  const supabase = await createClient();
-  const { data: existing } = await supabase
-    .from("crypto_holdings")
-    .select("id, created_at")
-    .eq("user_id", userId)
-    .eq("ticker", row.ticker)
-    .maybeSingle();
+  return withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { data: existing } = await supabase
+        .from("crypto_holdings")
+        .select("id, created_at")
+        .eq("user_id", effectiveUserId)
+        .eq("ticker", row.ticker)
+        .maybeSingle();
 
-  const payload = {
-    ...row,
-    id: existing ? (existing as { id: string }).id : row.id,
-    created_at: existing
-      ? (existing as { created_at: string }).created_at
-      : row.created_at,
-    updated_at: new Date().toISOString(),
-  };
+      const payload = {
+        ...row,
+        user_id: effectiveUserId,
+        id: existing ? (existing as { id: string }).id : row.id,
+        created_at: existing
+          ? (existing as { created_at: string }).created_at
+          : row.created_at,
+        updated_at: new Date().toISOString(),
+      };
 
-  const { error } = await supabase
-    .from("crypto_holdings")
-    .upsert(payload as never, { onConflict: "user_id,ticker" });
+      const { error } = await supabase
+        .from("crypto_holdings")
+        .upsert(payload as never, { onConflict: "user_id,ticker" });
 
-  if (error) throw new Error(error.message);
-  return payload;
+      if (error) throw new Error(error.message);
+      return payload;
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      return upsertMockCryptoHolding({ ...row, user_id: MOCK_USER_ID });
+    }
+  );
 }
 
 export async function removeCryptoHolding(
   id: string,
   userId?: string
 ): Promise<void> {
-  if (!isSupabaseConfigured() || !userId) {
+  if (!isSupabaseConfigured()) {
     deleteMockCryptoHolding(id);
     return;
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("crypto_holdings")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", userId);
+  await withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error } = await supabase
+        .from("crypto_holdings")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", effectiveUserId);
 
-  if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      deleteMockCryptoHolding(id);
+    }
+  );
 }

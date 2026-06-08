@@ -1,6 +1,6 @@
 import type { ScannerScoreResult } from "@/lib/watchlist/scanner-result";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import type { ScannerScore } from "@/types/database";
 
 function mapScoreToRow(
@@ -46,27 +46,30 @@ function mapScoreToRow(
 
 export async function persistScannerScores(
   scores: ScannerScoreResult[],
-  userId: string
+  _userId: string
 ): Promise<void> {
   if (!isSupabaseConfigured() || scores.length === 0) return;
 
-  const supabase = await createClient();
+  await withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      for (const score of scores) {
+        const { data: existing } = await supabase
+          .from("scanner_scores")
+          .select("id")
+          .eq("watchlist_id", score.watchlistId)
+          .eq("score_date", score.scoreDate)
+          .maybeSingle();
 
-  for (const score of scores) {
-    const { data: existing } = await supabase
-      .from("scanner_scores")
-      .select("id")
-      .eq("watchlist_id", score.watchlistId)
-      .eq("score_date", score.scoreDate)
-      .maybeSingle();
+        const row = mapScoreToRow(score, userId);
+        if (existing) {
+          row.id = (existing as { id: string }).id;
+        }
 
-    const row = mapScoreToRow(score, userId);
-    if (existing) {
-      row.id = (existing as { id: string }).id;
-    }
-
-    await supabase
-      .from("scanner_scores")
-      .upsert(row as never, { onConflict: "watchlist_id,score_date" });
-  }
+        await supabase
+          .from("scanner_scores")
+          .upsert(row as never, { onConflict: "watchlist_id,score_date" });
+      }
+    },
+    () => undefined
+  );
 }

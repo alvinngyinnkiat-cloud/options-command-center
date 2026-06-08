@@ -6,16 +6,12 @@ import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import { getPortfolioHistoryData } from "@/lib/supabase/queries/daily-portfolio-snapshots";
 import { buildCategoryValuesSgd } from "@/lib/stocks-etfs/build-tab-data";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { MOCK_USER_ID, resolveAuthenticatedUserId } from "@/lib/supabase/resolve-user";
 import { FinancialGoalsClient } from "./FinancialGoalsClient";
 
 async function resolveUserId(): Promise<string> {
-  if (!isSupabaseConfigured()) return "mock-user";
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? "mock-user";
+  if (!isSupabaseConfigured()) return MOCK_USER_ID;
+  return (await resolveAuthenticatedUserId()) ?? MOCK_USER_ID;
 }
 
 export async function FinancialGoalsDashboard() {

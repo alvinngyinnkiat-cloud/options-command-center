@@ -19,8 +19,8 @@ import { getMockPortfolioRawWithHoldings } from "@/lib/mock/portfolio-holdings-s
 import { getCryptoHoldingsRows } from "@/lib/supabase/queries/crypto-holdings";
 import { getStockEtfHoldingsRows } from "@/lib/supabase/queries/stock-etf-holdings";
 import { calculatePnLFromOptionsRow } from "@/lib/trades/pnl-allocation";
-import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { readSupabasePrimary } from "@/lib/supabase/data-access";
+import { withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import type {
   AssetType,
   CurrencyCode,
@@ -71,6 +71,16 @@ function mapOverride(row: PortfolioOverride | null): PortfolioOverrideInput | nu
       row.manual_sg_stocks_cash_value_sgd != null
         ? Number(row.manual_sg_stocks_cash_value_sgd)
         : null,
+    manualTradingCashUsd:
+      row.manual_trading_cash_usd != null
+        ? Number(row.manual_trading_cash_usd)
+        : null,
+    manualTradingCashSgd:
+      row.manual_trading_cash_sgd != null
+        ? Number(row.manual_trading_cash_sgd)
+        : row.manual_cash_value_sgd != null
+          ? Number(row.manual_cash_value_sgd)
+          : null,
     manualUsdSgdRate: Number(row.manual_usd_sgd_rate),
     manualTotalPortfolioValueSgd:
       row.manual_total_portfolio_value_sgd != null
@@ -130,87 +140,104 @@ function estimateOptionsAllocationPct(
   return (optionsValue / portfolioValue) * 100;
 }
 
-async function fetchRawFromSupabase(userId: string): Promise<PortfolioRawInput | null> {
-  const supabase = await createClient();
+async function fetchRawFromSupabase(_userId: string): Promise<PortfolioRawInput | null> {
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const [dailySnapshotsRes, holdingsRes, tradesRes, overrideRes] =
+        await Promise.all([
+          supabase
+            .from("daily_portfolio_snapshots")
+            .select("*")
+            .eq("user_id", userId)
+            .order("snapshot_date", { ascending: false })
+            .limit(6),
+          supabase
+            .from("holdings")
+            .select("*")
+            .eq("user_id", userId)
+            .is("snapshot_id", null),
+          supabase
+            .from("options_trades")
+            .select("*")
+            .eq("user_id", userId)
+            .in("status", ["open", "closing", "managed"]),
+          supabase
+            .from("portfolio_overrides")
+            .select("*")
+            .eq("user_id", userId)
+            .maybeSingle(),
+        ]);
 
-  const [dailySnapshotsRes, holdingsRes, tradesRes, overrideRes] =
-    await Promise.all([
-      supabase
-        .from("daily_portfolio_snapshots")
-        .select("*")
-        .eq("user_id", userId)
-        .order("snapshot_date", { ascending: false })
-        .limit(6),
-      supabase
-        .from("holdings")
-        .select("*")
-        .eq("user_id", userId)
-        .is("snapshot_id", null),
-      supabase
-        .from("options_trades")
-        .select("*")
-        .eq("user_id", userId)
-        .in("status", ["open", "closing", "managed"]),
-      supabase
-        .from("portfolio_overrides")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle(),
-    ]);
+      if (dailySnapshotsRes.error || holdingsRes.error || tradesRes.error) {
+        return null;
+      }
 
-  if (dailySnapshotsRes.error || holdingsRes.error || tradesRes.error) {
-    return null;
-  }
+      const overrideRow = overrideRes.data as PortfolioOverride | null;
+      const defaultUsdRate = DEFAULT_USD_SGD_RATE;
 
-  const overrideRow = overrideRes.data as PortfolioOverride | null;
-  const defaultUsdRate = DEFAULT_USD_SGD_RATE;
+      const holdingsRows = (holdingsRes.data ?? []) as Holding[];
+      const holdings: HoldingInput[] = holdingsRows.map((h) =>
+        mapHolding(h, defaultUsdRate)
+      );
 
-  const holdingsRows = (holdingsRes.data ?? []) as Holding[];
-  const holdings: HoldingInput[] = holdingsRows.map((h) =>
-    mapHolding(h, defaultUsdRate)
+      const openTrades = (tradesRes.data ?? []) as OptionsTrade[];
+      const dailyRows = (dailySnapshotsRes.data ?? []) as DailyPortfolioSnapshot[];
+      const openPositionsCount = openTrades.length;
+      const snapshots = buildSnapshotSummariesFromDailyRows(
+        dailyRows,
+        openPositionsCount
+      );
+      const latestDaily = dailyRows[0] ?? null;
+      const latestSummary = snapshots[0] ?? null;
+
+      const holdingsValueSgd = holdings.reduce((s, h) => s + h.market_value_sgd, 0);
+      const recordedPortfolioValue = latestDaily
+        ? Number(latestDaily.portfolio_value_sgd)
+        : null;
+      const portfolioValue = recordedPortfolioValue ?? holdingsValueSgd;
+
+      const oldestSnapshotDate =
+        dailyRows.length > 0
+          ? dailyRows[dailyRows.length - 1]!.snapshot_date
+          : latestDaily?.snapshot_date;
+
+      return {
+        portfolioValue,
+        override: mapOverride(overrideRow),
+        availableRiskCapacity: latestDaily
+          ? Number(latestDaily.available_risk_capacity)
+          : latestSummary?.availableRiskCapacity ?? 0,
+        totalDeposits: null,
+        totalWithdrawals: null,
+        monthlyGainLoss: latestSummary?.mtdPnl ?? 0,
+        optionsAllocationPct: estimateOptionsAllocationPct(holdings, portfolioValue),
+        openPositionsCount,
+        expiringThisWeek: countExpiringThisWeek(openTrades),
+        inceptionDate: oldestSnapshotDate ?? new Date().toISOString().slice(0, 10),
+        holdings,
+        snapshots,
+        openPositions: openTrades.map(mapOpenPosition),
+      };
+    },
+    () => null
   );
+}
 
-  const openTrades = (tradesRes.data ?? []) as OptionsTrade[];
-  const dailyRows = (dailySnapshotsRes.data ?? []) as DailyPortfolioSnapshot[];
-  const openPositionsCount = openTrades.length;
-  const snapshots = buildSnapshotSummariesFromDailyRows(
-    dailyRows,
-    openPositionsCount
-  );
-  const latestDaily = dailyRows[0] ?? null;
-  const latestSummary = snapshots[0] ?? null;
-
-  const holdingsValueSgd = holdings.reduce((s, h) => s + h.market_value_sgd, 0);
-  const recordedPortfolioValue = latestDaily
-    ? Number(latestDaily.portfolio_value_sgd)
-    : null;
-  const portfolioValue = recordedPortfolioValue ?? holdingsValueSgd;
-
-  if (portfolioValue <= 0 && holdings.length === 0) {
-    return null;
-  }
-
-  const oldestSnapshotDate =
-    dailyRows.length > 0
-      ? dailyRows[dailyRows.length - 1]!.snapshot_date
-      : latestDaily?.snapshot_date;
-
+function emptyPortfolioRaw(overrideRow: PortfolioOverride | null = null): PortfolioRawInput {
   return {
-    portfolioValue,
+    portfolioValue: 0,
     override: mapOverride(overrideRow),
-    availableRiskCapacity: latestDaily
-      ? Number(latestDaily.available_risk_capacity)
-      : latestSummary?.availableRiskCapacity ?? 0,
+    availableRiskCapacity: 0,
     totalDeposits: null,
     totalWithdrawals: null,
-    monthlyGainLoss: latestSummary?.mtdPnl ?? 0,
-    optionsAllocationPct: estimateOptionsAllocationPct(holdings, portfolioValue),
-    openPositionsCount,
-    expiringThisWeek: countExpiringThisWeek(openTrades),
-    inceptionDate: oldestSnapshotDate ?? new Date().toISOString().slice(0, 10),
-    holdings,
-    snapshots,
-    openPositions: openTrades.map(mapOpenPosition),
+    monthlyGainLoss: 0,
+    optionsAllocationPct: 0,
+    openPositionsCount: 0,
+    expiringThisWeek: 0,
+    inceptionDate: new Date().toISOString().slice(0, 10),
+    holdings: [],
+    snapshots: [],
+    openPositions: [],
   };
 }
 
@@ -227,32 +254,14 @@ async function withAssetTrackers(
 }
 
 export async function getPortfolioDashboardData(): Promise<PortfolioMetrics> {
-  if (!isSupabaseConfigured()) {
-    const raw = await withAssetTrackers(getMockPortfolioRawWithHoldings());
-    return buildPortfolioMetrics(raw, "mock");
-  }
-
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      const raw = await withAssetTrackers(getMockPortfolioRawWithHoldings());
-      return buildPortfolioMetrics(raw, "mock");
-    }
-
-    const fetched = await fetchRawFromSupabase(user.id);
-    if (!fetched) {
-      const raw = await withAssetTrackers(getMockPortfolioRawWithHoldings());
-      return buildPortfolioMetrics(raw, "mock");
-    }
-
-    const raw = await withAssetTrackers(fetched);
-    return buildPortfolioMetrics(raw, "supabase");
-  } catch {
-    const raw = await withAssetTrackers(getMockPortfolioRawWithHoldings());
-    return buildPortfolioMetrics(raw, "mock");
-  }
+  const { value: raw, dataSource } = await readSupabasePrimary({
+    module: "getPortfolioDashboardData",
+    mock: async () => withAssetTrackers(getMockPortfolioRawWithHoldings()),
+    empty: async () => withAssetTrackers(emptyPortfolioRaw()),
+    read: async (userId) => {
+      const fetched = await fetchRawFromSupabase(userId);
+      return withAssetTrackers(fetched ?? emptyPortfolioRaw());
+    },
+  });
+  return buildPortfolioMetrics(raw, dataSource);
 }

@@ -173,7 +173,7 @@ export async function exportExcelWorkbook(): Promise<FileDownloadPayload> {
 
   const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
   return buildBinaryDownload(
-    `options-command-center-${timestampForFilename()}.xlsx`,
+    `investment-manager-${timestampForFilename()}.xlsx`,
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer
   );

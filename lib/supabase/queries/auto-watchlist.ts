@@ -13,7 +13,12 @@ import {
 } from "@/lib/mock/auto-watchlist-store";
 import { SCANNER_DEFAULT_TICKERS } from "@/lib/constants/scanner-watchlist";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import {
+  MOCK_USER_ID,
+  resolveAuthenticatedUserId,
+  warnMissingDevUserIdForWrite,
+  withSupabaseQuery,
+} from "@/lib/supabase/resolve-user";
 import type { AutoWatchlistResult } from "@/types/database";
 
 const CATEGORY_ORDER: AutoWatchlistCategoryId[] = [
@@ -24,22 +29,27 @@ const CATEGORY_ORDER: AutoWatchlistCategoryId[] = [
 ];
 
 async function getManualWatchlistTickers(userId?: string): Promise<string[]> {
-  if (!isSupabaseConfigured() || !userId) {
+  if (!isSupabaseConfigured()) {
     return [...SCANNER_DEFAULT_TICKERS];
   }
 
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("watchlist")
-      .select("ticker")
-      .eq("user_id", userId)
-      .eq("is_active", true);
-
-    return (data ?? []).map((r) => (r as { ticker: string }).ticker);
-  } catch {
+  const queryUserId = userId ?? (await resolveAuthenticatedUserId());
+  if (!queryUserId) {
     return [...SCANNER_DEFAULT_TICKERS];
   }
+
+  return withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { data } = await supabase
+        .from("watchlist")
+        .select("ticker")
+        .eq("user_id", effectiveUserId)
+        .eq("is_active", true);
+
+      return (data ?? []).map((r) => (r as { ticker: string }).ticker);
+    },
+    () => [...SCANNER_DEFAULT_TICKERS]
+  );
 }
 
 function rowsToCategories(
@@ -93,8 +103,8 @@ export async function refreshAutoWatchlist(
   const flat = categories.flatMap((c) => c.entries);
   const manualWatchlistTickers = await getManualWatchlistTickers(userId);
 
-  if (!isSupabaseConfigured() || !userId) {
-    const rows = flat.map((e) => entryToDbRow(e, userId ?? "mock-user"));
+  if (!isSupabaseConfigured()) {
+    const rows = flat.map((e) => entryToDbRow(e, MOCK_USER_ID));
     setMockAutoWatchlistResults(rows);
     return buildPageData(
       categories,
@@ -105,27 +115,42 @@ export async function refreshAutoWatchlist(
     );
   }
 
-  const supabase = await createClient();
-  await supabase
-    .from("auto_watchlist_results")
-    .delete()
-    .eq("user_id", userId);
+  return withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      await supabase
+        .from("auto_watchlist_results")
+        .delete()
+        .eq("user_id", effectiveUserId);
 
-  const dbRows = flat.map((e) => entryToDbRow(e, userId));
-  if (dbRows.length > 0) {
-    const { error } = await supabase
-      .from("auto_watchlist_results")
-      .insert(dbRows as never);
+      const dbRows = flat.map((e) => entryToDbRow(e, effectiveUserId));
+      if (dbRows.length > 0) {
+        const { error } = await supabase
+          .from("auto_watchlist_results")
+          .insert(dbRows as never);
 
-    if (error) throw new Error(error.message);
-  }
+        if (error) throw new Error(error.message);
+      }
 
-  return buildPageData(
-    categories,
-    generatedAt,
-    manualWatchlistTickers,
-    "supabase",
-    marketDataSource
+      return buildPageData(
+        categories,
+        generatedAt,
+        manualWatchlistTickers,
+        "supabase",
+        marketDataSource
+      );
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      const rows = flat.map((e) => entryToDbRow(e, MOCK_USER_ID));
+      setMockAutoWatchlistResults(rows);
+      return buildPageData(
+        categories,
+        generatedAt,
+        manualWatchlistTickers,
+        "mock",
+        marketDataSource
+      );
+    }
   );
 }
 
@@ -149,38 +174,40 @@ export async function getAutoWatchlistPageData(): Promise<AutoWatchlistPageData>
   }
 
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return refreshAutoWatchlist();
+    const userId = await resolveAuthenticatedUserId();
+    if (!userId) {
+      const manualWatchlistTickers = await getManualWatchlistTickers();
+      return buildPageData([], null, manualWatchlistTickers, "supabase", "mock");
     }
 
-    const { data, error } = await supabase
-      .from("auto_watchlist_results")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("category")
-      .order("rank", { ascending: true });
+    return withSupabaseQuery(
+      async ({ userId: queryUserId, supabase }) => {
+        const { data, error } = await supabase
+          .from("auto_watchlist_results")
+          .select("*")
+          .eq("user_id", queryUserId)
+          .order("category")
+          .order("rank", { ascending: true });
 
-    const manualWatchlistTickers = await getManualWatchlistTickers(user.id);
+        const manualWatchlistTickers = await getManualWatchlistTickers(queryUserId);
 
-    if (error || !data?.length) {
-      return refreshAutoWatchlist(user.id);
-    }
+        if (error || !data?.length) {
+          return refreshAutoWatchlist(queryUserId);
+        }
 
-    const { categories, generatedAt } = rowsToCategories(
-      data as AutoWatchlistResult[]
-    );
+        const { categories, generatedAt } = rowsToCategories(
+          data as AutoWatchlistResult[]
+        );
 
-    return buildPageData(
-      categories,
-      generatedAt,
-      manualWatchlistTickers,
-      "supabase",
-      "mock"
+        return buildPageData(
+          categories,
+          generatedAt,
+          manualWatchlistTickers,
+          "supabase",
+          "mock"
+        );
+      },
+      async () => refreshAutoWatchlist()
     );
   } catch {
     return refreshAutoWatchlist();

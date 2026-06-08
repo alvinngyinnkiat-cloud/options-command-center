@@ -23,7 +23,12 @@ function mapLog(row: Awaited<ReturnType<typeof listDataSourceLogs>>[0]): DataSou
   };
 }
 
-function widgetMessage(report: DataSourceHealthReport): string {
+const NO_LOGS_MESSAGE = "No data health logs yet";
+
+function widgetMessage(
+  report: DataSourceHealthReport,
+  hasLogs: boolean
+): string {
   if (report.id === "manual_data") {
     const sr = report.details.find((d) => d.label === "S/R needs weekend review");
     if (sr?.value && sr.value !== "Up to date") return "Needs Review";
@@ -33,13 +38,23 @@ function widgetMessage(report: DataSourceHealthReport): string {
   if (report.lastSuccessfulUpdate) {
     return formatRelativeAge(report.lastSuccessfulUpdate.slice(0, 10), MOCK_REFERENCE_DATE);
   }
+  if (!hasLogs && report.id !== "manual_data" && report.id !== "options_trades") {
+    return NO_LOGS_MESSAGE;
+  }
   return report.summary.slice(0, 40);
 }
 
-function buildWidgetLines(reports: DataSourceHealthReport[]): DataHealthWidgetLine[] {
+function buildWidgetLines(
+  reports: DataSourceHealthReport[],
+  hasLogs: boolean
+): DataHealthWidgetLine[] {
   const pick = (id: DataSourceHealthReport["id"], label: string) => {
     const report = reports.find((r) => r.id === id)!;
-    return { label, message: widgetMessage(report), status: report.status };
+    return {
+      label,
+      message: widgetMessage(report, hasLogs),
+      status: report.status,
+    };
   };
 
   const manual = reports.find((r) => r.id === "manual_data")!;
@@ -58,7 +73,7 @@ function buildWidgetLines(reports: DataSourceHealthReport[]): DataHealthWidgetLi
     pick("dividend_data", "Dividends"),
     {
       label: "Manual Inputs",
-      message: widgetMessage(manual),
+      message: widgetMessage(manual, hasLogs),
       status: manual.status,
     },
     recordLine,
@@ -73,16 +88,32 @@ export async function getDataHealthPageData(
     listDataSourceLogs(userId),
   ]);
 
+  const hasLogs = logs.length > 0;
+
   return {
     reports,
     logs: logs.map(mapLog),
-    widgetLines: buildWidgetLines(reports),
+    widgetLines: buildWidgetLines(reports, hasLogs),
     checkedAt: new Date().toISOString(),
     supabaseConfigured: isSupabaseConfigured(),
   };
 }
 
+function fallbackWidgetLines(): DataHealthWidgetLine[] {
+  return [
+    { label: "Market Data", message: NO_LOGS_MESSAGE, status: "warning" },
+    { label: "Indicators", message: NO_LOGS_MESSAGE, status: "warning" },
+    { label: "Dividends", message: NO_LOGS_MESSAGE, status: "warning" },
+    { label: "Manual Inputs", message: "Manual review required", status: "manual_required" },
+    { label: "Portfolio Record", message: NO_LOGS_MESSAGE, status: "warning" },
+  ];
+}
+
 export async function getDataHealthWidget(userId: string) {
-  const data = await getDataHealthPageData(userId);
-  return data.widgetLines;
+  try {
+    const data = await getDataHealthPageData(userId);
+    return data.widgetLines;
+  } catch {
+    return fallbackWidgetLines();
+  }
 }

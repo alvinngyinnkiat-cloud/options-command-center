@@ -67,7 +67,7 @@ export function PortfolioCurrentStateGrid({
       <StatCard
         label="Trading Cash"
         value={formatSGD(currentState.cashAvailability)}
-        change="Broker USD + SGD — not crypto cash"
+        change="Manual SGD only — USD shown separately"
         changeType="neutral"
       />
       <StatCard

@@ -16,6 +16,7 @@ import { PortfolioMarketIncomeSection } from "./PortfolioMarketIncomeSection";
 import type { PortfolioIncomeSummary } from "@/lib/ticker-positions/market-types";
 import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/dividends/use-dividend-sync";
 import { ManualPortfolioOverrideCard } from "./ManualPortfolioOverrideCard";
+import { ManualTradingCashCard } from "./ManualTradingCashCard";
 import { AssetAllocationChart } from "./AssetAllocationChart";
 import { HealthScorePanel } from "./HealthScorePanel";
 import { LatestSnapshotSummaryCard } from "./LatestSnapshotSummaryCard";
@@ -44,7 +45,7 @@ export function PortfolioDashboardClient({
   recordedTotalAssetsManagedSgd,
 }: PortfolioDashboardClientProps) {
   const [metrics, setMetrics] = useState(initialMetrics);
-  const [capitalPools] = useState(initialPools);
+  const [capitalPools, setCapitalPools] = useState(initialPools);
   const [portfolioIncome, setPortfolioIncome] = useState(initialPortfolioIncome);
   const [currentState, setCurrentState] = useState(initialCurrentState);
   const [openRisk] = useState(initialOpenRisk);
@@ -61,6 +62,18 @@ export function PortfolioDashboardClient({
       portfolioValue: next.myPortfolioValue,
       availableRiskCapacity: next.availableRiskCapacity,
       cashAvailability: next.tradingCashSgd,
+    }));
+  }
+
+  function handleTradingCashSaved(
+    next: PortfolioMetrics,
+    pools: CapitalPoolsBreakdown
+  ) {
+    setMetrics(next);
+    setCapitalPools(pools);
+    setCurrentState((prev) => ({
+      ...prev,
+      cashAvailability: pools.tradingCashSgd,
     }));
   }
 
@@ -88,6 +101,12 @@ export function PortfolioDashboardClient({
       <ManualPortfolioOverrideCard
         metrics={metrics}
         onMetricsChange={handleMetricsChange}
+      />
+
+      <ManualTradingCashCard
+        metrics={metrics}
+        pools={capitalPools}
+        onSaved={handleTradingCashSaved}
       />
 
       <DataHealthWidget lines={dataHealthLines} />

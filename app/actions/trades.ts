@@ -25,7 +25,7 @@ import {
   toActiveTradeConflict,
 } from "@/lib/trading-workflow/one-trade-per-ticker";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 async function finish(): Promise<TradeActionResult> {
@@ -34,15 +34,6 @@ async function finish(): Promise<TradeActionResult> {
   revalidatePath("/");
   revalidatePath("/client-profit-sharing");
   return { success: true, data };
-}
-
-async function resolveUserId(): Promise<string | undefined> {
-  if (!isSupabaseConfigured()) return undefined;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id;
 }
 
 function validateClientTradeInput(input: TradeFormInput): string | null {
@@ -75,7 +66,7 @@ export async function updateTradeCurrentValue(
   input: UpdateCurrentValueInput
 ): Promise<TradeActionResult> {
   try {
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const existing = await getOptionsTradeRow(tradeId, userId);
     if (!existing) {
       return { success: false, error: "Trade not found." };
@@ -114,7 +105,7 @@ export async function createOptionsTrade(
       };
     }
 
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     await persistTradeWithAllocation(input, userId);
     revalidatePath("/trade-queue");
     revalidatePath("/risk");
@@ -135,7 +126,7 @@ export async function updateOptionsTrade(
     const clientErr = validateClientTradeInput(input);
     if (clientErr) return { success: false, error: clientErr };
 
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     await persistTradeWithAllocation(input, userId, tradeId);
     return finish();
   } catch (e) {
@@ -155,7 +146,7 @@ export async function closeOptionsTrade(
     const trade = data.trades.find((t) => t.id === tradeId);
     if (!trade) return { success: false, error: "Trade not found." };
 
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const input = tradeFormInputFromEnriched(trade);
     input.status = "closed";
     input.currentValue = 0;
@@ -191,7 +182,7 @@ async function updateTradeStatus(
     const trade = data.trades.find((t) => t.id === tradeId);
     if (!trade) return { success: false, error: "Trade not found." };
 
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const input = tradeFormInputFromEnriched(trade);
     input.status = status;
     await persistTradeWithAllocation(input, userId, tradeId);
@@ -214,7 +205,7 @@ export async function deleteOptionsTrade(
   tradeId: string
 ): Promise<TradeActionResult> {
   try {
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     await removeTradeAllocation(tradeId, userId);
     await removeOptionsTrade(tradeId, userId);
     return finish();

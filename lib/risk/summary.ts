@@ -197,6 +197,7 @@ export function buildRiskDashboardData(input: {
     portfolioValue: input.portfolio.myPortfolioValue,
     tradingCapital,
     tradingCashSgd,
+    tradingCashUsd: input.capitalPools?.cash.brokerUsdCashNative,
     usStocksOptionsValueUsd: input.portfolio.usStocksOptionsValueUsd,
     stocksValue: input.portfolio.stocksValue,
     etfsValue: input.portfolio.etfsValue,

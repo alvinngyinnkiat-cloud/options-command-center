@@ -4,7 +4,7 @@ import {
   insertMockDataSourceLog,
 } from "@/lib/mock/data-source-logs-store";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { MOCK_USER_ID, warnMissingDevUserIdForWrite, withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import type { DataSourceLogRow } from "@/types/database";
 import { randomUUID } from "crypto";
 
@@ -16,16 +16,20 @@ export async function listDataSourceLogs(
     return getMockDataSourceLogs(userId).slice(0, limit);
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("data_source_logs")
-    .select("*")
-    .eq("user_id", userId)
-    .order("started_at", { ascending: false })
-    .limit(limit);
+  return withSupabaseQuery(
+    async ({ userId: queryUserId, supabase }) => {
+      const { data, error } = await supabase
+        .from("data_source_logs")
+        .select("*")
+        .eq("user_id", queryUserId)
+        .order("started_at", { ascending: false })
+        .limit(limit);
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as DataSourceLogRow[];
+      if (error) return [];
+      return (data ?? []) as DataSourceLogRow[];
+    },
+    () => []
+  );
 }
 
 export async function appendDataSourceLog(input: {
@@ -52,29 +56,43 @@ export async function appendDataSourceLog(input: {
   };
 
   if (!isSupabaseConfigured()) {
-    return insertMockDataSourceLog(row);
+    return insertMockDataSourceLog({ ...row, user_id: input.userId || MOCK_USER_ID });
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("data_source_logs")
-    .insert(row as never)
-    .select()
-    .single();
+  return withSupabaseQuery(
+    async ({ userId: queryUserId, supabase }) => {
+      const { data, error } = await supabase
+        .from("data_source_logs")
+        .insert({ ...row, user_id: queryUserId } as never)
+        .select()
+        .single();
 
-  if (error) throw new Error(error.message);
-  return data as DataSourceLogRow;
+      if (error) {
+        warnMissingDevUserIdForWrite();
+        return insertMockDataSourceLog({ ...row, user_id: MOCK_USER_ID });
+      }
+      return data as DataSourceLogRow;
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      return insertMockDataSourceLog({ ...row, user_id: MOCK_USER_ID });
+    }
+  );
 }
 
 export async function getLastLogForSource(
   userId: string,
   sourceName: string
 ): Promise<{ success: DataSourceLogRow | null; failed: DataSourceLogRow | null }> {
-  const logs = await listDataSourceLogs(userId, 100);
-  const filtered = logs.filter((l) => l.source_name === sourceName);
-  const success =
-    filtered.find((l) => l.status === "success" || l.status === "partial") ??
-    null;
-  const failed = filtered.find((l) => l.status === "failed") ?? null;
-  return { success, failed };
+  try {
+    const logs = await listDataSourceLogs(userId, 100);
+    const filtered = logs.filter((l) => l.source_name === sourceName);
+    const success =
+      filtered.find((l) => l.status === "success" || l.status === "partial") ??
+      null;
+    const failed = filtered.find((l) => l.status === "failed") ?? null;
+    return { success, failed };
+  } catch {
+    return { success: null, failed: null };
+  }
 }

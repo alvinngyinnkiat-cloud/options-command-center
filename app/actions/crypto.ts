@@ -7,8 +7,7 @@ import {
   persistCryptoHolding,
   removeCryptoHolding,
 } from "@/lib/supabase/queries/crypto-holdings";
-import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 async function finish(): Promise<CryptoActionResult> {
@@ -18,20 +17,11 @@ async function finish(): Promise<CryptoActionResult> {
   return { success: true, data };
 }
 
-async function resolveUserId(): Promise<string | undefined> {
-  if (!isSupabaseConfigured()) return undefined;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id;
-}
-
 export async function createCryptoHolding(
   input: CryptoHoldingFormInput
 ): Promise<CryptoActionResult> {
   try {
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const row = cryptoRowFromForm(input, userId);
     await persistCryptoHolding(row, userId);
     return finish();
@@ -49,7 +39,7 @@ export async function updateCryptoHolding(
   createdAt?: string
 ): Promise<CryptoActionResult> {
   try {
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const row = cryptoRowFromForm(input, userId, id, createdAt);
     await persistCryptoHolding(row, userId);
     return finish();
@@ -65,7 +55,7 @@ export async function deleteCryptoHolding(
   id: string
 ): Promise<CryptoActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await removeCryptoHolding(id, userId);
     return finish();
   } catch (e) {

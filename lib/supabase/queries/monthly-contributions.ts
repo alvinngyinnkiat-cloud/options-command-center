@@ -7,8 +7,9 @@ import {
   getMockMonthlyContributions,
   upsertMockMonthlyContribution,
 } from "@/lib/mock/monthly-contributions-store";
+import { readSupabasePrimary } from "@/lib/supabase/data-access";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { MOCK_USER_ID, warnMissingDevUserIdForWrite, withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import type { MonthlyContribution as MonthlyContributionRow } from "@/types/database";
 
 function getReferenceYear(): number {
@@ -28,95 +29,107 @@ function buildTrackerData(
   );
 }
 
+async function fetchContributionRows(
+  _userId: string
+): Promise<MonthlyContributionRow[]> {
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const { data, error } = await supabase
+        .from("monthly_contributions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("contribution_year", { ascending: true })
+        .order("contribution_month", { ascending: true });
+
+      if (error) return [];
+      return (data ?? []) as MonthlyContributionRow[];
+    },
+    () => []
+  );
+}
+
 export async function getMonthlyContributionTrackerData(): Promise<MonthlyContributionTrackerData> {
-  if (!isSupabaseConfigured()) {
-    return buildTrackerData(getMockMonthlyContributions(), "mock");
-  }
-
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return buildTrackerData(getMockMonthlyContributions(), "mock");
-    }
-
-    const { data, error } = await supabase
-      .from("monthly_contributions")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("contribution_year", { ascending: true })
-      .order("contribution_month", { ascending: true });
-
-    if (error || !data?.length) {
-      return buildTrackerData(getMockMonthlyContributions(), "mock");
-    }
-
-    return buildTrackerData(data as MonthlyContributionRow[], "supabase");
-  } catch {
-    return buildTrackerData(getMockMonthlyContributions(), "mock");
-  }
+  const { value, dataSource } = await readSupabasePrimary({
+    module: "getMonthlyContributionTrackerData",
+    mock: () => buildTrackerData(getMockMonthlyContributions(), "mock"),
+    empty: () => buildTrackerData([], "supabase"),
+    read: async (userId) =>
+      buildTrackerData(await fetchContributionRows(userId), "supabase"),
+  });
+  return { ...value, dataSource };
 }
 
 export async function persistMonthlyContribution(
   row: MonthlyContributionRow,
   userId?: string
 ): Promise<MonthlyContributionRow> {
-  if (!isSupabaseConfigured() || !userId) {
+  if (!isSupabaseConfigured()) {
     return upsertMockMonthlyContribution({
       ...row,
-      user_id: userId ?? "mock-user",
+      user_id: userId ?? MOCK_USER_ID,
     });
   }
 
-  const supabase = await createClient();
-  const { data: existing } = await supabase
-    .from("monthly_contributions")
-    .select("id, created_at")
-    .eq("user_id", userId)
-    .eq("contribution_year", row.contribution_year)
-    .eq("contribution_month", row.contribution_month)
-    .maybeSingle();
+  return withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { data: existing } = await supabase
+        .from("monthly_contributions")
+        .select("id, created_at")
+        .eq("user_id", effectiveUserId)
+        .eq("contribution_year", row.contribution_year)
+        .eq("contribution_month", row.contribution_month)
+        .maybeSingle();
 
-  const payload = {
-    ...row,
-    id: existing ? (existing as { id: string }).id : row.id,
-    user_id: userId,
-    created_at: existing
-      ? (existing as { created_at: string }).created_at
-      : row.created_at,
-    updated_at: new Date().toISOString(),
-  };
+      const payload = {
+        ...row,
+        id: existing ? (existing as { id: string }).id : row.id,
+        user_id: effectiveUserId,
+        created_at: existing
+          ? (existing as { created_at: string }).created_at
+          : row.created_at,
+        updated_at: new Date().toISOString(),
+      };
 
-  const { data, error } = await supabase
-    .from("monthly_contributions")
-    .upsert(payload as never, {
-      onConflict: "user_id,contribution_year,contribution_month",
-    })
-    .select()
-    .single();
+      const { data, error } = await supabase
+        .from("monthly_contributions")
+        .upsert(payload as never, {
+          onConflict: "user_id,contribution_year,contribution_month",
+        })
+        .select()
+        .single();
 
-  if (error) throw new Error(error.message);
-  return data as MonthlyContributionRow;
+      if (error) throw new Error(error.message);
+      return data as MonthlyContributionRow;
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      return upsertMockMonthlyContribution({ ...row, user_id: MOCK_USER_ID });
+    }
+  );
 }
 
 export async function removeMonthlyContribution(
   id: string,
   userId?: string
 ): Promise<void> {
-  if (!isSupabaseConfigured() || !userId) {
+  if (!isSupabaseConfigured()) {
     deleteMockMonthlyContribution(id);
     return;
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("monthly_contributions")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", userId);
+  await withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error } = await supabase
+        .from("monthly_contributions")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", effectiveUserId);
 
-  if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      deleteMockMonthlyContribution(id);
+    }
+  );
 }

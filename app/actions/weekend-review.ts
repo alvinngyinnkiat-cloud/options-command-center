@@ -25,7 +25,7 @@ import {
   persistWeeklyMarketReviewSnapshots,
 } from "@/lib/supabase/queries/weekly-market-updates";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { resolveAuthenticatedUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -34,18 +34,18 @@ import { revalidatePath } from "next/cache";
  */
 export async function runWeekendMarketReview(): Promise<WeekendMarketReviewActionResult> {
   try {
-    let dataSource: "supabase" | "mock" = "mock";
-    let userId: string | undefined;
+    let dataSource: "supabase" | "mock" = isSupabaseConfigured()
+      ? "supabase"
+      : "mock";
+    const userId = await resolveAuthenticatedUserId();
 
-    if (isSupabaseConfigured()) {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        userId = user.id;
-        dataSource = "supabase";
-      }
+    if (!isSupabaseConfigured()) {
+      dataSource = "mock";
+    } else if (!userId) {
+      return {
+        success: false,
+        error: "Sign in or set SUPABASE_DEV_USER_ID for local development.",
+      };
     }
 
     const history = await getWeeklyMarketUpdateHistory(200);

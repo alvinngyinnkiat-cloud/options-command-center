@@ -21,7 +21,11 @@ import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
 import { enrichAllStockEtfHoldings } from "@/lib/stocks-etfs/map-holding";
 import type { EnrichedStockEtfHolding } from "@/lib/stocks-etfs/types";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import {
+  MOCK_USER_ID,
+  warnMissingDevUserIdForWrite,
+  withSupabaseQuery,
+} from "@/lib/supabase/resolve-user";
 import { getStockEtfHoldingsRows } from "@/lib/supabase/queries/stock-etf-holdings";
 import type { DividendRecordRow } from "@/types/database";
 import { randomUUID } from "crypto";
@@ -76,21 +80,25 @@ function rowFromForm(
 }
 
 export async function listDividendRecordRows(
-  userId: string
+  _userId: string
 ): Promise<DividendRecordRow[]> {
   if (!isSupabaseConfigured()) {
-    return getMockDividendRecords(userId).map(normalizeRow);
+    return getMockDividendRecords(_userId).map(normalizeRow);
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("dividend_records")
-    .select("*")
-    .eq("user_id", userId)
-    .order("payment_date", { ascending: false, nullsFirst: false });
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const { data, error } = await supabase
+        .from("dividend_records")
+        .select("*")
+        .eq("user_id", userId)
+        .order("payment_date", { ascending: false, nullsFirst: false });
 
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as DividendRecordRow[]).map(normalizeRow);
+      if (error) return [];
+      return ((data ?? []) as DividendRecordRow[]).map(normalizeRow);
+    },
+    () => []
+  );
 }
 
 async function persistDividendRow(
@@ -101,15 +109,22 @@ async function persistDividendRow(
     return upsertMockDividendRecord({ ...row, user_id: userId });
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("dividend_records")
-    .upsert({ ...row, user_id: userId } as never)
-    .select()
-    .single();
+  return withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { data, error } = await supabase
+        .from("dividend_records")
+        .upsert({ ...row, user_id: effectiveUserId } as never)
+        .select()
+        .single();
 
-  if (error) throw new Error(error.message);
-  return normalizeRow(data as DividendRecordRow);
+      if (error) throw new Error(error.message);
+      return normalizeRow(data as DividendRecordRow);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      return upsertMockDividendRecord({ ...row, user_id: MOCK_USER_ID });
+    }
+  );
 }
 
 export async function createDividendRecord(
@@ -146,33 +161,48 @@ export async function removeDividendRecord(
     return;
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("dividend_records")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", userId);
+  await withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error } = await supabase
+        .from("dividend_records")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", effectiveUserId);
 
-  if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      deleteMockDividendRecord(id);
+    }
+  );
 }
 
 export async function upsertApiDividendRecord(
   row: DividendRecordRow,
   userId: string
 ): Promise<DividendRecordRow | null> {
-  if (row.api_reference_id) {
+  const apiRef = row.api_reference_id;
+  if (apiRef) {
     if (!isSupabaseConfigured()) {
-      const existing = findMockByApiRef(userId, row.api_reference_id);
+      const existing = findMockByApiRef(userId, apiRef);
       if (existing?.is_manual_override) return null;
     } else {
-      const supabase = await createClient();
-      const { data } = await supabase
-        .from("dividend_records")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("api_reference_id", row.api_reference_id)
-        .maybeSingle();
-      if (data && (data as DividendRecordRow).is_manual_override) return null;
+      const blocked = await withSupabaseQuery(
+        async ({ userId: queryUserId, supabase }) => {
+          const { data } = await supabase
+            .from("dividend_records")
+            .select("*")
+            .eq("user_id", queryUserId)
+            .eq("api_reference_id", apiRef)
+            .maybeSingle();
+          return Boolean(
+            data && (data as DividendRecordRow).is_manual_override
+          );
+        },
+        () => false
+      );
+      if (blocked) return null;
     }
   }
 

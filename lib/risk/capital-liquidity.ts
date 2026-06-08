@@ -8,8 +8,9 @@ export type StressTestStatus = "comfortable" | "tight" | "underfunded";
 export interface CashBalances {
   cashSgd: number;
   cashUsdNative: number;
+  /** @deprecated Not used — USD cash is reference-only, never added to SGD trading cash */
   cashUsdSgd: number;
-  /** Trading cash only — broker USD + SGD (excludes crypto cash) */
+  /** Trading cash SGD only — manual broker SGD cash */
   cashAvailable: number;
   tradingCashSgd: number;
   cryptoCashSgd: number;
@@ -76,13 +77,12 @@ export function extractCashBalances(
 
   const cashSgd = sgdCashHolding?.market_value_sgd ?? 0;
   const cashUsdNative = usdCashHolding?.market_value_native ?? 0;
-  const cashUsdSgd = usdCashHolding?.market_value_sgd ?? 0;
-  const tradingCashSgd = cashSgd + cashUsdSgd;
+  const tradingCashSgd = cashSgd;
 
   return {
     cashSgd,
     cashUsdNative,
-    cashUsdSgd,
+    cashUsdSgd: 0,
     cashAvailable: tradingCashSgd,
     tradingCashSgd,
     cryptoCashSgd,
@@ -165,6 +165,7 @@ export function buildCapitalLiquidityBase(input: {
   portfolioValue: number;
   tradingCapital?: number;
   tradingCashSgd?: number;
+  tradingCashUsd?: number;
   usStocksOptionsValueUsd: number;
   stocksValue: number;
   etfsValue: number;
@@ -199,8 +200,11 @@ export function buildCapitalLiquidityBase(input: {
     input.cryptoCashSgd ?? 0
   );
   const tradingCashSgd = input.tradingCashSgd ?? extracted.tradingCashSgd;
+  const cashUsdNative = input.tradingCashUsd ?? extracted.cashUsdNative;
   const cash: CashBalances = {
-    ...extracted,
+    cashSgd: tradingCashSgd,
+    cashUsdNative,
+    cashUsdSgd: 0,
     tradingCashSgd,
     cashAvailable: tradingCashSgd,
     cryptoCashSgd: input.cryptoCashSgd ?? extracted.cryptoCashSgd,
@@ -215,7 +219,7 @@ export function buildCapitalLiquidityBase(input: {
     cryptoValue: input.cryptoValue,
     cash,
     usdTradingBuyingPower: calculateUsdTradingBuyingPower(
-      usStocksOptionsValueUsd,
+      cashUsdNative,
       currentOpenRisk
     ),
     currentOpenRisk,

@@ -9,22 +9,12 @@ import {
   type DailyPortfolioRecordFormInput,
 } from "@/lib/supabase/queries/daily-portfolio-snapshots";
 import type { PortfolioHistoryData } from "@/lib/portfolio/daily-snapshot-types";
-import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 export type DailyPortfolioRecordActionResult =
   | { success: true; history: PortfolioHistoryData }
   | { success: false; error: string };
-
-async function resolveUserId(): Promise<string> {
-  if (!isSupabaseConfigured()) return "mock-user";
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? "mock-user";
-}
 
 async function reloadHistory(userId: string): Promise<PortfolioHistoryData> {
   const [metrics, tradesData] = await Promise.all([
@@ -47,7 +37,7 @@ export async function createDailyPortfolioRecord(
   form: DailyPortfolioRecordFormInput
 ): Promise<DailyPortfolioRecordActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     const [metrics, tradesData] = await Promise.all([
       getPortfolioDashboardData(),
       getOptionsTradesData(),
@@ -76,7 +66,7 @@ export async function updateDailyPortfolioRecord(
   form: DailyPortfolioRecordFormInput
 ): Promise<DailyPortfolioRecordActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     const [metrics, tradesData] = await Promise.all([
       getPortfolioDashboardData(),
       getOptionsTradesData(),
@@ -106,7 +96,7 @@ export async function deleteDailyPortfolioRecord(
   recordId: string
 ): Promise<DailyPortfolioRecordActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await removeDailyPortfolioSnapshot(userId, recordId);
     const history = await reloadHistory(userId);
     revalidatePortfolioPaths();

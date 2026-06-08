@@ -7,21 +7,12 @@ import type { DataHealthPageData } from "@/lib/data-health/types";
 import { appendDataSourceLog } from "@/lib/supabase/queries/data-source-logs";
 import { getWatchlistScannerData } from "@/lib/supabase/queries/watchlist-scanner";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 export type DataHealthActionResult =
   | { success: true; data: DataHealthPageData }
   | { success: false; error: string };
-
-async function resolveUserId(): Promise<string> {
-  if (!isSupabaseConfigured()) return "mock-user";
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? "mock-user";
-}
 
 async function finish(userId: string): Promise<DataHealthPageData> {
   revalidatePath("/data-health");
@@ -50,7 +41,7 @@ async function logRefresh(
 
 export async function runFullDataHealthCheck(): Promise<DataHealthActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     return { success: true, data: await finish(userId) };
   } catch (e) {
     return {
@@ -61,7 +52,7 @@ export async function runFullDataHealthCheck(): Promise<DataHealthActionResult> 
 }
 
 export async function refreshMarketDataHealth(): Promise<DataHealthActionResult> {
-  const userId = await resolveUserId();
+  const userId = await requireUserId();
   const startedAt = new Date().toISOString();
   try {
     const scanner = await getWatchlistScannerData();
@@ -84,7 +75,7 @@ export async function refreshMarketDataHealth(): Promise<DataHealthActionResult>
 }
 
 export async function refreshTechnicalIndicatorsHealth(): Promise<DataHealthActionResult> {
-  const userId = await resolveUserId();
+  const userId = await requireUserId();
   const startedAt = new Date().toISOString();
   try {
     const scanner = await getWatchlistScannerData();
@@ -109,7 +100,7 @@ export async function refreshTechnicalIndicatorsHealth(): Promise<DataHealthActi
 }
 
 export async function refreshAutoWatchlistHealth(): Promise<DataHealthActionResult> {
-  const userId = await resolveUserId();
+  const userId = await requireUserId();
   const startedAt = new Date().toISOString();
   const result = await refreshAutoWatchlistAction();
   if (!result.success) {
@@ -135,7 +126,7 @@ export async function refreshAutoWatchlistHealth(): Promise<DataHealthActionResu
 }
 
 export async function refreshDividendDataHealth(): Promise<DataHealthActionResult> {
-  const userId = await resolveUserId();
+  const userId = await requireUserId();
   const startedAt = new Date().toISOString();
   const result = await syncDividendsFromApi();
   if (!result.success) {

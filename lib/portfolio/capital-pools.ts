@@ -4,7 +4,7 @@ import { buildClientCapitalMetrics } from "./client-capital";
 import type { EnrichedCryptoHolding } from "@/lib/crypto/types";
 import type { CryptoHolding } from "@/types/database";
 import type { EnrichedTrade } from "@/lib/trades/types";
-import type { HoldingInput } from "./types";
+import type { HoldingInput, PortfolioOverrideInput } from "./types";
 
 const CRYPTO_CASH_TICKERS = new Set([
   "USDT",
@@ -64,17 +64,36 @@ export function splitCryptoTrackerValues(rows: CryptoTrackerRow[]): {
   return { cryptoHoldingsSgd, cryptoCashSgd };
 }
 
-export interface TradingCashBalances {
-  brokerUsdCashNative: number;
-  /** Broker USD cash — manually entered SGD equivalent (no FX applied here). */
-  brokerUsdCashSgdEquivalent: number;
-  brokerSgdCash: number;
+export interface ManualTradingCashInput {
+  tradingCashUsd: number;
   tradingCashSgd: number;
 }
 
+export interface TradingCashBalances {
+  /** Manual broker USD cash — reference only */
+  brokerUsdCashNative: number;
+  /** Manual Trading Cash SGD */
+  brokerSgdCash: number;
+  /** Same as brokerSgdCash — never includes USD converted to SGD */
+  tradingCashSgd: number;
+}
+
+export function manualTradingCashFromOverride(
+  override: PortfolioOverrideInput | null | undefined
+): ManualTradingCashInput | null {
+  if (!override) return null;
+  const usd = override.manualTradingCashUsd;
+  const sgd = override.manualTradingCashSgd;
+  if (usd == null && sgd == null) return null;
+  return {
+    tradingCashUsd: usd ?? 0,
+    tradingCashSgd: sgd ?? 0,
+  };
+}
+
+/** Fallback from holdings when no manual override — SGD cash only for tradingCashSgd. */
 export function extractTradingCash(holdings: HoldingInput[]): TradingCashBalances {
   let brokerUsdCashNative = 0;
-  let brokerUsdCashSgdEquivalent = 0;
   let brokerSgdCash = 0;
 
   for (const holding of holdings) {
@@ -83,7 +102,6 @@ export function extractTradingCash(holdings: HoldingInput[]): TradingCashBalance
 
     if (holding.currency === "USD") {
       brokerUsdCashNative += holding.market_value_native;
-      brokerUsdCashSgdEquivalent += holding.market_value_sgd;
     } else {
       brokerSgdCash += holding.market_value_sgd;
     }
@@ -91,16 +109,28 @@ export function extractTradingCash(holdings: HoldingInput[]): TradingCashBalance
 
   return {
     brokerUsdCashNative,
-    brokerUsdCashSgdEquivalent,
     brokerSgdCash,
-    tradingCashSgd: brokerUsdCashSgdEquivalent + brokerSgdCash,
+    tradingCashSgd: brokerSgdCash,
   };
+}
+
+export function resolveTradingCash(
+  manual: ManualTradingCashInput | null | undefined,
+  holdings: HoldingInput[]
+): TradingCashBalances {
+  if (manual) {
+    return {
+      brokerUsdCashNative: manual.tradingCashUsd,
+      brokerSgdCash: manual.tradingCashSgd,
+      tradingCashSgd: manual.tradingCashSgd,
+    };
+  }
+  return extractTradingCash(holdings);
 }
 
 export interface CashBreakdown {
   tradingCashSgd: number;
   brokerUsdCashNative: number;
-  brokerUsdCashSgdEquivalent: number;
   brokerSgdCash: number;
   cryptoCashSgd: number;
   totalCashSgd: number;
@@ -144,12 +174,19 @@ export function buildCapitalPoolsBreakdown(input: {
   openTrades: EnrichedTrade[];
   clientSummary: ClientProfitSharingSummary;
   tradeAllocations: TradeAllocationRow[];
-  fxRate?: number;
+  manualTradingCash?: ManualTradingCashInput | null;
+  cryptoCashSgdOverride?: number | null;
+  cryptoHoldingsSgdOverride?: number | null;
 }): CapitalPoolsBreakdown {
-  const tradingCash = extractTradingCash(input.holdings);
-  const { cryptoHoldingsSgd, cryptoCashSgd } = splitCryptoTrackerValues(
-    input.cryptoRows
+  const tradingCash = resolveTradingCash(
+    input.manualTradingCash,
+    input.holdings
   );
+  const splitCrypto = splitCryptoTrackerValues(input.cryptoRows);
+  const cryptoHoldingsSgd =
+    input.cryptoHoldingsSgdOverride ?? splitCrypto.cryptoHoldingsSgd;
+  const cryptoCashSgd =
+    input.cryptoCashSgdOverride ?? splitCrypto.cryptoCashSgd;
 
   const personalOpenTrades = input.openTrades.filter((t) => !t.isClientTrade);
   const optionsValueSgd = personalOpenTrades.reduce(
@@ -172,7 +209,6 @@ export function buildCapitalPoolsBreakdown(input: {
   const cash: CashBreakdown = {
     tradingCashSgd: tradingCash.tradingCashSgd,
     brokerUsdCashNative: tradingCash.brokerUsdCashNative,
-    brokerUsdCashSgdEquivalent: tradingCash.brokerUsdCashSgdEquivalent,
     brokerSgdCash: tradingCash.brokerSgdCash,
     cryptoCashSgd,
     totalCashSgd: tradingCash.tradingCashSgd + cryptoCashSgd,

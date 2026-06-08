@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Options Command Center",
-  description: "Professional options trading dashboard for spread strategies",
+  title: "Investment Manager",
+  description:
+    "Portfolio, financial goals, equities, crypto, and options trading in one dashboard",
 };
 
 export default function RootLayout({

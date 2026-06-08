@@ -10,8 +10,7 @@ import {
   persistStockEtfHolding,
   removeStockEtfHolding,
 } from "@/lib/supabase/queries/stock-etf-holdings";
-import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 async function finish(): Promise<StockEtfActionResult> {
@@ -22,20 +21,11 @@ async function finish(): Promise<StockEtfActionResult> {
   return { success: true, data };
 }
 
-async function resolveUserId(): Promise<string | undefined> {
-  if (!isSupabaseConfigured()) return undefined;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id;
-}
-
 export async function createStockEtfHolding(
   input: StockEtfHoldingFormInput
 ): Promise<StockEtfActionResult> {
   try {
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const row = stockEtfRowFromForm(input, userId);
     await persistStockEtfHolding(row, userId);
     return finish();
@@ -53,7 +43,7 @@ export async function updateStockEtfHolding(
   createdAt?: string
 ): Promise<StockEtfActionResult> {
   try {
-    const userId = (await resolveUserId()) ?? "mock-user";
+    const userId = await requireUserId();
     const row = stockEtfRowFromForm(input, userId, id, createdAt);
     await persistStockEtfHolding(row, userId);
     return finish();
@@ -69,7 +59,7 @@ export async function deleteStockEtfHolding(
   id: string
 ): Promise<StockEtfActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await removeStockEtfHolding(id, userId);
     return finish();
   } catch (e) {

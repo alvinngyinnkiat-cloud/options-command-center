@@ -30,7 +30,7 @@ function addHeader(doc: jsPDF, title: string, subtitle?: string) {
   doc.rect(0, 0, 210, 28, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
-  doc.text("Options Command Center", 14, 12);
+  doc.text("Investment Manager", 14, 12);
   doc.setFontSize(11);
   doc.text(title, 14, 20);
   if (subtitle) {

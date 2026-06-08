@@ -66,6 +66,8 @@ export function ManualPortfolioOverrideCard({
       manualUsStocksOptionsSgdEquivalent: parseNum(usSgd),
       manualCryptoValueSgd: parseNum(crypto),
       manualSgStocksCashValueSgd: parseNum(sgSgd),
+      manualTradingCashUsd: override?.manualTradingCashUsd ?? null,
+      manualTradingCashSgd: override?.manualTradingCashSgd ?? null,
       manualUsdSgdRate: override?.manualUsdSgdRate ?? 1.35,
       manualTotalPortfolioValueSgd: null,
       overrideReason: reason.trim() || null,

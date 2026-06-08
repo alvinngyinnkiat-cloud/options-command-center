@@ -10,8 +10,14 @@ import {
 import { getMockTrades } from "@/lib/mock/trades-store";
 import { enrichTrade } from "@/lib/trades/map-trade";
 import type { EnrichedTrade } from "@/lib/trades/types";
+import { readSupabasePrimary } from "@/lib/supabase/data-access";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import {
+  MOCK_USER_ID,
+  warnMissingDevUserIdForWrite,
+  withSupabaseQuery,
+} from "@/lib/supabase/resolve-user";
+import type { ServerSupabaseClient } from "@/lib/supabase/server-write";
 import type { OptionsTrade, TradingJournalEntry } from "@/types/database";
 
 function buildTradeLookup(trades: OptionsTrade[]): Map<string, EnrichedTrade> {
@@ -40,84 +46,103 @@ function buildData(
 }
 
 async function fetchTradesForJournal(
-  userId: string | undefined
+  userId: string,
+  supabase: ServerSupabaseClient
 ): Promise<OptionsTrade[]> {
-  if (!isSupabaseConfigured() || !userId) {
-    return getMockTrades();
-  }
-
-  const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("options_trades")
     .select("*")
     .eq("user_id", userId);
 
-  return (data as OptionsTrade[] | null) ?? getMockTrades();
+  if (error) return [];
+  return (data ?? []) as OptionsTrade[];
+}
+
+async function fetchJournalRows(_userId: string): Promise<{
+  journal: TradingJournalEntry[];
+  trades: OptionsTrade[];
+}> {
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const [journalRes, trades] = await Promise.all([
+        supabase
+          .from("trading_journal")
+          .select("*")
+          .eq("user_id", userId)
+          .order("entry_date", { ascending: false }),
+        fetchTradesForJournal(userId, supabase),
+      ]);
+
+      if (journalRes.error) return { journal: [], trades: [] };
+      return {
+        journal: (journalRes.data ?? []) as TradingJournalEntry[],
+        trades,
+      };
+    },
+    () => ({ journal: [], trades: [] })
+  );
 }
 
 export async function getJournalTrackerData(): Promise<JournalTrackerData> {
-  if (!isSupabaseConfigured()) {
-    return buildData(getMockJournalEntries(), getMockTrades(), "mock");
-  }
-
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return buildData(getMockJournalEntries(), getMockTrades(), "mock");
-
-    const [journalRes, trades] = await Promise.all([
-      supabase
-        .from("trading_journal")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("entry_date", { ascending: false }),
-      fetchTradesForJournal(user.id),
-    ]);
-
-    if (journalRes.error || !journalRes.data?.length) {
-      return buildData(getMockJournalEntries(), trades, "mock");
-    }
-
-    return buildData(journalRes.data as TradingJournalEntry[], trades, "supabase");
-  } catch {
-    return buildData(getMockJournalEntries(), getMockTrades(), "mock");
-  }
+  const { value, dataSource } = await readSupabasePrimary({
+    module: "getJournalTrackerData",
+    mock: () => buildData(getMockJournalEntries(), getMockTrades(), "mock"),
+    empty: () => buildData([], [], "supabase"),
+    read: async (userId) => {
+      const { journal, trades } = await fetchJournalRows(userId);
+      return buildData(journal, trades, "supabase");
+    },
+  });
+  return { ...value, dataSource };
 }
 
 export async function persistJournalEntry(
   row: TradingJournalEntry,
   userId?: string
 ): Promise<TradingJournalEntry> {
-  if (!isSupabaseConfigured() || !userId) {
-    return upsertMockJournalEntry({ ...row, user_id: userId ?? "mock-user" });
+  if (!isSupabaseConfigured()) {
+    return upsertMockJournalEntry({ ...row, user_id: userId ?? MOCK_USER_ID });
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("trading_journal").upsert(row as never);
-  if (error) throw new Error(error.message);
-  return row;
+  return withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error } = await supabase
+        .from("trading_journal")
+        .upsert({ ...row, user_id: effectiveUserId } as never);
+      if (error) throw new Error(error.message);
+      return { ...row, user_id: effectiveUserId };
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      return upsertMockJournalEntry({ ...row, user_id: MOCK_USER_ID });
+    }
+  );
 }
 
 export async function removeJournalEntry(
   id: string,
   userId?: string
 ): Promise<void> {
-  if (!isSupabaseConfigured() || !userId) {
+  if (!isSupabaseConfigured()) {
     deleteMockJournalEntry(id);
     return;
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("trading_journal")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", userId);
+  await withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error } = await supabase
+        .from("trading_journal")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", effectiveUserId);
 
-  if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      deleteMockJournalEntry(id);
+    }
+  );
 }
 
 export async function getJournalCountForTrade(tradeId: string): Promise<number> {
@@ -125,21 +150,16 @@ export async function getJournalCountForTrade(tradeId: string): Promise<number> 
     return countJournalByTradeId(tradeId);
   }
 
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return countJournalByTradeId(tradeId);
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const { count } = await supabase
+        .from("trading_journal")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("trade_id", tradeId);
 
-    const { count } = await supabase
-      .from("trading_journal")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("trade_id", tradeId);
-
-    return count ?? 0;
-  } catch {
-    return countJournalByTradeId(tradeId);
-  }
+      return count ?? 0;
+    },
+    () => countJournalByTradeId(tradeId)
+  );
 }

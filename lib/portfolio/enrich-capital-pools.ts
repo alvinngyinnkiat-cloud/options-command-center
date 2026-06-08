@@ -6,6 +6,7 @@ import { buildCategoryValuesSgd } from "@/lib/stocks-etfs/build-tab-data";
 import type { PortfolioMetrics } from "./types";
 import {
   buildCapitalPoolsBreakdown,
+  manualTradingCashFromOverride,
   type CapitalPoolsBreakdown,
 } from "./capital-pools";
 
@@ -41,6 +42,7 @@ export async function buildPortfolioCapitalPools(
     openTrades: getOpenTrades(tradesData.trades),
     clientSummary: clientData.summary,
     tradeAllocations: clientData.tradeAllocations,
+    manualTradingCash: manualTradingCashFromOverride(metrics.override),
   });
 }
 

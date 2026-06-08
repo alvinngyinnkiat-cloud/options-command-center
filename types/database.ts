@@ -210,6 +210,25 @@ export interface Database {
           },
         ];
       };
+      technical_indicators: {
+        Row: TechnicalIndicator;
+        Insert: TechnicalIndicatorInsert;
+        Update: TechnicalIndicatorUpdate;
+        Relationships: [
+          {
+            foreignKeyName: "technical_indicators_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "technical_indicators_watchlist_id_fkey";
+            columns: ["watchlist_id"];
+            referencedRelation: "watchlist";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       options_trades: {
         Row: OptionsTrade;
         Insert: OptionsTradeInsert;
@@ -544,6 +563,8 @@ export interface PortfolioOverride {
   manual_us_stocks_options_value_usd: number | null;
   manual_us_stocks_options_sgd_equivalent: number | null;
   manual_sg_stocks_cash_value_sgd: number | null;
+  manual_trading_cash_usd: number | null;
+  manual_trading_cash_sgd: number | null;
   override_reason: string | null;
   override_updated_at: string | null;
   created_at: string;
@@ -635,6 +656,24 @@ export interface SupportResistance {
   resistance_2: number | null;
   notes: string | null;
   update_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Auto-refreshed scanner indicators — never writes support/resistance */
+export interface TechnicalIndicator {
+  id: string;
+  user_id: string;
+  watchlist_id: string;
+  ticker: string;
+  indicator_date: string;
+  atr_14: number | null;
+  ema_20: number | null;
+  sma_50: number | null;
+  sma_200: number | null;
+  stochastic: number | null;
+  source: string;
+  refreshed_at: string;
   created_at: string;
   updated_at: string;
 }
@@ -1012,6 +1051,11 @@ export type SupportResistanceInsert = Omit<
   "id" | "created_at" | "updated_at"
 > & { id?: string; created_at?: string; updated_at?: string };
 
+export type TechnicalIndicatorInsert = Omit<
+  TechnicalIndicator,
+  "id" | "created_at" | "updated_at" | "refreshed_at"
+> & { id?: string; created_at?: string; updated_at?: string; refreshed_at?: string };
+
 export type OptionsTradeInsert = Omit<
   OptionsTrade,
   "id" | "created_at" | "updated_at"
@@ -1092,6 +1136,7 @@ export type MonthlyContributionUpdate = Partial<MonthlyContributionInsert>;
 export type WatchlistItemUpdate = Partial<WatchlistItemInsert>;
 export type MarketDataUpdate = Partial<MarketDataInsert>;
 export type SupportResistanceUpdate = Partial<SupportResistanceInsert>;
+export type TechnicalIndicatorUpdate = Partial<TechnicalIndicatorInsert>;
 export type OptionsTradeUpdate = Partial<OptionsTradeInsert>;
 export type CryptoHoldingUpdate = Partial<CryptoHoldingInsert>;
 export type StockEtfHoldingUpdate = Partial<StockEtfHoldingInsert>;

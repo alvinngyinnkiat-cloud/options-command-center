@@ -36,10 +36,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-terminal-text leading-tight">
-                Options Command Center
+                Investment Manager
               </span>
               <span className="text-[10px] text-terminal-muted leading-tight">
-                Professional Trading Dashboard
+                Portfolio & Trading Dashboard
               </span>
             </div>
           </Link>

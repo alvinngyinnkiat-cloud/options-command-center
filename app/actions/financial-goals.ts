@@ -9,8 +9,7 @@ import {
   deleteFinancialGoalRecord,
   updateFinancialGoalRecord,
 } from "@/lib/supabase/queries/financial-goals";
-import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 export type FinancialGoalActionResult =
@@ -24,20 +23,11 @@ async function finish(): Promise<FinancialGoalActionResult> {
   return { success: true, data };
 }
 
-async function resolveUserId(): Promise<string> {
-  if (!isSupabaseConfigured()) return "mock-user";
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? "mock-user";
-}
-
 export async function createFinancialGoal(
   input: FinancialGoalFormInput
 ): Promise<FinancialGoalActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     if (!input.name.trim()) {
       return { success: false, error: "Goal name is required." };
     }
@@ -60,7 +50,7 @@ export async function updateFinancialGoal(
   changeReason?: string | null
 ): Promise<FinancialGoalActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     if (!input.name.trim()) {
       return { success: false, error: "Goal name is required." };
     }
@@ -79,7 +69,7 @@ export async function archiveFinancialGoal(
   archived = true
 ): Promise<FinancialGoalActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await archiveFinancialGoalRecord(id, userId, archived);
     return finish();
   } catch (e) {
@@ -94,7 +84,7 @@ export async function deleteFinancialGoal(
   id: string
 ): Promise<FinancialGoalActionResult> {
   try {
-    const userId = await resolveUserId();
+    const userId = await requireUserId();
     await deleteFinancialGoalRecord(id, userId);
     return finish();
   } catch (e) {

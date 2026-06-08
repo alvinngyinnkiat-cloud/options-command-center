@@ -19,40 +19,39 @@ import {
 } from "@/lib/mock/market-intelligence-store";
 import { getWatchlistScannerData } from "@/lib/supabase/queries/watchlist-scanner";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import {
+  resolveAuthenticatedUserId,
+  withSupabaseQuery,
+} from "@/lib/supabase/resolve-user";
 
 export async function getAggregatedIntelligenceImpacts() {
   if (!isSupabaseConfigured()) {
     return getAggregatedIntelligenceMap();
   }
 
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return getAggregatedIntelligenceMap();
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const { data } = await supabase
+        .from("market_intelligence_ticker_impacts")
+        .select("*")
+        .eq("user_id", userId);
 
-    const { data } = await supabase
-      .from("market_intelligence_ticker_impacts")
-      .select("*")
-      .eq("user_id", user.id);
+      if (!data?.length) return getAggregatedIntelligenceMap();
 
-    if (!data?.length) return getAggregatedIntelligenceMap();
+      const impacts = (data as TickerIntelligenceImpact[]).map((row) => ({
+        ...row,
+        impactDate:
+          (row as unknown as { impact_date: string }).impact_date ?? row.impactDate,
+      }));
 
-    const impacts = (data as TickerIntelligenceImpact[]).map((row) => ({
-      ...row,
-      impactDate: (row as unknown as { impact_date: string }).impact_date ?? row.impactDate,
-    }));
-
-    const { buildAggregatedImpacts } = await import(
-      "@/lib/market-intelligence/page-data"
-    );
-    const aggregated = buildAggregatedImpacts(impacts, []);
-    return new Map(aggregated.map((a) => [a.ticker, a]));
-  } catch {
-    return getAggregatedIntelligenceMap();
-  }
+      const { buildAggregatedImpacts } = await import(
+        "@/lib/market-intelligence/page-data"
+      );
+      const aggregated = buildAggregatedImpacts(impacts, []);
+      return new Map(aggregated.map((a) => [a.ticker, a]));
+    },
+    () => getAggregatedIntelligenceMap()
+  );
 }
 
 export async function getMarketIntelligencePageData(): Promise<MarketIntelligencePageData> {
@@ -76,61 +75,52 @@ export async function getMarketIntelligencePageData(): Promise<MarketIntelligenc
 
 async function getIntelligenceDocuments(): Promise<IntelligenceDocument[]> {
   if (!isSupabaseConfigured()) return getMockIntelligenceDocuments();
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return getMockIntelligenceDocuments();
-    const { data } = await supabase
-      .from("market_intelligence_documents")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("uploaded_at", { ascending: false });
-    if (!data?.length) return getMockIntelligenceDocuments();
-    return mapDocumentsFromDb(data);
-  } catch {
-    return getMockIntelligenceDocuments();
-  }
+
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const { data } = await supabase
+        .from("market_intelligence_documents")
+        .select("*")
+        .eq("user_id", userId)
+        .order("uploaded_at", { ascending: false });
+      if (!data?.length) return getMockIntelligenceDocuments();
+      return mapDocumentsFromDb(data);
+    },
+    () => getMockIntelligenceDocuments()
+  );
 }
 
 async function getIntelligenceSummaries(): Promise<IntelligenceSummary[]> {
   if (!isSupabaseConfigured()) return getMockIntelligenceSummaries();
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return getMockIntelligenceSummaries();
-    const { data } = await supabase
-      .from("market_intelligence_summaries")
-      .select("*")
-      .eq("user_id", user.id);
-    if (!data?.length) return getMockIntelligenceSummaries();
-    return mapSummariesFromDb(data);
-  } catch {
-    return getMockIntelligenceSummaries();
-  }
+
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const { data } = await supabase
+        .from("market_intelligence_summaries")
+        .select("*")
+        .eq("user_id", userId);
+      if (!data?.length) return getMockIntelligenceSummaries();
+      return mapSummariesFromDb(data);
+    },
+    () => getMockIntelligenceSummaries()
+  );
 }
 
 async function getTickerImpacts(): Promise<TickerIntelligenceImpact[]> {
   if (!isSupabaseConfigured()) return getMockTickerImpacts();
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return getMockTickerImpacts();
-    const { data } = await supabase
-      .from("market_intelligence_ticker_impacts")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("impact_date", { ascending: false });
-    if (!data?.length) return getMockTickerImpacts();
-    return mapImpactsFromDb(data);
-  } catch {
-    return getMockTickerImpacts();
-  }
+
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const { data } = await supabase
+        .from("market_intelligence_ticker_impacts")
+        .select("*")
+        .eq("user_id", userId)
+        .order("impact_date", { ascending: false });
+      if (!data?.length) return getMockTickerImpacts();
+      return mapImpactsFromDb(data);
+    },
+    () => getMockTickerImpacts()
+  );
 }
 
 function mapDocumentsFromDb(rows: unknown[]): IntelligenceDocument[] {
@@ -230,53 +220,53 @@ export async function uploadAndAnalyzeDocument(
     return getMarketIntelligencePageData();
   }
 
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const userId = user?.id ?? "mock-user";
+  const persisted = await withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      await supabase.from("market_intelligence_documents").insert({
+        id: doc.id,
+        user_id: userId,
+        title: doc.title,
+        source_type: doc.sourceType,
+        file_name: doc.fileName,
+        mime_type: doc.mimeType,
+        raw_text: doc.rawText,
+        published_at: doc.publishedAt,
+      } as never);
 
-    await supabase.from("market_intelligence_documents").insert({
-      id: doc.id,
-      user_id: userId,
-      title: doc.title,
-      source_type: doc.sourceType,
-      file_name: doc.fileName,
-      mime_type: doc.mimeType,
-      raw_text: doc.rawText,
-      published_at: doc.publishedAt,
-    } as never);
+      await supabase.from("market_intelligence_summaries").insert({
+        id: summary.id,
+        user_id: userId,
+        document_id: summary.documentId,
+        key_takeaways: summary.keyTakeaways,
+        bullish_signals: summary.bullishSignals,
+        bearish_signals: summary.bearishSignals,
+        overall_sentiment: summary.overallSentiment,
+        sentiment_score: summary.sentimentScore,
+        summary_text: summary.summaryText,
+      } as never);
 
-    await supabase.from("market_intelligence_summaries").insert({
-      id: summary.id,
-      user_id: userId,
-      document_id: summary.documentId,
-      key_takeaways: summary.keyTakeaways,
-      bullish_signals: summary.bullishSignals,
-      bearish_signals: summary.bearishSignals,
-      overall_sentiment: summary.overallSentiment,
-      sentiment_score: summary.sentimentScore,
-      summary_text: summary.summaryText,
-    } as never);
+      if (impacts.length > 0) {
+        await supabase.from("market_intelligence_ticker_impacts").insert(
+          impacts.map((i) => ({
+            id: i.id,
+            user_id: userId,
+            document_id: i.documentId,
+            watchlist_id: i.watchlistId,
+            ticker: i.ticker,
+            impact_date: i.impactDate,
+            sentiment: i.sentiment,
+            sentiment_score: i.sentimentScore,
+            impact_score: i.impactScore,
+            rationale: i.rationale,
+          })) as never
+        );
+      }
+      return true;
+    },
+    () => false
+  );
 
-    if (impacts.length > 0) {
-      await supabase.from("market_intelligence_ticker_impacts").insert(
-        impacts.map((i) => ({
-          id: i.id,
-          user_id: userId,
-          document_id: i.documentId,
-          watchlist_id: i.watchlistId,
-          ticker: i.ticker,
-          impact_date: i.impactDate,
-          sentiment: i.sentiment,
-          sentiment_score: i.sentimentScore,
-          impact_score: i.impactScore,
-          rationale: i.rationale,
-        })) as never
-      );
-    }
-  } catch {
+  if (!persisted) {
     addMockDocument(doc);
     addMockSummary(summary);
     addMockTickerImpacts(impacts);
@@ -293,15 +283,17 @@ export async function removeIntelligenceDocument(
     return getMarketIntelligencePageData();
   }
 
-  try {
-    const supabase = await createClient();
-    await supabase
-      .from("market_intelligence_documents")
-      .delete()
-      .eq("id", documentId);
-  } catch {
-    deleteMockDocument(documentId);
-  }
+  await withSupabaseQuery(
+    async ({ supabase }) => {
+      await supabase
+        .from("market_intelligence_documents")
+        .delete()
+        .eq("id", documentId);
+    },
+    () => {
+      deleteMockDocument(documentId);
+    }
+  );
 
   return getMarketIntelligencePageData();
 }

@@ -30,6 +30,10 @@ export interface PortfolioOverrideInput {
   manualCryptoValueSgd: number | null;
   /** Singapore stocks, ETFs, and SGD cash */
   manualSgStocksCashValueSgd: number | null;
+  /** Manual broker USD cash — reference only for US trading */
+  manualTradingCashUsd: number | null;
+  /** Manual broker SGD cash — used for Trading Cash SGD and trading capital */
+  manualTradingCashSgd: number | null;
   /** Legacy — not exposed in reconciliation UI; default FX for holdings load */
   manualUsdSgdRate: number;
   /** Legacy — derived on save from reconciled SGD buckets */

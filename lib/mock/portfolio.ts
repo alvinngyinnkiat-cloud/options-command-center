@@ -31,6 +31,8 @@ export const MOCK_PORTFOLIO_OVERRIDE: PortfolioOverrideInput = {
   manualUsStocksOptionsSgdEquivalent: null,
   manualCryptoValueSgd: null,
   manualSgStocksCashValueSgd: null,
+  manualTradingCashUsd: 18_000,
+  manualTradingCashSgd: 24_336,
   manualUsdSgdRate: DEFAULT_USD_SGD_RATE,
   manualTotalPortfolioValueSgd: null,
   overrideReason: null,

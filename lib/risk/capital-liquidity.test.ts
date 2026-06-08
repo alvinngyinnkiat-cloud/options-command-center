@@ -62,7 +62,9 @@ describe("capital liquidity", () => {
     const cash = extractCashBalances(holdings);
     expect(cash.cashSgd).toBe(12_000);
     expect(cash.cashUsdNative).toBe(18_000);
-    expect(cash.cashAvailable).toBe(36_300);
+    expect(cash.cashUsdSgd).toBe(0);
+    expect(cash.tradingCashSgd).toBe(12_000);
+    expect(cash.cashAvailable).toBe(12_000);
   });
 
   it("calculates USD trading buying power", () => {

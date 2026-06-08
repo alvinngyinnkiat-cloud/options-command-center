@@ -5,8 +5,7 @@ import { listDividendRecordRows } from "@/lib/supabase/queries/dividend-records"
 import { getStockEtfTrackerData } from "@/lib/supabase/queries/stock-etf-holdings";
 import { buildCategoryValuesSgd } from "@/lib/stocks-etfs/build-tab-data";
 import type { DataSource } from "@/lib/portfolio/types";
-import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { resolveUserId } from "@/lib/supabase/resolve-user";
 import {
   buildMarketPerformanceReport,
   buildPortfolioIncomeSummary,
@@ -30,17 +29,12 @@ export interface TickerPositionManagerData {
   dataSource: DataSource;
 }
 
-async function resolveUserId(): Promise<string> {
-  if (!isSupabaseConfigured()) return "mock-user";
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? "mock-user";
+async function resolveTickerUserId(): Promise<string> {
+  return resolveUserId();
 }
 
 export async function getTickerPositionManagerData(): Promise<TickerPositionManagerData> {
-  const userId = await resolveUserId();
+  const userId = await resolveTickerUserId();
   const referenceDate = MOCK_REFERENCE_DATE;
   const referenceYear = Number(referenceDate.slice(0, 4));
 

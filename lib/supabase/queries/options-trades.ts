@@ -9,11 +9,12 @@ import { buildTradeTrackerSummary } from "@/lib/trades/summary";
 import { resolveUnderlyingCurrentPrices } from "@/lib/trades/underlying-price";
 import type { EnrichedTrade, TradeTrackerData } from "@/lib/trades/types";
 import { getJournalCountForTrade } from "@/lib/supabase/queries/trading-journal";
+import { readSupabasePrimary } from "@/lib/supabase/data-access";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
-import type { OptionsTrade } from "@/types/database";
+import { MOCK_USER_ID, isValidSupabaseUserId, warnMissingDevUserIdForWrite, withSupabaseQuery } from "@/lib/supabase/resolve-user";
+import type { OptionsTrade, SupportResistance, TechnicalIndicator } from "@/types/database";
 
-function buildAlertContextByTicker(
+function buildAlertContextFromMock(
   currentPrices: Map<string, number>
 ): Map<string, TradeMarketContext> {
   const map = new Map<string, TradeMarketContext>();
@@ -31,6 +32,88 @@ function buildAlertContextByTicker(
   return map;
 }
 
+async function buildAlertContextByTicker(
+  userId: string | undefined,
+  currentPrices: Map<string, number>
+): Promise<Map<string, TradeMarketContext>> {
+  if (!isSupabaseConfigured() || !isValidSupabaseUserId(userId)) {
+    return buildAlertContextFromMock(currentPrices);
+  }
+
+  try {
+    return await withSupabaseQuery(
+      async ({ userId: queryUserId, supabase }) => {
+        const [srRes, techRes] = await Promise.all([
+          supabase
+            .from("support_resistance")
+            .select("*")
+            .eq("user_id", queryUserId)
+            .eq("timeframe", "daily"),
+          supabase
+            .from("technical_indicators")
+            .select("*")
+            .eq("user_id", queryUserId)
+            .order("indicator_date", { ascending: false }),
+        ]);
+
+        const srByTicker = new Map<string, SupportResistance>();
+        for (const row of (srRes.data ?? []) as SupportResistance[]) {
+          srByTicker.set(row.ticker.toUpperCase(), row);
+        }
+
+        const atrByTicker = new Map<string, number>();
+        for (const row of (techRes.data ?? []) as TechnicalIndicator[]) {
+          const ticker = row.ticker.toUpperCase();
+          if (!atrByTicker.has(ticker) && row.atr_14 != null) {
+            atrByTicker.set(ticker, Number(row.atr_14));
+          }
+        }
+
+        const map = new Map<string, TradeMarketContext>();
+        for (const [ticker, sr] of srByTicker) {
+          map.set(ticker, {
+            underlyingCurrentPrice: currentPrices.get(ticker) ?? null,
+            manualSupport: sr.support_1 != null ? Number(sr.support_1) : null,
+            manualResistance:
+              sr.resistance_1 != null ? Number(sr.resistance_1) : null,
+            atr14: atrByTicker.get(ticker) ?? null,
+          });
+        }
+
+        for (const [ticker, price] of currentPrices) {
+          if (!map.has(ticker)) {
+            map.set(ticker, {
+              underlyingCurrentPrice: price,
+              atr14: atrByTicker.get(ticker) ?? null,
+            });
+          }
+        }
+
+        return map;
+      },
+      () => buildAlertContextFromMock(currentPrices)
+    );
+  } catch {
+    return buildAlertContextFromMock(currentPrices);
+  }
+}
+
+async function fetchTradeRows(_userId: string): Promise<OptionsTrade[]> {
+  return withSupabaseQuery(
+    async ({ userId, supabase }) => {
+      const { data, error } = await supabase
+        .from("options_trades")
+        .select("*")
+        .eq("user_id", userId)
+        .order("expiration_date", { ascending: true });
+
+      if (error) return [];
+      return (data ?? []) as OptionsTrade[];
+    },
+    () => []
+  );
+}
+
 async function enrichAll(
   rows: OptionsTrade[],
   dataSource: "supabase" | "mock",
@@ -38,7 +121,10 @@ async function enrichAll(
 ): Promise<TradeTrackerData> {
   const tickers = rows.map((row) => row.ticker);
   const currentPrices = await resolveUnderlyingCurrentPrices(tickers, userId);
-  const alertContextByTicker = buildAlertContextByTicker(currentPrices);
+  const alertContextByTicker = await buildAlertContextByTicker(
+    userId,
+    currentPrices
+  );
   const trades: EnrichedTrade[] = await Promise.all(
     rows.map(async (row) => {
       const journalEntryCount = await getJournalCountForTrade(row.id);
@@ -64,34 +150,13 @@ async function enrichAll(
 }
 
 export async function getOptionsTradesData(): Promise<TradeTrackerData> {
-  if (!isSupabaseConfigured()) {
-    return enrichAll(getMockTrades(), "mock");
-  }
-
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return enrichAll(getMockTrades(), "mock");
-    }
-
-    const { data, error } = await supabase
-      .from("options_trades")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("expiration_date", { ascending: true });
-
-    if (error || !data?.length) {
-      return enrichAll(getMockTrades(), "mock");
-    }
-
-    return enrichAll(data as OptionsTrade[], "supabase", user.id);
-  } catch {
-    return enrichAll(getMockTrades(), "mock");
-  }
+  const { value, dataSource } = await readSupabasePrimary({
+    module: "getOptionsTradesData",
+    mock: () => enrichAll(getMockTrades(), "mock"),
+    empty: (userId) => enrichAll([], "supabase", userId),
+    read: async (userId) => enrichAll(await fetchTradeRows(userId), "supabase", userId),
+  });
+  return { ...value, dataSource };
 }
 
 export async function getOptionsTradeById(
@@ -105,71 +170,87 @@ export async function getOptionsTradeRow(
   tradeId: string,
   userId?: string
 ): Promise<OptionsTrade | null> {
-  if (!isSupabaseConfigured() || !userId) {
+  if (!isSupabaseConfigured()) {
     return getMockTrades().find((t) => t.id === tradeId) ?? null;
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("options_trades")
-    .select("*")
-    .eq("id", tradeId)
-    .eq("user_id", userId)
-    .maybeSingle();
+  return withSupabaseQuery(
+    async ({ userId: queryUserId, supabase }) => {
+      const { data, error } = await supabase
+        .from("options_trades")
+        .select("*")
+        .eq("id", tradeId)
+        .eq("user_id", queryUserId)
+        .maybeSingle();
 
-  if (error || !data) {
-    return getMockTrades().find((t) => t.id === tradeId) ?? null;
-  }
-
-  return data as OptionsTrade;
+      if (error) return null;
+      return (data as OptionsTrade | null) ?? null;
+    },
+    () => getMockTrades().find((t) => t.id === tradeId) ?? null
+  );
 }
 
 export async function persistOptionsTrade(
   trade: OptionsTrade,
   userId?: string
 ): Promise<OptionsTrade> {
-  if (!isSupabaseConfigured() || !userId) {
-    return upsertMockTrade({ ...trade, user_id: userId ?? "mock-user" });
+  if (!isSupabaseConfigured()) {
+    return upsertMockTrade({ ...trade, user_id: userId ?? MOCK_USER_ID });
   }
 
-  const supabase = await createClient();
-  const { data: existing } = await supabase
-    .from("options_trades")
-    .select("id, created_at")
-    .eq("id", trade.id)
-    .maybeSingle();
+  return withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { data: existing } = await supabase
+        .from("options_trades")
+        .select("id, created_at")
+        .eq("id", trade.id)
+        .maybeSingle();
 
-  const payload = {
-    ...trade,
-    created_at: existing
-      ? (existing as { created_at: string }).created_at
-      : trade.created_at,
-    updated_at: new Date().toISOString(),
-  };
+      const payload = {
+        ...trade,
+        user_id: effectiveUserId,
+        created_at: existing
+          ? (existing as { created_at: string }).created_at
+          : trade.created_at,
+        updated_at: new Date().toISOString(),
+      };
 
-  const { error } = await supabase
-    .from("options_trades")
-    .upsert(payload as never);
+      const { error } = await supabase
+        .from("options_trades")
+        .upsert(payload as never);
 
-  if (error) throw new Error(error.message);
-  return payload;
+      if (error) throw new Error(error.message);
+      return payload;
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      return upsertMockTrade({ ...trade, user_id: MOCK_USER_ID });
+    }
+  );
 }
 
 export async function removeOptionsTrade(
   id: string,
   userId?: string
 ): Promise<void> {
-  if (!isSupabaseConfigured() || !userId) {
+  if (!isSupabaseConfigured()) {
     deleteMockTrade(id);
     return;
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("options_trades")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", userId);
+  await withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error } = await supabase
+        .from("options_trades")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", effectiveUserId);
 
-  if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+      deleteMockTrade(id);
+    }
+  );
 }

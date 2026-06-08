@@ -74,7 +74,7 @@ export async function exportFullBackupJson(): Promise<FileDownloadPayload> {
   const bundle = await buildFullBackupBundle();
   const json = JSON.stringify(bundle, null, 2);
   return buildTextDownload(
-    `occ-full-backup-${timestampForFilename()}.json`,
+    `investment-manager-full-backup-${timestampForFilename()}.json`,
     "application/json",
     json
   );

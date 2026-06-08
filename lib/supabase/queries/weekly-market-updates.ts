@@ -18,7 +18,7 @@ import {
 } from "@/lib/mock/weekend-review-state";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { resolveAuthenticatedUserId, withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import type { WeeklyMarketUpdate } from "@/types/database";
 
 function mapDbRow(row: WeeklyMarketUpdate): WeeklyMarketUpdateRecord {
@@ -58,52 +58,54 @@ export async function getWeekendReviewStatus(
   }
 
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      const lastReviewDate = getMockWeekendReviewDate();
-      const nextReviewDueDate = getNextReviewDueDate(lastReviewDate);
+    const userId = await resolveAuthenticatedUserId();
+    if (!userId) {
       return {
-        lastReviewDate,
-        nextReviewDueDate,
+        lastReviewDate: null,
+        nextReviewDueDate: getNextReviewDueDate(null),
         weekEnding: null,
         tickerCount,
-        dataSource: "mock",
-        isDue: isReviewDue(
-          lastReviewDate,
-          nextReviewDueDate,
-          parseStableDate(MOCK_REFERENCE_DATE)
-        ),
+        dataSource: "supabase" as const,
+        isDue: isReviewDue(null, getNextReviewDueDate(null)),
       };
     }
 
-    const { data } = await supabase
-      .from("weekly_market_updates")
-      .select("created_at, week_ending")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    return withSupabaseQuery(
+      async ({ userId, supabase }) => {
+        const { data } = await supabase
+          .from("weekly_market_updates")
+          .select("created_at, week_ending")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-    const lastReviewDate = data
-      ? (data as { created_at: string }).created_at.split("T")[0]
-      : null;
-    const weekEnding = data
-      ? (data as { week_ending: string }).week_ending
-      : null;
-    const nextReviewDueDate = getNextReviewDueDate(lastReviewDate);
+        const lastReviewDate = data
+          ? (data as { created_at: string }).created_at.split("T")[0]
+          : null;
+        const weekEnding = data
+          ? (data as { week_ending: string }).week_ending
+          : null;
+        const nextReviewDueDate = getNextReviewDueDate(lastReviewDate);
 
-    return {
-      lastReviewDate,
-      nextReviewDueDate,
-      weekEnding,
-      tickerCount,
-      dataSource: "supabase",
-      isDue: isReviewDue(lastReviewDate, nextReviewDueDate),
-    };
+        return {
+          lastReviewDate,
+          nextReviewDueDate,
+          weekEnding,
+          tickerCount,
+          dataSource: "supabase" as const,
+          isDue: isReviewDue(lastReviewDate, nextReviewDueDate),
+        };
+      },
+      () => ({
+        lastReviewDate: null,
+        nextReviewDueDate: getNextReviewDueDate(null),
+        weekEnding: null,
+        tickerCount,
+        dataSource: "supabase" as const,
+        isDue: isReviewDue(null, getNextReviewDueDate(null)),
+      })
+    );
   } catch {
     const lastReviewDate = getMockWeekendReviewDate();
     const nextReviewDueDate = getNextReviewDueDate(lastReviewDate);
@@ -134,44 +136,56 @@ export async function persistWeeklyMarketReviewSnapshots(
   const weekEnding = getWeekEndingForReview();
   const snapshots = buildWeeklyMarketSnapshots(rows, reviewDate, weekEnding);
 
-  if (!isSupabaseConfigured() || !userId) {
+  if (!isSupabaseConfigured()) {
     setMockWeekendReviewDate(reviewDate);
     setMockWeeklyMarketSnapshots(snapshots);
     return { snapshots, reviewDate, dataSource: "mock" };
   }
 
-  const supabase = await createClient();
-  const now = new Date().toISOString();
+  return withSupabaseQuery<{
+    snapshots: WeeklyMarketUpdateRecord[];
+    reviewDate: string;
+    dataSource: "supabase" | "mock";
+  }>(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const now = new Date().toISOString();
 
-  for (const snap of snapshots) {
-    const { data: existing } = await supabase
-      .from("weekly_market_updates")
-      .select("id")
-      .eq("watchlist_id", snap.watchlistId)
-      .eq("week_ending", weekEnding)
-      .maybeSingle();
+      for (const snap of snapshots) {
+        const { data: existing } = await supabase
+          .from("weekly_market_updates")
+          .select("id")
+          .eq("watchlist_id", snap.watchlistId)
+          .eq("week_ending", weekEnding)
+          .maybeSingle();
 
-    const payload: WeeklyMarketUpdate = {
-      id: existing ? (existing as { id: string }).id : crypto.randomUUID(),
-      user_id: userId,
-      watchlist_id: snap.watchlistId,
-      ticker: snap.ticker,
-      week_ending: weekEnding,
-      support_1: snap.support1,
-      support_2: snap.support2,
-      resistance_1: snap.resistance1,
-      resistance_2: snap.resistance2,
-      analyst_notes: snap.analystNotes,
-      created_at: now,
-      updated_at: now,
-    };
+        const payload: WeeklyMarketUpdate = {
+          id: existing ? (existing as { id: string }).id : crypto.randomUUID(),
+          user_id: effectiveUserId,
+          watchlist_id: snap.watchlistId,
+          ticker: snap.ticker,
+          week_ending: weekEnding,
+          support_1: snap.support1,
+          support_2: snap.support2,
+          resistance_1: snap.resistance1,
+          resistance_2: snap.resistance2,
+          analyst_notes: snap.analystNotes,
+          created_at: now,
+          updated_at: now,
+        };
 
-    await supabase
-      .from("weekly_market_updates")
-      .upsert(payload as never, { onConflict: "watchlist_id,week_ending" });
-  }
+        await supabase
+          .from("weekly_market_updates")
+          .upsert(payload as never, { onConflict: "watchlist_id,week_ending" });
+      }
 
-  return { snapshots, reviewDate, dataSource: "supabase" };
+      return { snapshots, reviewDate, dataSource: "supabase" };
+    },
+    () => {
+      setMockWeekendReviewDate(reviewDate);
+      setMockWeeklyMarketSnapshots(snapshots);
+      return { snapshots, reviewDate, dataSource: "mock" };
+    }
+  );
 }
 
 export async function getWeeklyMarketUpdateHistory(
@@ -185,22 +199,23 @@ export async function getWeeklyMarketUpdateHistory(
   }
 
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const userId = await resolveAuthenticatedUserId();
+    if (!userId) return [];
 
-    if (!user) return [];
+    return withSupabaseQuery(
+      async ({ userId, supabase }) => {
+        const { data } = await supabase
+          .from("weekly_market_updates")
+          .select("*")
+          .eq("user_id", userId)
+          .order("week_ending", { ascending: false })
+          .order("ticker", { ascending: true })
+          .limit(limit);
 
-    const { data } = await supabase
-      .from("weekly_market_updates")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("week_ending", { ascending: false })
-      .order("ticker", { ascending: true })
-      .limit(limit);
-
-    return ((data ?? []) as WeeklyMarketUpdate[]).map(mapDbRow);
+        return ((data ?? []) as WeeklyMarketUpdate[]).map(mapDbRow);
+      },
+      () => []
+    );
   } catch {
     return [];
   }
