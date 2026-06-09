@@ -1,4 +1,5 @@
 import type { StrategyType } from "@/types/database";
+import { scoreBullPutAdjustedZone } from "@/lib/watchlist/support-resistance-atr";
 import type { ScoreComponentResult, SupportResistanceScoreInput } from "./types";
 import { SCORE_WEIGHTS } from "./types";
 
@@ -67,34 +68,48 @@ function scoreBullPutSr(
 ): ScoreComponentResult {
   const results: ScoreComponentResult[] = [];
 
-  if (input.support == null && input.weeklySupport == null) {
+  const hasDaily =
+    input.support != null && input.resistance != null;
+  const hasWeekly =
+    input.weeklySupport != null && input.weeklyResistance != null;
+
+  if (!hasDaily && !hasWeekly) {
     return {
       score: 0,
       maxScore,
       passed: false,
-      reason: "Manual support required — never auto-generated",
+      reason: "Manual support and resistance required — never auto-generated",
     };
   }
 
-  if (input.support != null) {
-    const atrDistance = (input.averagePrice - input.support) / input.atr14;
-    results.push(
-      scoreAtrDistance(atrDistance, maxScore, "daily support", "Bull Put")
+  if (hasDaily) {
+    const zone = scoreBullPutAdjustedZone(
+      input.averagePrice,
+      input.support!,
+      input.resistance!,
+      input.atr14,
+      maxScore,
+      "Daily S/R"
     );
+    results.push({ ...zone, maxScore });
   }
 
-  if (input.weeklySupport != null) {
-    const atrDistance =
-      (input.averagePrice - input.weeklySupport) / input.atr14;
-    results.push(
-      scoreAtrDistance(atrDistance, maxScore, "weekly support", "Bull Put")
+  if (hasWeekly) {
+    const zone = scoreBullPutAdjustedZone(
+      input.averagePrice,
+      input.weeklySupport!,
+      input.weeklyResistance!,
+      input.atr14,
+      maxScore,
+      "Weekly S/R"
     );
+    results.push({ ...zone, maxScore });
   }
 
   return averageComponentScores(
     results,
     maxScore,
-    "Manual support required — never auto-generated"
+    "Manual support and resistance required — never auto-generated"
   );
 }
 

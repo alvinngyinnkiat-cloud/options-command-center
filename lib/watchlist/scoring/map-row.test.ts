@@ -12,8 +12,8 @@ describe("scoreWatchlistRow", () => {
     row.technicals.sma50 = 95;
     row.previousTechnicals.sma50 = 94;
     row.supportResistance.support1 = 98;
-    row.supportResistance.resistance1 = null;
-    row.technicals.atr14 = 1;
+    row.supportResistance.resistance1 = 120;
+    row.technicals.atr14 = 5;
 
     const fromRow = scoreWatchlistRow(row);
     const fromCurrentPrice = computeScannerScore({
@@ -26,10 +26,10 @@ describe("scoreWatchlistRow", () => {
       },
       distanceEma20Pct: row.distances.distanceEma20Pct,
       support: row.supportResistance.support1,
-      resistance: null,
+      resistance: row.supportResistance.resistance1,
     });
 
-    expect(fromRow.supportResistance.score).toBe(8);
+    expect(fromRow.supportResistance.score).toBe(10);
     expect(fromCurrentPrice.supportResistance.score).toBe(0);
   });
 

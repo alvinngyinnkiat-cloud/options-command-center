@@ -50,6 +50,6 @@ describe("computeScannerScore", () => {
     const result = computeScannerScore(NO_SR_FIXTURE);
     expect(result.supportResistance.passed).toBe(false);
     expect(result.supportResistance.score).toBe(0);
-    expect(result.supportResistance.reason).toContain("Manual support required");
+    expect(result.supportResistance.reason).toContain("Manual support and resistance required");
   });
 });

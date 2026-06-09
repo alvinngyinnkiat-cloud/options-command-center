@@ -1,24 +1,9 @@
 import type { DailyCandle } from "@/lib/watchlist/market-data-provider";
+import { toYahooSymbol } from "@/lib/watchlist/market-data-symbols";
+
+export { toYahooSymbol } from "@/lib/watchlist/market-data-symbols";
 
 const YAHOO_CHART_ENDPOINT = "https://query1.finance.yahoo.com/v8/finance/chart";
-
-/**
- * Map watchlist tickers to Yahoo Finance symbols.
- * GOOG and GOOGL are separate listings on Yahoo (no aliasing).
- */
-export function toYahooSymbol(ticker: string): string {
-  const normalized = ticker.trim().toUpperCase();
-
-  if (normalized === "XSP") return "XSP.TO";
-  if (normalized === "BRK.B" || normalized === "BRKB") return "BRK-B";
-  if (normalized === "DBS" || normalized === "D05") return "D05.SI";
-  if (normalized === "C38U") return "C38U.SI";
-  if (normalized === "A17U") return "A17U.SI";
-  if (normalized === "ES3") return "ES3.SI";
-  if (normalized.endsWith(".SI")) return normalized;
-
-  return normalized.replace(/\./g, "-");
-}
 
 function formatNyseDate(unixSeconds: number): string {
   return new Intl.DateTimeFormat("en-CA", {

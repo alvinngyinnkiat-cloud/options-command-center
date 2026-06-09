@@ -1,5 +1,6 @@
 import { differenceInCalendarDays, parseISO, startOfDay, subDays } from "date-fns";
 import { calculateMidPoint } from "@/lib/watchlist/support-resistance-mid";
+import { buildAdjustedSupportResistanceLevels } from "@/lib/watchlist/support-resistance-atr";
 import {
   isBearCallCandidate,
   isBullPutCandidate,
@@ -28,8 +29,10 @@ export interface TradingAnalysisViewModel {
   soRollingSentiment: AnalysisSentiment;
   atr14: number;
   support1: number | null;
+  adjustedSupport1: number | null;
   midPoint: number | null;
   resistance1: number | null;
+  adjustedResistance1: number | null;
   previousAveragePrice: number;
   currentAveragePrice: number;
   averagePriceDifference: number;
@@ -171,6 +174,11 @@ export function buildTradingAnalysisViewModel(
   );
   const trend = getTrendDirectionLabel(row);
   const score = row.score;
+  const adjustedLevels = buildAdjustedSupportResistanceLevels(
+    row.supportResistance.support1,
+    row.supportResistance.resistance1,
+    row.technicals.atr14
+  );
 
   return {
     ticker: row.ticker,
@@ -183,11 +191,13 @@ export function buildTradingAnalysisViewModel(
     soRollingSentiment: soRolling.sentiment,
     atr14: row.technicals.atr14,
     support1: row.supportResistance.support1,
+    adjustedSupport1: adjustedLevels?.adjustedSupport ?? null,
     midPoint: calculateMidPoint(
       row.supportResistance.support1,
       row.supportResistance.resistance1
     ),
     resistance1: row.supportResistance.resistance1,
+    adjustedResistance1: adjustedLevels?.adjustedResistance ?? null,
     previousAveragePrice: avg.previousAverage,
     currentAveragePrice: avg.todayAverage,
     averagePriceDifference: avg.difference,

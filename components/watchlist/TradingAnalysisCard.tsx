@@ -167,19 +167,40 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             />
           </Section>
 
-          <Section title="2. ATR Analysis">
+          <Section title="2. Support / Resistance">
             <Field
               label="ATR(14)"
               value={formatIndicator(model.atr14)}
               className="col-span-2"
             />
-          </Section>
-
-          <Section title="3. Support / Resistance">
             <Field
-              label="Support 1"
+              label="Support"
               value={
                 model.support1 != null ? formatPrice(model.support1) : "—"
+              }
+            />
+            <Field
+              label="Adjusted Support"
+              value={
+                model.adjustedSupport1 != null
+                  ? formatPrice(model.adjustedSupport1)
+                  : "—"
+              }
+            />
+            <Field
+              label="Resistance"
+              value={
+                model.resistance1 != null
+                  ? formatPrice(model.resistance1)
+                  : "—"
+              }
+            />
+            <Field
+              label="Adjusted Resistance"
+              value={
+                model.adjustedResistance1 != null
+                  ? formatPrice(model.adjustedResistance1)
+                  : "—"
               }
             />
             <Field
@@ -187,19 +208,11 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
               value={
                 model.midPoint != null ? formatPrice(model.midPoint) : "—"
               }
-            />
-            <Field
-              label="Resistance 1"
-              value={
-                model.resistance1 != null
-                  ? formatPrice(model.resistance1)
-                  : "—"
-              }
               className="col-span-2"
             />
           </Section>
 
-          <Section title="4. Average Price Analysis">
+          <Section title="3. Average Price Analysis">
             <Field
               label="Previous Avg Price"
               value={formatPrice(model.previousAveragePrice)}
@@ -227,7 +240,7 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             />
           </Section>
 
-          <Section title="5. EMA20 Analysis">
+          <Section title="4. EMA20 Analysis">
             <Field label="EMA20" value={formatIndicator(model.ema20)} />
             <Field
               label="Avg Price vs EMA20"
@@ -251,7 +264,7 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             />
           </Section>
 
-          <Section title="6. Trend Analysis">
+          <Section title="5. Trend Analysis">
             <Field label="SMA200" value={formatIndicator(model.sma200)} />
             <Field label="SMA50" value={formatIndicator(model.sma50)} />
             <Field
@@ -284,7 +297,7 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             />
           </Section>
 
-          <Section title="7. Score Analysis">
+          <Section title="6. Score Analysis">
             <Field
               label="Trend Score"
               value={model.trendScore != null ? formatScore(model.trendScore) : "—"}
@@ -312,7 +325,7 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             />
           </Section>
 
-          <Section title="8. Recommendation">
+          <Section title="7. Recommendation">
             <Field
               label="Strategy"
               value={
@@ -347,7 +360,7 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             )}
           </Section>
 
-          <Section title="9. Weekend Review Status">
+          <Section title="8. Weekend Review Status">
             <Field
               label="Updated This Weekend"
               value={boolLabel(model.weekendReview.updatedThisWeekend)}

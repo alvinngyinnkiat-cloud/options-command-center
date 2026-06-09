@@ -74,9 +74,21 @@ export function TradingAnalysisExpandedRow({
                     : "—",
                 ],
                 [
+                  "Adjusted Support",
+                  model.adjustedSupport1 != null
+                    ? formatIndicator(model.adjustedSupport1)
+                    : "—",
+                ],
+                [
                   "Resistance",
                   model.resistance1 != null
                     ? formatIndicator(model.resistance1)
+                    : "—",
+                ],
+                [
+                  "Adjusted Resistance",
+                  model.adjustedResistance1 != null
+                    ? formatIndicator(model.adjustedResistance1)
                     : "—",
                 ],
               ].map(([label, value]) => (

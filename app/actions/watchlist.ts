@@ -26,7 +26,7 @@ import {
 } from "@/lib/watchlist/refresh-watchlist-scanner";
 import { getWatchlistScannerData } from "@/lib/supabase/queries/watchlist-scanner";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { requireUserId } from "@/lib/supabase/resolve-user";
+import { requireUserId, withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import { createClient } from "@/lib/supabase/server";
 import { WATCHLIST_MANUAL_REFRESH_LOG_SOURCE } from "@/lib/watchlist/sync-concurrency";
 import { revalidatePath } from "next/cache";
@@ -40,6 +40,63 @@ export type WatchlistActionResult =
 async function refreshRows(): Promise<WatchlistScannerRow[]> {
   const data = await getWatchlistScannerData({ persistScores: true });
   return data.rows;
+}
+
+async function resolveWatchlistItemForUpdate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  watchlistId: string,
+  ticker: string
+): Promise<{ id: string; ticker: string } | null> {
+  console.log("[save-sr] lookup by id", { watchlistId, userId });
+
+  const { data: byId, error: byIdError } = await supabase
+    .from("watchlist")
+    .select("id, ticker")
+    .eq("id", watchlistId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (byIdError) {
+    console.error("[save-sr] lookup by id failed:", byIdError.message);
+  }
+
+  if (byId) {
+    const row = byId as { id: string; ticker: string };
+    console.log("[save-sr] matched by id", { id: row.id, ticker: row.ticker });
+    return row;
+  }
+
+  const normalizedTicker = normalizeTicker(ticker);
+  console.log("[save-sr] lookup by ticker fallback", {
+    watchlistId,
+    ticker: normalizedTicker,
+    userId,
+  });
+
+  const { data: byTicker, error: byTickerError } = await supabase
+    .from("watchlist")
+    .select("id, ticker")
+    .eq("user_id", userId)
+    .eq("ticker", normalizedTicker)
+    .maybeSingle();
+
+  if (byTickerError) {
+    console.error("[save-sr] lookup by ticker failed:", byTickerError.message);
+  }
+
+  if (byTicker) {
+    const row = byTicker as { id: string; ticker: string };
+    console.log("[save-sr] matched by ticker", { id: row.id, ticker: row.ticker });
+    return row;
+  }
+
+  console.warn("[save-sr] no watchlist row matched", {
+    watchlistId,
+    ticker: normalizedTicker,
+    userId,
+  });
+  return null;
 }
 
 export type RefreshWatchlistScannerResult =
@@ -288,6 +345,17 @@ export async function saveSupportResistance(
 ): Promise<WatchlistActionResult> {
   const timeframe = input.timeframe ?? "daily";
 
+  console.log("[save-sr] payload received", {
+    watchlistId: input.watchlistId,
+    ticker: input.ticker,
+    timeframe,
+    support1: input.support1,
+    support2: input.support2,
+    resistance1: input.resistance1,
+    resistance2: input.resistance2,
+    updateDate: input.updateDate,
+  });
+
   if (!isSupabaseConfigured()) {
     const current = buildMockScannerRows();
     const next = attachScoresToRows(
@@ -312,59 +380,83 @@ export async function saveSupportResistance(
   }
 
   try {
-    const userId = await requireUserId();
-    const supabase = await createClient();
+    const saved = await withSupabaseQuery(
+      async ({ userId, supabase }) => {
+        const watchlistItem = await resolveWatchlistItemForUpdate(
+          supabase,
+          userId,
+          input.watchlistId,
+          input.ticker
+        );
 
-    const { data: watchlistItem } = await supabase
-      .from("watchlist")
-      .select("id")
-      .eq("id", input.watchlistId)
-      .eq("user_id", userId)
-      .maybeSingle();
+        if (!watchlistItem) {
+          return { ok: false as const, error: "Watchlist item not found." };
+        }
 
-    if (!watchlistItem) {
-      return { success: false, error: "Watchlist item not found." };
-    }
+        const resolvedWatchlistId = watchlistItem.id;
+        const resolvedTicker = watchlistItem.ticker;
 
-    const { data: existingSr } = await supabase
-      .from("support_resistance")
-      .select("id")
-      .eq("watchlist_id", input.watchlistId)
-      .eq("timeframe", timeframe)
-      .maybeSingle();
+        const { data: existingSr } = await supabase
+          .from("support_resistance")
+          .select("id, created_at")
+          .eq("watchlist_id", resolvedWatchlistId)
+          .eq("timeframe", timeframe)
+          .maybeSingle();
 
-    const existingId = existingSr
-      ? (existingSr as { id: string }).id
-      : crypto.randomUUID();
+        const existingRow = existingSr as
+          | { id: string; created_at: string }
+          | null;
+        const now = new Date().toISOString();
 
-    const payload: SupportResistance = {
-      id: existingId,
-      user_id: userId,
-      watchlist_id: input.watchlistId,
-      ticker: input.ticker,
-      timeframe,
-      support_1: input.support1,
-      support_2: input.support2,
-      resistance_1: input.resistance1,
-      resistance_2: input.resistance2,
-      notes: input.notes,
-      update_date: input.updateDate,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+        const payload: SupportResistance = {
+          id: existingRow?.id ?? crypto.randomUUID(),
+          user_id: userId,
+          watchlist_id: resolvedWatchlistId,
+          ticker: resolvedTicker,
+          timeframe,
+          support_1: input.support1,
+          support_2: input.support2,
+          resistance_1: input.resistance1,
+          resistance_2: input.resistance2,
+          notes: input.notes,
+          update_date: input.updateDate,
+          created_at: existingRow?.created_at ?? now,
+          updated_at: now,
+        };
 
-    const { error } = await supabase
-      .from("support_resistance")
-      .upsert(payload as never, { onConflict: "watchlist_id,timeframe" });
+        console.log("[save-sr] upserting", {
+          watchlistId: resolvedWatchlistId,
+          ticker: resolvedTicker,
+          srId: payload.id,
+        });
 
-    if (error) {
-      return { success: false, error: error.message };
+        const { error } = await supabase
+          .from("support_resistance")
+          .upsert(payload as never, { onConflict: "watchlist_id,timeframe" });
+
+        if (error) {
+          console.error("[save-sr] upsert failed:", error.message);
+          return { ok: false as const, error: error.message };
+        }
+
+        console.log("[save-sr] upsert success", {
+          watchlistId: resolvedWatchlistId,
+          srId: payload.id,
+        });
+        return { ok: true as const };
+      },
+      () => ({ ok: false as const, error: "Authentication required." })
+    );
+
+    if (!saved.ok) {
+      return { success: false, error: saved.error };
     }
 
     revalidatePath("/watchlist");
     const rows = await refreshRows();
     return { success: true, rows, dataSource: "supabase" };
   } catch (e) {
+    console.error("[save-sr] unexpected error:", e);
     return {
       success: false,
       error: e instanceof Error ? e.message : "Failed to save support/resistance.",

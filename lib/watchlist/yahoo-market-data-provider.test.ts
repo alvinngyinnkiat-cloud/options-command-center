@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { toYahooSymbol } from "@/lib/watchlist/yahoo-market-data-provider";
 
 describe("toYahooSymbol", () => {
-  it("maps XSP to Toronto listing", () => {
-    expect(toYahooSymbol("XSP")).toBe("XSP.TO");
+  it("maps XSP to S&P 500 index ^XSP (not XSP.TO)", () => {
+    expect(toYahooSymbol("XSP")).toBe("^XSP");
   });
 
   it("maps BRK.B to BRK-B", () => {

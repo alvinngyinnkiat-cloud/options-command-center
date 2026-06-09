@@ -13,8 +13,8 @@ export const BULL_PUT_PERFECT_FIXTURE: ScannerScoringInput = {
     stochastic: 18,
   },
   distanceEma20Pct: 1.85,
-  support: 109.5,
-  resistance: 120,
+  support: 105,
+  resistance: 115,
 };
 
 export const BEAR_CALL_PERFECT_FIXTURE: ScannerScoringInput = {

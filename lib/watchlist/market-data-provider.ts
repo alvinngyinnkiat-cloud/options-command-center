@@ -1,4 +1,5 @@
 import { MarketDataFetchError } from "@/lib/watchlist/market-data-fetch-error";
+import { toFmpSymbol } from "@/lib/watchlist/market-data-symbols";
 import { yahooMarketDataProvider } from "@/lib/watchlist/yahoo-market-data-provider";
 
 export const FMP_EOD_ENDPOINT =
@@ -66,7 +67,7 @@ export class FmpMarketDataProvider {
     from: string,
     to: string
   ): Promise<DailyCandle[]> {
-    const symbol = ticker.toUpperCase();
+    const symbol = toFmpSymbol(ticker);
     const params = new URLSearchParams({
       symbol,
       from,

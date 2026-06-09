@@ -58,10 +58,20 @@ function techPair(
 
 const MOCK_PROFILES: Record<string, TickerMockProfile> = {
   XSP: {
-    close: 52.18, open: 51.92, high: 52.34, low: 51.78, previousClose: 51.65,
-    previousDayHigh: 51.9, previousDayLow: 51.4,
-    ...techPair(0.82, 51.45, 50.88, 49.2, 52, 0.8, 51.2, 50.6, 49.0, 48.5),
-    supportResistance: { support1: 50.5, resistance1: 54 },
+    close: 738.67,
+    open: 736.2,
+    high: 740.1,
+    low: 735.5,
+    previousClose: 735.2,
+    previousDayHigh: 737.8,
+    previousDayLow: 733.4,
+    ...techPair(8.42, 732.5, 718.2, 685.6, 52, 8.28, 731.4, 716.5, 684.8, 48.5),
+    supportResistance: {
+      support1: 700,
+      support2: 730,
+      resistance1: 790,
+      resistance2: 765,
+    },
   },
   SPY: {
     close: 521.4, open: 519.2, high: 522.8, low: 518.1, previousClose: 518.6,
