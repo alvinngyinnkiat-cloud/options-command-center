@@ -1,7 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { refreshWatchlistScannerAction } from "@/app/actions/watchlist";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  getWatchlistRefreshStatusAction,
+  loadWatchlistScannerSnapshotAction,
+  refreshWatchlistScannerAction,
+} from "@/app/actions/watchlist";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -46,7 +50,13 @@ export function WatchlistScannerClient({
     useState<WatchlistCategory>("ETF");
   const [viewMode, setViewMode] = useState<WatchlistViewMode>("categories");
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isRefreshActive = isRefreshing || isBackgroundRefreshing;
 
   const activeRows = useMemo(
     () => rows.filter((row) => row.isActive),
@@ -93,8 +103,24 @@ export function WatchlistScannerClient({
     [activeRows, activeCategory]
   );
 
+  function stopRefreshPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+    setIsBackgroundRefreshing(false);
+  }
+
+  useEffect(() => () => stopRefreshPolling(), []);
+
   function handleRefresh() {
     setRefreshError(null);
+    setRefreshMessage(null);
+    stopRefreshPolling();
     startRefresh(async () => {
       const result = await refreshWatchlistScannerAction();
       if (!result.success) {
@@ -102,6 +128,36 @@ export function WatchlistScannerClient({
         return;
       }
       handleRowsChange(result.rows, result.dataSource);
+
+      if ("background" in result && result.background && result.refreshStartedAt) {
+        const startedAt = result.refreshStartedAt;
+        setRefreshMessage(result.message);
+        setIsBackgroundRefreshing(true);
+
+        pollRef.current = setInterval(async () => {
+          const [snapshot, status] = await Promise.all([
+            loadWatchlistScannerSnapshotAction(),
+            getWatchlistRefreshStatusAction(startedAt),
+          ]);
+          if (snapshot.success && snapshot.rows) {
+            handleRowsChange(snapshot.rows, snapshot.dataSource ?? "supabase");
+          }
+          if (status.complete) {
+            stopRefreshPolling();
+            setRefreshMessage(null);
+            if (status.status === "failed") {
+              setRefreshError(
+                "Background refresh failed. Check Data Health for details."
+              );
+            }
+          }
+        }, 3000);
+
+        pollTimeoutRef.current = setTimeout(() => {
+          stopRefreshPolling();
+          setRefreshMessage(null);
+        }, 180_000);
+      }
     });
   }
 
@@ -119,12 +175,14 @@ export function WatchlistScannerClient({
               variant="secondary"
               size="sm"
               onClick={handleRefresh}
-              disabled={isRefreshing}
+              disabled={isRefreshActive}
             >
               <RefreshCw
-                className={isRefreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+                className={
+                  isRefreshActive ? "h-4 w-4 animate-spin" : "h-4 w-4"
+                }
               />
-              {isRefreshing ? "Refreshing…" : "Refresh Data"}
+              {isRefreshActive ? "Refreshing…" : "Refresh Data"}
             </Button>
           </>
         }
@@ -132,6 +190,10 @@ export function WatchlistScannerClient({
 
       {refreshError && (
         <p className="text-xs text-loss">{refreshError}</p>
+      )}
+
+      {refreshMessage && (
+        <p className="text-xs text-terminal-muted">{refreshMessage}</p>
       )}
 
       <WeekendMarketReviewPanel

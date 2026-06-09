@@ -12,6 +12,10 @@ import {
 } from "@/lib/watchlist/market-data-provider";
 import { getWatchlistHistoryRange } from "@/lib/watchlist/market-data-sync-range";
 import { resolveWatchlistSyncClient } from "@/lib/watchlist/ensure-default-watchlist";
+import {
+  MARKET_DATA_UPSERT_BATCH_SIZE,
+  WATCHLIST_TICKER_CONCURRENCY,
+} from "@/lib/watchlist/sync-concurrency";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import type { Database, MarketData, TechnicalIndicator, WatchlistItem } from "@/types/database";
 
@@ -39,13 +43,21 @@ export interface SyncWatchlistDataResult {
 
 type DbClient = SupabaseClient<Database>;
 
+interface TickerSyncOutcome {
+  symbol: string;
+  marketRows: number;
+  indicatorRows: number;
+  source: MarketDataFetchSource | null;
+  diagnostic: TickerSyncDiagnostic;
+  fmpCounted: boolean;
+  yahooCounted: boolean;
+}
+
 function isMissingOptionalColumnError(message: string): boolean {
   return /average_price|fetched_at|schema cache|column/i.test(message);
 }
 
-async function resolveClient(
-  supabase?: DbClient
-): Promise<DbClient> {
+async function resolveClient(supabase?: DbClient): Promise<DbClient> {
   return resolveWatchlistSyncClient(supabase);
 }
 
@@ -65,79 +77,71 @@ async function fetchActiveWatchlist(
   return (data ?? []) as WatchlistItem[];
 }
 
-async function upsertMarketDataRow(
+async function upsertHistoricalMarketDataBulk(
   item: WatchlistItem,
-  candle: {
-    date: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    volume: number | null;
-  },
-  source: string,
-  supabase?: DbClient
-): Promise<void> {
-  const client = await resolveClient(supabase);
-  const { data: existing } = await client
-    .from("market_data")
-    .select("id, created_at")
-    .eq("watchlist_id", item.id)
-    .eq("price_date", candle.date)
-    .maybeSingle();
-
-  const now = new Date().toISOString();
-  const corePayload = {
-    id: existing ? (existing as { id: string }).id : randomUUID(),
-    watchlist_id: item.id,
-    ticker: item.ticker.toUpperCase(),
-    price_date: candle.date,
-    open: candle.open,
-    high: candle.high,
-    low: candle.low,
-    close: candle.close,
-    volume: candle.volume,
-    source,
-    updated_at: now,
-    created_at: existing
-      ? (existing as { created_at: string }).created_at
-      : now,
-  };
-
-  const extendedPayload = {
-    ...corePayload,
-    average_price: calculateAveragePrice(candle.high, candle.low),
-    fetched_at: now,
-  };
-
-  let { error } = await client
-    .from("market_data")
-    .upsert(extendedPayload as never, { onConflict: "watchlist_id,price_date" });
-
-  if (error && isMissingOptionalColumnError(error.message)) {
-    ({ error } = await client
-      .from("market_data")
-      .upsert(corePayload as never, { onConflict: "watchlist_id,price_date" }));
-  }
-
-  if (error) throw new Error(error.message);
-}
-
-async function upsertHistoricalMarketData(
-  item: WatchlistItem,
-  candles: Awaited<ReturnType<typeof fetchDailyCandlesForTicker>>["candles"],
+  candles: { date: string; open: number; high: number; low: number; close: number; volume: number | null }[],
   source: string,
   completedDate: string,
   supabase?: DbClient
 ): Promise<number> {
-  let count = 0;
+  const client = await resolveClient(supabase);
   const toStore = candles.filter((c) => c.date <= completedDate).slice(-260);
+  if (toStore.length === 0) return 0;
 
-  for (const candle of toStore) {
-    await upsertMarketDataRow(item, candle, source, supabase);
-    count++;
+  const dates = toStore.map((c) => c.date);
+  const { data: existingRows } = await client
+    .from("market_data")
+    .select("id, price_date, created_at")
+    .eq("watchlist_id", item.id)
+    .in("price_date", dates);
+
+  const existingByDate = new Map(
+    (existingRows ?? []).map((r) => {
+      const row = r as { id: string; price_date: string; created_at: string };
+      return [row.price_date, row] as const;
+    })
+  );
+
+  const now = new Date().toISOString();
+  const payloads = toStore.map((candle) => {
+    const existing = existingByDate.get(candle.date);
+    return {
+      id: existing?.id ?? randomUUID(),
+      watchlist_id: item.id,
+      ticker: item.ticker.toUpperCase(),
+      price_date: candle.date,
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+      volume: candle.volume,
+      source,
+      average_price: calculateAveragePrice(candle.high, candle.low),
+      fetched_at: now,
+      updated_at: now,
+      created_at: existing?.created_at ?? now,
+    };
+  });
+
+  for (let i = 0; i < payloads.length; i += MARKET_DATA_UPSERT_BATCH_SIZE) {
+    const chunk = payloads.slice(i, i + MARKET_DATA_UPSERT_BATCH_SIZE);
+    let { error } = await client
+      .from("market_data")
+      .upsert(chunk as never, { onConflict: "watchlist_id,price_date" });
+
+    if (error && isMissingOptionalColumnError(error.message)) {
+      const coreChunk = chunk.map(
+        ({ average_price: _ap, fetched_at: _fa, ...rest }) => rest
+      );
+      ({ error } = await client
+        .from("market_data")
+        .upsert(coreChunk as never, { onConflict: "watchlist_id,price_date" }));
+    }
+
+    if (error) throw new Error(error.message);
   }
-  return count;
+
+  return toStore.length;
 }
 
 async function upsertIndicatorRow(
@@ -189,6 +193,142 @@ async function upsertIndicatorRow(
   if (error) throw new Error(error.message);
 }
 
+async function syncSingleWatchlistItem(
+  userId: string,
+  item: WatchlistItem,
+  from: string,
+  to: string,
+  completedCandleDate: string,
+  supabase?: DbClient
+): Promise<TickerSyncOutcome> {
+  const symbol = item.ticker.toUpperCase();
+  console.log(`[watchlist-sync] Processing ticker ${symbol}...`);
+
+  try {
+    const { candles, source, fmpError, yahooError } =
+      await fetchDailyCandlesForTicker(item.ticker, from, to);
+
+    const eligible = candles.filter((c) => c.date <= completedCandleDate);
+    if (eligible.length === 0) {
+      throw new Error(`No completed candles through ${completedCandleDate}`);
+    }
+
+    const marketRows = await upsertHistoricalMarketDataBulk(
+      item,
+      eligible,
+      source,
+      completedCandleDate,
+      supabase
+    );
+
+    const indicators = computeIndicatorsFromCandles(eligible);
+    if (!indicators) {
+      throw new Error("Insufficient candle history for indicator calculation");
+    }
+
+    await upsertIndicatorRow(
+      userId,
+      item,
+      completedCandleDate,
+      indicators,
+      "computed",
+      supabase
+    );
+    let indicatorRows = 1;
+
+    const prevDate = eligible[eligible.length - 2]?.date;
+    if (prevDate) {
+      const prevIndicators = computeIndicatorsFromCandles(eligible.slice(0, -1));
+      if (prevIndicators) {
+        await upsertIndicatorRow(
+          userId,
+          item,
+          prevDate,
+          prevIndicators,
+          "computed",
+          supabase
+        );
+        indicatorRows++;
+      }
+    }
+
+    console.log(
+      `[watchlist-sync] Completed ${symbol} (${marketRows} candles, source=${source})`
+    );
+
+    return {
+      symbol,
+      marketRows,
+      indicatorRows,
+      source,
+      fmpCounted: source === "fmp",
+      yahooCounted: source === "yahoo",
+      diagnostic: {
+        symbol,
+        selectedSource: source,
+        status: "success",
+        error: null,
+        fmpError,
+        yahooError,
+      },
+    };
+  } catch (e) {
+    let fmpError: string | null = null;
+    let yahooError: string | null = null;
+    let message: string;
+
+    if (e instanceof MarketDataFetchError) {
+      fmpError = e.fmpError;
+      yahooError = e.yahooError;
+      message = e.message;
+    } else {
+      message = `${symbol}: ${e instanceof Error ? e.message : "sync failed"}`;
+    }
+
+    console.error(`[watchlist-sync] Failed ${symbol}: ${message}`);
+
+    return {
+      symbol,
+      marketRows: 0,
+      indicatorRows: 0,
+      source: null,
+      fmpCounted: false,
+      yahooCounted: false,
+      diagnostic: {
+        symbol,
+        selectedSource: null,
+        status: "failed",
+        error: message,
+        fmpError,
+        yahooError,
+      },
+    };
+  }
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await fn(items[index]!, index);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    () => worker()
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 export async function syncWatchlistDataForUser(
   userId: string,
   now: Date = new Date(),
@@ -199,109 +339,55 @@ export async function syncWatchlistDataForUser(
   }
 
   const { completedCandleDate, from, to } = getWatchlistHistoryRange(now);
-
   const items = await fetchActiveWatchlist(userId, supabase);
+
+  console.log(
+    `[watchlist-sync] Starting sync for ${items.length} tickers (concurrency=${WATCHLIST_TICKER_CONCURRENCY})`
+  );
+
+  const outcomes = await mapWithConcurrency(
+    items,
+    WATCHLIST_TICKER_CONCURRENCY,
+    (item) =>
+      syncSingleWatchlistItem(
+        userId,
+        item,
+        from,
+        to,
+        completedCandleDate,
+        supabase
+      )
+  );
+
   let marketRowsUpserted = 0;
   let indicatorRowsUpserted = 0;
   let tickersFailed = 0;
   const errors: string[] = [];
   const tickerDiagnostics: TickerSyncDiagnostic[] = [];
-  let providerSource: SyncWatchlistDataResult["providerSource"] = "none";
   let fmpTickers = 0;
   let yahooTickers = 0;
 
-  for (const item of items) {
-    const symbol = item.ticker.toUpperCase();
-    try {
-      const { candles, source, fmpError, yahooError } =
-        await fetchDailyCandlesForTicker(item.ticker, from, to);
-      if (source === "fmp") fmpTickers++;
-      else if (source === "yahoo") yahooTickers++;
+  for (const outcome of outcomes) {
+    marketRowsUpserted += outcome.marketRows;
+    indicatorRowsUpserted += outcome.indicatorRows;
+    tickerDiagnostics.push(outcome.diagnostic);
 
-      const eligible = candles.filter((c) => c.date <= completedCandleDate);
-      if (eligible.length === 0) {
-        throw new Error(`No completed candles through ${completedCandleDate}`);
-      }
-
-      marketRowsUpserted += await upsertHistoricalMarketData(
-        item,
-        eligible,
-        source,
-        completedCandleDate,
-        supabase
-      );
-
-      const indicators = computeIndicatorsFromCandles(eligible);
-      if (!indicators) {
-        throw new Error("Insufficient candle history for indicator calculation");
-      }
-
-      await upsertIndicatorRow(
-        userId,
-        item,
-        completedCandleDate,
-        indicators,
-        "computed",
-        supabase
-      );
-      indicatorRowsUpserted++;
-
-      const prevDate = eligible[eligible.length - 2]?.date;
-      if (prevDate) {
-        const prevIndicators = computeIndicatorsFromCandles(
-          eligible.slice(0, -1)
-        );
-        if (prevIndicators) {
-          await upsertIndicatorRow(
-            userId,
-            item,
-            prevDate,
-            prevIndicators,
-            "computed",
-            supabase
-          );
-          indicatorRowsUpserted++;
-        }
-      }
-
-      tickerDiagnostics.push({
-        symbol,
-        selectedSource: source,
-        status: "success",
-        error: null,
-        fmpError,
-        yahooError,
-      });
-    } catch (e) {
+    if (outcome.diagnostic.status === "failed") {
       tickersFailed++;
-      let fmpError: string | null = null;
-      let yahooError: string | null = null;
-      let message: string;
-
-      if (e instanceof MarketDataFetchError) {
-        fmpError = e.fmpError;
-        yahooError = e.yahooError;
-        message = e.message;
-        errors.push(message);
-      } else {
-        message = `${symbol}: ${e instanceof Error ? e.message : "sync failed"}`;
-        errors.push(message);
-      }
-
-      tickerDiagnostics.push({
-        symbol,
-        selectedSource: null,
-        status: "failed",
-        error: message,
-        fmpError,
-        yahooError,
-      });
+      if (outcome.diagnostic.error) errors.push(outcome.diagnostic.error);
     }
+    if (outcome.fmpCounted) fmpTickers++;
+    if (outcome.yahooCounted) yahooTickers++;
   }
 
+  let providerSource: SyncWatchlistDataResult["providerSource"] = "none";
   if (fmpTickers > 0 && yahooTickers > 0) providerSource = "mixed";
   else if (fmpTickers > 0) providerSource = "fmp";
   else if (yahooTickers > 0) providerSource = "yahoo";
+
+  console.log(
+    `[watchlist-sync] Finished: ${items.length - tickersFailed}/${items.length} succeeded, ${marketRowsUpserted} candle rows, ${tickersFailed} failed`
+  );
 
   return {
     completedCandleDate,

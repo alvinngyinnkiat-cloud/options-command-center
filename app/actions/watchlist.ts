@@ -21,12 +21,16 @@ import {
 } from "@/lib/watchlist/categories";
 import { coerceWatchlistCategory } from "@/lib/watchlist/normalize-watchlist-categories";
 import { ensureDefaultWatchlistItems } from "@/lib/watchlist/ensure-default-watchlist";
-import { refreshWatchlistScannerForUser } from "@/lib/watchlist/refresh-watchlist-scanner";
+import {
+  runWatchlistScannerRefreshJob,
+} from "@/lib/watchlist/refresh-watchlist-scanner";
 import { getWatchlistScannerData } from "@/lib/supabase/queries/watchlist-scanner";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import { requireUserId } from "@/lib/supabase/resolve-user";
 import { createClient } from "@/lib/supabase/server";
+import { WATCHLIST_MANUAL_REFRESH_LOG_SOURCE } from "@/lib/watchlist/sync-concurrency";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import type { SupportResistance, WatchlistItem } from "@/types/database";
 
 export type WatchlistActionResult =
@@ -45,10 +49,42 @@ export type RefreshWatchlistScannerResult =
       dataSource: "supabase" | "mock";
       tickersProcessed: number;
       tickersFailed: number;
+      background?: false;
+    }
+  | {
+      success: true;
+      rows: WatchlistScannerRow[];
+      dataSource: "supabase" | "mock";
+      background: true;
+      refreshStartedAt: string;
+      message: string;
     }
   | { success: false; error: string };
 
-/** Manual refresh — syncs market data, indicators, and scores from Yahoo/FMP. */
+/** Read-only snapshot for polling while background refresh runs. */
+export async function loadWatchlistScannerSnapshotAction(): Promise<
+  Pick<RefreshWatchlistScannerResult, "success"> & {
+    rows?: WatchlistScannerRow[];
+    dataSource?: "supabase" | "mock";
+    error?: string;
+  }
+> {
+  try {
+    const data = await getWatchlistScannerData({ persistScores: false });
+    return {
+      success: true,
+      rows: data.rows,
+      dataSource: data.dataSource,
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Failed to load watchlist.",
+    };
+  }
+}
+
+/** Manual refresh — returns immediately; sync runs in background via after(). */
 export async function refreshWatchlistScannerAction(): Promise<RefreshWatchlistScannerResult> {
   try {
     if (!isSupabaseConfigured()) {
@@ -63,23 +99,64 @@ export async function refreshWatchlistScannerAction(): Promise<RefreshWatchlistS
     }
 
     const userId = await requireUserId();
-    await ensureDefaultWatchlistItems();
-    const { sync, scanner } = await refreshWatchlistScannerForUser(userId);
-    revalidatePath("/watchlist");
-    revalidatePath("/data-health");
+    const snapshot = await getWatchlistScannerData({ persistScores: false });
+    const startedAt = new Date().toISOString();
+
+    after(async () => {
+      try {
+        await ensureDefaultWatchlistItems();
+        await runWatchlistScannerRefreshJob(userId, startedAt);
+      } catch (e) {
+        console.error("[watchlist-refresh] Background job failed:", e);
+      }
+    });
 
     return {
       success: true,
-      rows: scanner.rows,
-      dataSource: scanner.dataSource,
-      tickersProcessed: sync.tickersProcessed,
-      tickersFailed: sync.tickersFailed,
+      background: true,
+      refreshStartedAt: startedAt,
+      rows: snapshot.rows,
+      dataSource: snapshot.dataSource,
+      message:
+        "Refresh started in background. Market data for all tickers is updating — this page will refresh automatically.",
     };
   } catch (e) {
     return {
       success: false,
       error: e instanceof Error ? e.message : "Watchlist refresh failed.",
     };
+  }
+}
+
+/** Poll whether a background refresh started at `refreshStartedAt` has finished. */
+export async function getWatchlistRefreshStatusAction(refreshStartedAt: string): Promise<{
+  complete: boolean;
+  status?: "success" | "partial" | "failed";
+}> {
+  if (!isSupabaseConfigured()) {
+    return { complete: true, status: "success" };
+  }
+
+  try {
+    const userId = await requireUserId();
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("data_source_logs")
+      .select("status, completed_at")
+      .eq("user_id", userId)
+      .eq("source_name", WATCHLIST_MANUAL_REFRESH_LOG_SOURCE)
+      .eq("started_at", refreshStartedAt)
+      .maybeSingle();
+
+    const row = data as { status: string; completed_at: string | null } | null;
+    if (!row?.completed_at) {
+      return { complete: false };
+    }
+
+    const status = row.status as "success" | "partial" | "failed";
+    return { complete: true, status };
+  } catch {
+    return { complete: false };
   }
 }
 
