@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { deleteCryptoHolding } from "@/app/actions/crypto";
 import { Button } from "@/components/ui/Button";
+import { PnlPercentValue, PnlValue } from "@/components/ui/PnlValue";
 import type { EnrichedCryptoHolding } from "@/lib/crypto/types";
-import { cn, formatSGD, formatSignedSGD } from "@/lib/utils";
+import { formatSGD } from "@/lib/utils";
 import { Pencil, Trash2 } from "lucide-react";
 
 interface CryptoHoldingsTableProps {
@@ -63,21 +64,11 @@ export function CryptoHoldingsTable({
               <td className="px-3 py-2.5 font-mono text-right text-terminal-text">
                 {formatSGD(h.currentValueSgd)}
               </td>
-              <td
-                className={cn(
-                  "px-3 py-2.5 font-mono text-right font-medium",
-                  h.profitLossSgd >= 0 ? "text-profit" : "text-loss"
-                )}
-              >
-                {formatSignedSGD(h.profitLossSgd)}
+              <td className="px-3 py-2.5 font-mono text-right font-medium">
+                <PnlValue value={h.profitLossSgd} currency="SGD" />
               </td>
-              <td
-                className={cn(
-                  "px-3 py-2.5 font-mono text-right",
-                  h.returnPct >= 0 ? "text-profit" : "text-loss"
-                )}
-              >
-                {h.returnPct.toFixed(1)}%
+              <td className="px-3 py-2.5 font-mono text-right">
+                <PnlPercentValue value={h.returnPct} />
               </td>
               <td className="px-3 py-2.5 font-mono text-right text-terminal-muted">
                 {h.allocationPct.toFixed(1)}%

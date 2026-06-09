@@ -71,6 +71,14 @@ function mapOverride(row: PortfolioOverride | null): PortfolioOverrideInput | nu
       row.manual_sg_stocks_cash_value_sgd != null
         ? Number(row.manual_sg_stocks_cash_value_sgd)
         : null,
+    manualSgStocksValueSgd:
+      row.manual_sg_stocks_value_sgd != null
+        ? Number(row.manual_sg_stocks_value_sgd)
+        : null,
+    manualSgCashValueSgd:
+      row.manual_sg_cash_value_sgd != null
+        ? Number(row.manual_sg_cash_value_sgd)
+        : null,
     manualTradingCashUsd:
       row.manual_trading_cash_usd != null
         ? Number(row.manual_trading_cash_usd)
@@ -81,6 +89,16 @@ function mapOverride(row: PortfolioOverride | null): PortfolioOverrideInput | nu
         : row.manual_cash_value_sgd != null
           ? Number(row.manual_cash_value_sgd)
           : null,
+    manualCryptoCashSgd: Number(row.manual_crypto_cash_sgd ?? 0),
+    manualCryptoHoldingsSgd:
+      row.manual_crypto_holdings_sgd != null
+        ? Number(row.manual_crypto_holdings_sgd)
+        : null,
+    manualCryptoContributionsSgd:
+      row.manual_crypto_contributions_sgd != null
+        ? Number(row.manual_crypto_contributions_sgd)
+        : null,
+    manualClientPortfolioSgd: Number(row.manual_client_portfolio_sgd ?? 0),
     manualUsdSgdRate: Number(row.manual_usd_sgd_rate),
     manualTotalPortfolioValueSgd:
       row.manual_total_portfolio_value_sgd != null

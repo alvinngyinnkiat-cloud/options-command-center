@@ -69,15 +69,19 @@ function buildSgStockTab(
 ): { rows: SgStockRow[]; summary: SgStockTabSummary } {
   const sgHoldings = filterHoldingsByCategory(holdings, "sg_stock");
   const rows = sgHoldings.map((h) => buildSgStockRow(h, dividendTotals));
+  const totalCapital = rows.reduce(
+    (s, r) => s + r.holding.totalInvestedNative,
+    0
+  );
+  const totalPnl = rows.reduce((s, r) => s + r.totalPnl, 0);
   return {
     rows,
     summary: {
       totalMarketValue: rows.reduce((s, r) => s + r.marketValue, 0),
-      totalPnl: rows.reduce((s, r) => s + r.totalPnl, 0),
-      totalDividendIncome: rows.reduce(
-        (s, r) => s + (r.annualDividendIncome ?? 0),
-        0
-      ),
+      totalCapital,
+      totalDividendIncome: rows.reduce((s, r) => s + r.dividendIncome, 0),
+      totalPnl,
+      totalReturnPct: calculateRoiPct(totalPnl, totalCapital),
     },
   };
 }
@@ -133,6 +137,10 @@ export function mapEnrichedToDbRow(
     current_value_sgd: holding.currentValueSgd,
     shares_held: holding.sharesHeld,
     average_cost: holding.averageCost,
+    last_market_price_native: null,
+    last_price_date: null,
+    price_source: null,
+    manual_value_override: false,
     notes: holding.notes,
     last_updated: holding.lastUpdated,
     created_at: holding.createdAt,

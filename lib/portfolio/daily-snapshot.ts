@@ -5,6 +5,7 @@ import type { PortfolioPnlBreakdown } from "@/lib/trades/pnl-allocation";
 import type { DailyPortfolioSnapshot as DailyPortfolioSnapshotRow, DailyPortfolioSnapshotWrite } from "@/types/database";
 import type { CapitalPoolsBreakdown } from "./capital-pools";
 import { extractTradingCash } from "./capital-pools";
+import { getSingaporeSnapshotDate } from "./snapshot-date";
 import { snapshotOnOrBefore } from "./snapshot-history";
 
 type DailySnapshotGeneratedColumns =
@@ -78,14 +79,14 @@ export function buildDailySnapshotPayload(input: {
   const sgStockValueSgd = capitalPools?.sgStockValueSgd ?? 0;
   const currentOptionsValueSgd = capitalPools?.optionsValueSgd ?? 0;
   const cryptoHoldingsSgd = capitalPools?.cryptoHoldingsSgd ?? metrics.cryptoValue;
-  const cryptoCashSgd = capitalPools?.cryptoCashSgd ?? 0;
+  const cryptoCashSgd = capitalPools?.cryptoCashSgd ?? metrics.cryptoCashSgd ?? 0;
+  // crypto_value_sgd = coin holdings (incl. stablecoins); crypto_cash_sgd = exchange fiat cash
 
   const clientInitialCapital = capitalPools?.clientInitialCapital ?? 0;
-  const clientCurrentValue = capitalPools?.clientCurrentValue ?? 0;
+  const clientPortfolioSgd = capitalPools?.clientPortfolioSgd ?? 0;
 
   return {
-    snapshot_date:
-      input.snapshotDate ?? new Date().toISOString().slice(0, 10),
+    snapshot_date: input.snapshotDate ?? getSingaporeSnapshotDate(),
     portfolio_value_sgd: portfolioValue,
     stock_options_value_sgd:
       usEtfValueSgd +
@@ -107,7 +108,7 @@ export function buildDailySnapshotPayload(input: {
     personal_realized_pnl: pnl.myRealizedPnl,
     client_pnl: capitalPools?.clientPnl ?? pnl.clientOpenPnl + pnl.clientRealizedPnl,
     client_initial_capital_sgd: clientInitialCapital,
-    client_current_value_sgd: clientCurrentValue,
+    client_current_value_sgd: clientPortfolioSgd,
     portfolio_health_score: metrics.healthScore.score,
     notes: null,
   };

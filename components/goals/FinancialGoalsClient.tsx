@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { buildGoalsDashboardData } from "@/lib/goals/calculations";
@@ -122,7 +123,7 @@ export function FinancialGoalsClient({
               sgStockValueSgd={categoryValues.sgStockValueSgd}
               portfolioTargetSgd={data.portfolioGoal.targetValue}
             />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <MetricCardsGrid>
               <StatCard
                 label="Progress"
                 value={formatProgressPercent(data.portfolioGoal.progressPercent)}
@@ -147,7 +148,7 @@ export function FinancialGoalsClient({
                 change="Remaining"
                 changeType="neutral"
               />
-            </div>
+            </MetricCardsGrid>
           </div>
         </section>
       )}

@@ -8,7 +8,6 @@ import { getJournalTrackerData } from "@/lib/supabase/queries/trading-journal";
 import { getRiskDashboardData } from "@/lib/supabase/queries/risk-dashboard";
 import { getFinancialGoalsData } from "@/lib/supabase/queries/goals";
 import { getWeekendReviewPageData } from "@/lib/supabase/queries/weekend-review-page";
-import { getAutoWatchlistPageData } from "@/lib/supabase/queries/auto-watchlist";
 import { MOCK_RISK_SETTINGS } from "@/lib/mock/risk-settings";
 import { MOCK_PORTFOLIO_OVERRIDE } from "@/lib/mock/portfolio";
 import { getMockPortfolioHoldings } from "@/lib/mock/portfolio-holdings-store";
@@ -38,7 +37,6 @@ export async function collectExportContext() {
     risk,
     goals,
     weekend,
-    autoWatchlist,
   ] = await Promise.all([
     getCryptoTrackerData(),
     getStockEtfTrackerData(),
@@ -47,7 +45,6 @@ export async function collectExportContext() {
     getRiskDashboardData(),
     getFinancialGoalsData(),
     getWeekendReviewPageData(),
-    getAutoWatchlistPageData(),
   ]);
 
   return {
@@ -61,7 +58,6 @@ export async function collectExportContext() {
     risk,
     goals,
     weekend,
-    autoWatchlist,
     settings: {
       riskSettings: MOCK_RISK_SETTINGS,
       portfolioOverride: MOCK_PORTFOLIO_OVERRIDE,

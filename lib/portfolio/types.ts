@@ -28,12 +28,24 @@ export interface PortfolioOverrideInput {
   /** Broker-reported SGD equivalent for US bucket — entered manually, not FX-derived */
   manualUsStocksOptionsSgdEquivalent: number | null;
   manualCryptoValueSgd: number | null;
-  /** Singapore stocks, ETFs, and SGD cash */
+  /** @deprecated Legacy combined SG — use manualSgStocksValueSgd + manualSgCashValueSgd */
   manualSgStocksCashValueSgd: number | null;
+  /** Singapore stocks and ETFs (SGD) */
+  manualSgStocksValueSgd: number | null;
+  /** Singapore broker cash (SGD) — separate from Trading Cash SGD */
+  manualSgCashValueSgd: number | null;
   /** Manual broker USD cash — reference only for US trading */
   manualTradingCashUsd: number | null;
   /** Manual broker SGD cash — used for Trading Cash SGD and trading capital */
   manualTradingCashSgd: number | null;
+  /** Manual exchange fiat cash on crypto exchange (SGD) — not stablecoins */
+  manualCryptoCashSgd: number;
+  /** Auto-synced sum of individual crypto holdings — not manually entered */
+  manualCryptoHoldingsSgd: number | null;
+  /** Total crypto contributions / cost (SGD) for portfolio-level P/L */
+  manualCryptoContributionsSgd: number | null;
+  /** Manual client-owned portfolio slice (SGD) — Phase 17A ownership split */
+  manualClientPortfolioSgd: number;
   /** Legacy — not exposed in reconciliation UI; default FX for holdings load */
   manualUsdSgdRate: number;
   /** Legacy — derived on save from reconciled SGD buckets */
@@ -138,9 +150,11 @@ export interface HealthScoreResult {
 export interface PortfolioMetrics {
   /** Active display values (SGD) — manual if override enabled */
   portfolioValue: number;
-  /** My Portfolio Value = Trading Capital + Crypto Capital */
+  /** Personal portfolio slice (SGD) = total portfolio − client portfolio */
   myPortfolioValue: number;
   tradingCapital: number;
+  cryptoPortfolioValueSgd: number;
+  /** @deprecated Use cryptoPortfolioValueSgd */
   cryptoCapital: number;
   tradingCashSgd: number;
   cryptoCashSgd: number;

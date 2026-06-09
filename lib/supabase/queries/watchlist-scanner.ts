@@ -1,5 +1,6 @@
 import {
   resolveWatchlistCategory,
+  normalizeWatchlistCategory,
   type WatchlistCategory,
 } from "@/lib/watchlist/categories";
 import {
@@ -8,7 +9,12 @@ import {
   enrichScannerRow,
   sortScannerRows,
 } from "@/lib/watchlist/calculations";
+import { resolveCategoryDisplayRank } from "@/lib/watchlist/watchlist-rank";
 import { attachScoresToRows } from "@/lib/watchlist/scoring/map-row";
+import {
+  lastCompletedTradingDate,
+  selectCompletedCandleDate,
+} from "@/lib/market-calendar/nyse-calendar";
 import type {
   PreviousTechnicalIndicatorFields,
   TechnicalIndicatorFields,
@@ -16,6 +22,7 @@ import type {
   WatchlistScannerRow,
 } from "@/lib/watchlist/types";
 import { getAggregatedIntelligenceImpacts } from "@/lib/supabase/queries/market-intelligence";
+import type { AggregatedTickerIntelligence } from "@/lib/market-intelligence/types";
 import { persistScannerScores } from "@/lib/supabase/queries/scanner-scores";
 import { buildMockScannerRowsWithStore } from "@/lib/mock/watchlist-store";
 import {
@@ -31,9 +38,24 @@ import type {
   WatchlistItem,
 } from "@/types/database";
 
+function emptyTechnicals(): TechnicalIndicatorFields {
+  return { atr14: 0, ema20: 0, sma50: 0, sma200: 0, stochastic: 0 };
+}
+
+function emptyPreviousTechnicals(): PreviousTechnicalIndicatorFields {
+  return {
+    atr14: null,
+    ema20: null,
+    sma50: null,
+    sma200: null,
+    stochastic: null,
+  };
+}
+
 function mapSupportResistance(
   row: SupportResistance | null,
-  watchlistId: string
+  watchlistId: string,
+  timeframe: "daily" | "weekly"
 ): WatchlistScannerRow["supportResistance"] {
   if (!row) {
     return {
@@ -45,7 +67,7 @@ function mapSupportResistance(
       resistance2: null,
       notes: null,
       updateDate: new Date().toISOString().split("T")[0],
-      timeframe: "daily",
+      timeframe,
     };
   }
 
@@ -65,7 +87,7 @@ function mapSupportResistance(
 function categoryFromItem(item: WatchlistItem): WatchlistCategory {
   return resolveWatchlistCategory(
     item.ticker,
-    item.watchlist_category as WatchlistCategory
+    normalizeWatchlistCategory(item.watchlist_category) ?? item.watchlist_category
   );
 }
 
@@ -101,12 +123,17 @@ function mapPreviousIndicatorRow(
 function resolveTechnicals(
   watchlistId: string,
   ticker: string,
-  indicatorsByWatchlist: Map<string, TechnicalIndicator[]>
+  indicatorsByWatchlist: Map<string, TechnicalIndicator[]>,
+  completedDate: string,
+  allowMockFallback: boolean
 ): {
   today: TechnicalIndicatorFields;
   previous: PreviousTechnicalIndicatorFields;
 } {
-  const rows = indicatorsByWatchlist.get(watchlistId) ?? [];
+  const rows = (indicatorsByWatchlist.get(watchlistId) ?? []).filter(
+    (r) => r.indicator_date <= completedDate
+  );
+
   if (rows.length >= 2) {
     return {
       today: mapIndicatorRow(rows[0]!),
@@ -117,36 +144,83 @@ function resolveTechnicals(
     const today = mapIndicatorRow(rows[0]!);
     return { today, previous: { ...today } };
   }
-  return getMockTechnicalSnapshot(ticker);
+
+  if (allowMockFallback) {
+    return getMockTechnicalSnapshot(ticker);
+  }
+
+  return {
+    today: emptyTechnicals(),
+    previous: emptyPreviousTechnicals(),
+  };
+}
+
+function pickCompletedCandles(
+  marketRows: MarketData[],
+  completedDate: string
+): { latest: MarketData | null; previous: MarketData | null } {
+  const sorted = [...marketRows]
+    .filter((r) => r.price_date <= completedDate)
+    .sort(
+      (a, b) =>
+        new Date(b.price_date).getTime() - new Date(a.price_date).getTime()
+    );
+
+  const availableDates = sorted.map((r) => r.price_date);
+  const targetDate = selectCompletedCandleDate(availableDates);
+  const latest =
+    sorted.find((r) => r.price_date === targetDate) ?? sorted[0] ?? null;
+
+  if (!latest) return { latest: null, previous: null };
+
+  const previous =
+    sorted.find((r) => r.price_date < latest.price_date) ?? null;
+
+  return { latest, previous };
 }
 
 function buildRowFromDb(
   item: WatchlistItem,
   marketRows: MarketData[],
-  srRow: SupportResistance | null,
-  indicatorsByWatchlist: Map<string, TechnicalIndicator[]>
+  dailySr: SupportResistance | null,
+  weeklySr: SupportResistance | null,
+  indicatorsByWatchlist: Map<string, TechnicalIndicator[]>,
+  completedDate: string
 ): WatchlistScannerRow {
   const category = categoryFromItem(item);
-  const sorted = [...marketRows].sort(
-    (a, b) => new Date(b.price_date).getTime() - new Date(a.price_date).getTime()
+  const priorityRank = resolveCategoryDisplayRank(
+    item.ticker,
+    category,
+    item.priority_rank ?? 0
   );
-  const latest = sorted[0];
-  const previous = sorted[1];
+  const { latest, previous } = pickCompletedCandles(marketRows, completedDate);
 
   const { today: technicals, previous: previousTechnicals } = resolveTechnicals(
     item.id,
     item.ticker,
-    indicatorsByWatchlist
+    indicatorsByWatchlist,
+    completedDate,
+    false
   );
+
+  const dailySupportResistance = mapSupportResistance(
+    dailySr,
+    item.id,
+    "daily"
+  );
+  const weeklySupportResistance = weeklySr
+    ? mapSupportResistance(weeklySr, item.id, "weekly")
+    : null;
 
   if (latest) {
     const close = Number(latest.close);
-    const previousClose = previous ? Number(previous.close) : close * 0.995;
+    const previousClose = previous ? Number(previous.close) : close;
     const high = Number(latest.high ?? close);
     const low = Number(latest.low ?? close);
+    const open = Number(latest.open ?? close);
 
     const market = buildMarketDataFields(
-      Number(latest.open ?? close),
+      open,
       high,
       low,
       close,
@@ -154,14 +228,10 @@ function buildRowFromDb(
       close
     );
 
-    const mockPrev = buildMockScannerRow(item.ticker, item.sort_order, item.id)
-      .previousMarket;
     const prevHigh = previous
-      ? Number(previous.high ?? previousClose * 1.005)
-      : mockPrev.high;
-    const prevLow = previous
-      ? Number(previous.low ?? previousClose * 0.995)
-      : mockPrev.low;
+      ? Number(previous.high ?? previousClose)
+      : low;
+    const prevLow = previous ? Number(previous.low ?? previousClose) : low;
 
     const previousMarket = buildPreviousDayMarket(prevHigh, prevLow);
 
@@ -174,7 +244,12 @@ function buildRowFromDb(
         previousMarket,
         technicals,
         previousTechnicals,
-        mapSupportResistance(srRow, item.id)
+        dailySupportResistance,
+        category,
+        weeklySupportResistance,
+        priorityRank,
+        item.notes,
+        item.is_active
       ),
       item
     );
@@ -184,7 +259,8 @@ function buildRowFromDb(
     item.ticker,
     item.sort_order,
     item.id,
-    category
+    category,
+    priorityRank
   );
 }
 
@@ -210,82 +286,119 @@ function groupIndicatorsByWatchlist(
   return map;
 }
 
+function groupSupportResistance(
+  rows: SupportResistance[]
+): {
+  daily: Map<string, SupportResistance>;
+  weekly: Map<string, SupportResistance>;
+} {
+  const daily = new Map<string, SupportResistance>();
+  const weekly = new Map<string, SupportResistance>();
+  for (const row of rows) {
+    if (row.timeframe === "weekly") {
+      weekly.set(row.watchlist_id, row);
+    } else {
+      daily.set(row.watchlist_id, row);
+    }
+  }
+  return { daily, weekly };
+}
+
+async function fetchFromSupabaseForUser(
+  userId: string,
+  supabase: import("@supabase/supabase-js").SupabaseClient<import("@/types/database").Database>
+): Promise<WatchlistScannerRow[]> {
+  const completedDate = lastCompletedTradingDate();
+
+  const { data: watchlistItems, error } = await supabase
+    .from("watchlist")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .order("watchlist_category", { ascending: true })
+    .order("priority_rank", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (error) return [];
+
+  const items = (watchlistItems ?? []) as WatchlistItem[];
+  if (items.length === 0) return [];
+
+  const watchlistIds = items.map((i) => i.id);
+
+  const [marketRes, srRes, techRes] = await Promise.all([
+    supabase
+      .from("market_data")
+      .select("*")
+      .in("watchlist_id", watchlistIds)
+      .order("price_date", { ascending: false }),
+    supabase
+      .from("support_resistance")
+      .select("*")
+      .in("watchlist_id", watchlistIds),
+    supabase
+      .from("technical_indicators")
+      .select("*")
+      .eq("user_id", userId)
+      .in("watchlist_id", watchlistIds)
+      .order("indicator_date", { ascending: false }),
+  ]);
+
+  const marketByWatchlist = new Map<string, MarketData[]>();
+  for (const row of (marketRes.data ?? []) as MarketData[]) {
+    const existing = marketByWatchlist.get(row.watchlist_id) ?? [];
+    existing.push(row);
+    marketByWatchlist.set(row.watchlist_id, existing);
+  }
+
+  const { daily: dailySr, weekly: weeklySr } = groupSupportResistance(
+    (srRes.data ?? []) as SupportResistance[]
+  );
+
+  const indicatorsByWatchlist = groupIndicatorsByWatchlist(
+    (techRes.data ?? []) as TechnicalIndicator[]
+  );
+
+  return sortScannerRows(
+    items.map((item) =>
+      buildRowFromDb(
+        item,
+        marketByWatchlist.get(item.id) ?? [],
+        dailySr.get(item.id) ?? null,
+        weeklySr.get(item.id) ?? null,
+        indicatorsByWatchlist,
+        completedDate
+      )
+    )
+  );
+}
+
 async function fetchFromSupabase(_userId: string): Promise<WatchlistScannerRow[]> {
   return withSupabaseQuery(
-    async ({ userId, supabase }) => {
-      const { data: watchlistItems, error } = await supabase
-        .from("watchlist")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-
-      if (error) return [];
-
-      const items = (watchlistItems ?? []) as WatchlistItem[];
-      if (items.length === 0) return [];
-
-      const watchlistIds = items.map((i) => i.id);
-
-      const [marketRes, srRes, techRes] = await Promise.all([
-        supabase
-          .from("market_data")
-          .select("*")
-          .in("watchlist_id", watchlistIds)
-          .order("price_date", { ascending: false }),
-        supabase
-          .from("support_resistance")
-          .select("*")
-          .in("watchlist_id", watchlistIds)
-          .eq("timeframe", "daily"),
-        supabase
-          .from("technical_indicators")
-          .select("*")
-          .eq("user_id", userId)
-          .in("watchlist_id", watchlistIds)
-          .order("indicator_date", { ascending: false }),
-      ]);
-
-      const marketByWatchlist = new Map<string, MarketData[]>();
-      for (const row of (marketRes.data ?? []) as MarketData[]) {
-        const existing = marketByWatchlist.get(row.watchlist_id) ?? [];
-        existing.push(row);
-        marketByWatchlist.set(row.watchlist_id, existing);
-      }
-
-      const srByWatchlist = new Map<string, SupportResistance>();
-      for (const row of (srRes.data ?? []) as SupportResistance[]) {
-        srByWatchlist.set(row.watchlist_id, row);
-      }
-
-      const indicatorsByWatchlist = groupIndicatorsByWatchlist(
-        (techRes.data ?? []) as TechnicalIndicator[]
-      );
-
-      return sortScannerRows(
-        items.map((item) =>
-          buildRowFromDb(
-            item,
-            marketByWatchlist.get(item.id) ?? [],
-            srByWatchlist.get(item.id) ?? null,
-            indicatorsByWatchlist
-          )
-        )
-      );
-    },
+    async ({ userId, supabase }) =>
+      fetchFromSupabaseForUser(userId, supabase),
     () => []
   );
 }
 
+export type WatchlistScannerQueryOptions = {
+  /** Persist recomputed scores to Supabase. Off by default for read-only page loads. */
+  persistScores?: boolean;
+  /** Reuse a preloaded intelligence map to avoid duplicate Supabase reads. */
+  intelligenceMap?: Map<string, AggregatedTickerIntelligence>;
+};
+
 async function finalizeScannerRows(
   rows: WatchlistScannerRow[],
   dataSource: "supabase" | "mock",
-  userId?: string
+  userId?: string,
+  options: WatchlistScannerQueryOptions = {}
 ): Promise<WatchlistScannerData> {
-  const intelligenceMap = await getAggregatedIntelligenceImpacts();
+  const intelligenceMap =
+    options.intelligenceMap ?? (await getAggregatedIntelligenceImpacts());
   const scored = attachScoresToRows(rows, intelligenceMap);
 
-  if (dataSource === "supabase" && userId) {
+  if (options.persistScores && dataSource === "supabase" && userId) {
     await persistScannerScores(
       scored.map((r) => r.score!).filter(Boolean),
       userId
@@ -295,7 +408,9 @@ async function finalizeScannerRows(
   return { rows: scored, dataSource };
 }
 
-export async function getWatchlistScannerData(): Promise<WatchlistScannerData> {
+export async function getWatchlistScannerData(
+  options: WatchlistScannerQueryOptions = {}
+): Promise<WatchlistScannerData> {
   const { value: rows, dataSource } = await readSupabasePrimary({
     module: "getWatchlistScannerData",
     mock: () => buildMockScannerRowsWithStore(),
@@ -305,5 +420,16 @@ export async function getWatchlistScannerData(): Promise<WatchlistScannerData> {
 
   const userId =
     dataSource === "supabase" ? await resolveAuthenticatedUserId() : undefined;
-  return finalizeScannerRows(rows, dataSource, userId);
+  return finalizeScannerRows(rows, dataSource, userId, options);
 }
+
+export async function getWatchlistScannerDataForUser(
+  userId: string,
+  supabase: import("@supabase/supabase-js").SupabaseClient<import("@/types/database").Database>,
+  options: WatchlistScannerQueryOptions = { persistScores: true }
+): Promise<WatchlistScannerData> {
+  const rows = await fetchFromSupabaseForUser(userId, supabase);
+  return finalizeScannerRows(rows, "supabase", userId, options);
+}
+
+export { lastCompletedTradingDate };

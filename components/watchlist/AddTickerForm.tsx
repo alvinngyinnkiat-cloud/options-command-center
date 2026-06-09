@@ -13,7 +13,7 @@ interface AddTickerFormProps {
 }
 
 export function AddTickerForm({
-  category = "Pullbacks",
+  category = "PULLBACK",
   onAdded,
 }: AddTickerFormProps) {
   const [ticker, setTicker] = useState("");

@@ -208,6 +208,7 @@ export function CapitalLiquidityCheck({ base }: CapitalLiquidityCheckProps) {
           valueClassName={
             result.emergencyBuffer >= 0 ? "text-profit" : "text-loss"
           }
+          sub="Trading Cash USD − Close Requirement"
         />
         <Field
           label="After New Trade Buffer"
@@ -215,6 +216,7 @@ export function CapitalLiquidityCheck({ base }: CapitalLiquidityCheckProps) {
           valueClassName={
             result.afterNewTradeBuffer >= 0 ? "text-terminal-text" : "text-loss"
           }
+          sub="Trading Cash USD − Close Requirement − New Trade Risk"
         />
         <Field
           label="Stock Deployable Capital (USD)"
@@ -228,6 +230,7 @@ export function CapitalLiquidityCheck({ base }: CapitalLiquidityCheckProps) {
               ? "text-profit"
               : "text-loss"
           }
+          sub="Trading Cash USD − Open Risk − New Trade Risk"
         />
         <Field
           label="Capital Utilization"
@@ -280,8 +283,8 @@ export function CapitalLiquidityCheck({ base }: CapitalLiquidityCheckProps) {
         </h3>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Field
-            label="Cash Available"
-            value={formatSGD(result.stressTest.cashAvailable)}
+            label="Trading Cash USD Available"
+            value={formatNativeValue(result.stressTest.cashAvailable, "USD")}
           />
           <Field
             label="Current Close Requirement"

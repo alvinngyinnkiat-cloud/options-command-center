@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { buildTradingAnalysisViewModel } from "@/lib/watchlist/analysis-card";
+import { sortRowsByWatchlistRank } from "@/lib/watchlist/watchlist-rank";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
 import { TradingAnalysisCard } from "./TradingAnalysisCard";
@@ -12,17 +13,17 @@ interface TradingAnalysisPanelProps {
   reviewStatus: WeekendReviewStatus;
 }
 
-type SortKey = "score" | "ticker";
+type SortKey = "rank" | "score" | "ticker";
 
 export function TradingAnalysisPanel({
   rows,
   reviewStatus,
 }: TradingAnalysisPanelProps) {
-  const [sortKey, setSortKey] = useState<SortKey>("score");
+  const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [selectedTicker, setSelectedTicker] = useState<string | "all">("all");
 
   const models = useMemo(() => {
-    const built = rows.map((row) =>
+    const built = sortRowsByWatchlistRank(rows).map((row) =>
       buildTradingAnalysisViewModel(row, reviewStatus)
     );
     if (sortKey === "score") {
@@ -30,7 +31,10 @@ export function TradingAnalysisPanel({
         (a, b) => (b.totalScore ?? 0) - (a.totalScore ?? 0)
       );
     }
-    return [...built].sort((a, b) => a.ticker.localeCompare(b.ticker));
+    if (sortKey === "ticker") {
+      return [...built].sort((a, b) => a.ticker.localeCompare(b.ticker));
+    }
+    return built;
   }, [rows, reviewStatus, sortKey]);
 
   const visible =
@@ -63,6 +67,13 @@ export function TradingAnalysisPanel({
               </option>
             ))}
           </select>
+          <Button
+            variant={sortKey === "rank" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setSortKey("rank")}
+          >
+            By Rank
+          </Button>
           <Button
             variant={sortKey === "score" ? "secondary" : "ghost"}
             size="sm"

@@ -5,11 +5,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PortfolioGrowthChart } from "@/components/portfolio/PortfolioGrowthChart";
 import type { PortfolioHistoryData } from "@/lib/portfolio/daily-snapshot-types";
+import { getSingaporeSnapshotDate } from "@/lib/portfolio/snapshot-date";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
-import { DailyPortfolioTrackerCard } from "./DailyPortfolioTrackerCard";
 import { GoalProgressAnalysisPanel } from "./GoalProgressAnalysisPanel";
 import { MilestoneTrackerPanel } from "./MilestoneTrackerPanel";
-import { PortfolioHistoryTable } from "./PortfolioHistoryTable";
+import { formatSGD } from "@/lib/utils";
 import type { GoalsDashboardData } from "@/lib/goals/types";
 
 interface PortfolioGrowthHistorySectionProps {
@@ -21,20 +21,24 @@ export function PortfolioGrowthHistorySection({
   initialHistory,
   goalsData,
 }: PortfolioGrowthHistorySectionProps) {
-  const [history, setHistory] = useState(initialHistory);
+  const [history] = useState(initialHistory);
   const [showTargetLine, setShowTargetLine] = useState(true);
-  const asOfDate = history.latest?.snapshotDate ?? MOCK_REFERENCE_DATE;
+  const asOfDate =
+    history.latest?.snapshotDate ??
+    (history.dataSource === "supabase"
+      ? getSingaporeSnapshotDate()
+      : MOCK_REFERENCE_DATE);
 
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
-            Portfolio Growth &amp; History
+            Portfolio Performance
           </h2>
           <p className="mt-1 text-[11px] text-terminal-muted">
-            Long-term goal tracking and performance measurement — SGD values, My
-            portfolio only
+            Historical My Portfolio Value from saved snapshots — create snapshots
+            on the Portfolio Dashboard
           </p>
         </div>
         <Badge
@@ -43,11 +47,6 @@ export function PortfolioGrowthHistorySection({
           {history.dataSource === "supabase" ? "Live snapshots" : "Mock history"}
         </Badge>
       </div>
-
-      <DailyPortfolioTrackerCard
-        history={history}
-        onHistoryChange={setHistory}
-      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="space-y-2">
@@ -59,7 +58,7 @@ export function PortfolioGrowthHistorySection({
               onClick={() => setShowTargetLine((v) => !v)}
             >
               {showTargetLine ? "Hide" : "Show"} target line (
-              {goalsData.portfolioGoal.targetValue.toLocaleString()} SGD)
+              {formatSGD(goalsData.portfolioGoal.targetValue)})
             </Button>
           </div>
           <PortfolioGrowthChart
@@ -76,8 +75,6 @@ export function PortfolioGrowthHistorySection({
           milestones={history.milestones}
         />
       </div>
-
-      <PortfolioHistoryTable history={history} onHistoryChange={setHistory} />
 
       <GoalProgressAnalysisPanel data={goalsData} />
     </section>

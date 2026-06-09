@@ -55,6 +55,28 @@ export async function updateStockEtfHolding(
   }
 }
 
+export async function refreshStockMarketPricesAction(): Promise<StockEtfActionResult> {
+  try {
+    const userId = await requireUserId();
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    const { syncUsStockEtfPricesForUser, syncSgStockPricesForUser } =
+      await import("@/lib/stocks-etfs/sync-holding-market-prices");
+
+    await Promise.all([
+      syncUsStockEtfPricesForUser(userId, new Date(), admin),
+      syncSgStockPricesForUser(userId, new Date(), admin),
+    ]);
+
+    return finish();
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Failed to refresh market prices.",
+    };
+  }
+}
+
 export async function deleteStockEtfHolding(
   id: string
 ): Promise<StockEtfActionResult> {

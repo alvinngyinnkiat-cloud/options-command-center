@@ -13,11 +13,14 @@ import type {
 } from "./types";
 import {
   calculateCurrentCloseCost,
-  calculateValueDifference,
   deriveSystemOptionValueFromCloseCost,
-  resolveActiveValueSource,
-  resolveEffectiveOptionValue,
+  resolveManualOptionValue,
 } from "./valuation";
+import {
+  calculateExitDebitTotal,
+  deriveExitDebitPerContract,
+  resolveStoredExitDebitTotal,
+} from "./exit-debit";
 
 import type { TradeMarketContext } from "./types";
 
@@ -39,9 +42,10 @@ function strikesFromTrade(row: OptionsTrade): TradeStrikeInput {
 export function resolveTradeValuation(row: OptionsTrade): {
   manualCurrentOptionValue: number | null;
   systemCurrentOptionValue: number;
-  currentOptionValue: number;
+  currentOptionValue: number | null;
   currentValueSource: CurrentValueSource;
   currentCloseCost: number;
+  hasManualCurrentOptionValue: boolean;
 } {
   const systemFromColumn =
     row.system_current_option_value != null
@@ -54,25 +58,19 @@ export function resolveTradeValuation(row: OptionsTrade): {
       row.contracts
     );
 
-  const manualCurrentOptionValue =
+  const manualCurrentOptionValue = resolveManualOptionValue(
     row.manual_current_option_value != null
       ? Number(row.manual_current_option_value)
-      : null;
-
-  const currentOptionValue = resolveEffectiveOptionValue(
-    manualCurrentOptionValue,
-    systemCurrentOptionValue
+      : null
   );
 
-  const currentValueSource = resolveActiveValueSource(
-    manualCurrentOptionValue,
-    row.current_value_source ?? "system"
-  );
+  const hasManualCurrentOptionValue = manualCurrentOptionValue != null;
+  const currentOptionValue = manualCurrentOptionValue;
+  const currentValueSource: CurrentValueSource = "manual";
 
-  const currentCloseCost = calculateCurrentCloseCost(
-    currentOptionValue,
-    row.contracts
-  );
+  const currentCloseCost = hasManualCurrentOptionValue
+    ? calculateCurrentCloseCost(manualCurrentOptionValue, row.contracts)
+    : 0;
 
   return {
     manualCurrentOptionValue,
@@ -80,6 +78,7 @@ export function resolveTradeValuation(row: OptionsTrade): {
     currentOptionValue,
     currentValueSource,
     currentCloseCost,
+    hasManualCurrentOptionValue,
   };
 }
 
@@ -98,7 +97,16 @@ export function formInputFromTrade(
     contracts: row.contracts,
     premiumPerContract: Number(row.credit_received),
     currentValue: valuation.currentCloseCost,
-    exitDebit: row.exit_debit != null ? Number(row.exit_debit) : null,
+    exitDebit: resolveStoredExitDebitTotal(
+      row.exit_debit != null ? Number(row.exit_debit) : null,
+      Number(row.credit_received),
+      row.contracts
+    ),
+    feesCommission: Number(row.fees_commission ?? 0),
+    brokerRealizedPnl:
+      row.broker_realized_pnl != null
+        ? Number(row.broker_realized_pnl)
+        : null,
     shortStrikePut:
       row.short_strike_put != null ? Number(row.short_strike_put) : null,
     longStrikePut:
@@ -143,9 +151,11 @@ export function enrichTrade(
     expirationDate: input.expirationDate,
     contracts: input.contracts,
     premiumPerContract: input.premiumPerContract,
-    currentOptionValuePerContract: valuation.currentOptionValue,
+    currentOptionValuePerContract: valuation.currentOptionValue ?? 0,
     underlyingCurrentPrice: context.underlyingCurrentPrice ?? null,
     exitDebit: input.exitDebit,
+    feesCommission: input.feesCommission,
+    brokerRealizedPnl: input.brokerRealizedPnl,
     status: input.status,
     takeProfitTargetPct: input.takeProfitTargetPct,
     stopLossTargetPct: input.stopLossTargetPct,
@@ -191,11 +201,14 @@ export function enrichTrade(
     systemCurrentOptionValue: valuation.systemCurrentOptionValue,
     currentValueSource: valuation.currentValueSource,
     currentValueUpdatedAt: row.current_value_updated_at,
-    valueDifference: calculateValueDifference(
-      valuation.manualCurrentOptionValue,
-      valuation.systemCurrentOptionValue
-    ),
+    valueDifference: null,
     exitDebit: input.exitDebit,
+    exitDebitPerContract: deriveExitDebitPerContract(
+      input.exitDebit,
+      row.contracts
+    ),
+    feesCommission: input.feesCommission,
+    brokerRealizedPnl: input.brokerRealizedPnl,
     strikes,
     strikesDisplay: formatStrikesDisplay(row.strategy, strikes),
     takeProfitTargetPct: input.takeProfitTargetPct,
@@ -207,6 +220,9 @@ export function enrichTrade(
     notes: row.notes,
     underlyingAveragePrice: input.underlyingAveragePrice,
     underlyingCurrentPrice: context.underlyingCurrentPrice ?? null,
+    underlyingPriceSource: context.underlyingPriceSource ?? "unavailable",
+    underlyingPriceUpdatedAt: context.underlyingPriceUpdatedAt ?? null,
+    underlyingPriceUsable: context.underlyingPriceUsable ?? false,
     manualSupport: input.manualSupport,
     manualResistance: input.manualResistance,
     atr14: input.atr14,
@@ -245,6 +261,8 @@ export function tradeFormInputFromEnriched(trade: EnrichedTrade): TradeFormInput
     premiumPerContract: trade.premiumPerContract,
     currentValue: trade.currentValue,
     exitDebit: trade.exitDebit,
+    feesCommission: trade.feesCommission,
+    brokerRealizedPnl: trade.brokerRealizedPnl,
     shortStrikePut: trade.strikes.shortStrikePut,
     longStrikePut: trade.strikes.longStrikePut,
     shortStrikeCall: trade.strikes.shortStrikeCall,
@@ -275,16 +293,14 @@ export function applyCurrentValueUpdate(
   row: OptionsTrade,
   input: UpdateCurrentValueInput
 ): OptionsTrade {
-  const valuation = resolveTradeValuation(row);
-  const manualCurrentOptionValue = input.currentOptionValue;
-  const currentOptionValue = resolveEffectiveOptionValue(
-    manualCurrentOptionValue,
-    valuation.systemCurrentOptionValue
+  const manualCurrentOptionValue = resolveManualOptionValue(
+    input.currentOptionValue
   );
-  const currentCloseCost = calculateCurrentCloseCost(
-    currentOptionValue,
-    row.contracts
-  );
+  const perContract = manualCurrentOptionValue ?? 0;
+  const currentCloseCost =
+    manualCurrentOptionValue != null
+      ? calculateCurrentCloseCost(manualCurrentOptionValue, row.contracts)
+      : 0;
 
   const strikes = strikesFromTrade(row);
   const calc = buildTradeCalculations({
@@ -292,8 +308,17 @@ export function applyCurrentValueUpdate(
     expirationDate: row.expiration_date,
     contracts: row.contracts,
     premiumPerContract: Number(row.credit_received),
-    currentOptionValuePerContract: currentOptionValue,
-    exitDebit: row.exit_debit != null ? Number(row.exit_debit) : null,
+    currentOptionValuePerContract: perContract,
+    exitDebit: resolveStoredExitDebitTotal(
+      row.exit_debit != null ? Number(row.exit_debit) : null,
+      Number(row.credit_received),
+      row.contracts
+    ),
+    feesCommission: Number(row.fees_commission ?? 0),
+    brokerRealizedPnl:
+      row.broker_realized_pnl != null
+        ? Number(row.broker_realized_pnl)
+        : null,
     status: row.status,
     takeProfitTargetPct: Number(row.take_profit_target),
     stopLossTargetPct: Number(row.stop_loss_target),
@@ -304,9 +329,11 @@ export function applyCurrentValueUpdate(
   });
 
   const activePnl =
-    row.status === "closed" && calc.realizedPnl != null
-      ? calc.realizedPnl
-      : calc.currentPnl;
+    manualCurrentOptionValue != null
+      ? row.status === "closed" && calc.realizedPnl != null
+        ? calc.realizedPnl
+        : calc.currentPnl
+      : 0;
 
   const notes =
     input.notes != null && input.notes.trim()
@@ -315,18 +342,28 @@ export function applyCurrentValueUpdate(
         : input.notes.trim()
       : row.notes;
 
+  const updatedAt = parseCurrentValueUpdatedAt(input.updatedDate);
+
   return {
     ...row,
     manual_current_option_value: manualCurrentOptionValue,
-    system_current_option_value: valuation.systemCurrentOptionValue,
-    current_value_source: input.source,
-    current_value_updated_at: new Date().toISOString(),
+    system_current_option_value: 0,
+    current_value_source: "manual",
+    current_value_updated_at: updatedAt,
     current_value: currentCloseCost,
     current_pnl: activePnl,
-    pnl_percent: calc.returnOnRiskPct,
+    pnl_percent:
+      manualCurrentOptionValue != null ? calc.returnOnRiskPct : 0,
     notes,
     updated_at: new Date().toISOString(),
   };
+}
+
+function parseCurrentValueUpdatedAt(input: string | null | undefined): string {
+  if (!input?.trim()) return new Date().toISOString();
+  const parsed = new Date(`${input.slice(0, 10)}T12:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString();
+  return parsed.toISOString();
 }
 
 export function tradeRowFromForm(
@@ -351,17 +388,14 @@ export function tradeRowFromForm(
     : existingRow?.system_current_option_value != null
       ? Number(existingRow.system_current_option_value)
       : deriveSystemOptionValueFromCloseCost(input.currentValue, input.contracts);
-  const preservedSource = isClosed
-    ? "system"
-    : (existingRow?.current_value_source ?? "system");
+  const preservedSource = isClosed ? "manual" : "manual";
   const preservedUpdatedAt = isClosed
     ? null
     : existingRow?.current_value_updated_at ?? null;
 
-  const currentOptionValue = resolveEffectiveOptionValue(
-    preservedManual != null ? Number(preservedManual) : null,
-    preservedSystem
-  );
+  const currentOptionValue = resolveManualOptionValue(
+    preservedManual != null ? Number(preservedManual) : null
+  ) ?? 0;
 
   const calc = buildTradeCalculations({
     strategy: input.strategy,
@@ -370,6 +404,8 @@ export function tradeRowFromForm(
     premiumPerContract: input.premiumPerContract,
     currentOptionValuePerContract: currentOptionValue,
     exitDebit: input.exitDebit,
+    feesCommission: input.feesCommission,
+    brokerRealizedPnl: input.brokerRealizedPnl,
     status: input.status,
     takeProfitTargetPct: input.takeProfitTargetPct,
     stopLossTargetPct: input.stopLossTargetPct,
@@ -396,7 +432,12 @@ export function tradeRowFromForm(
     expiration_date: input.expirationDate,
     dte: calc.dte,
     contracts: input.contracts,
-    credit_received: input.premiumPerContract,
+    credit_received:
+      input.premiumPerContract > 0
+        ? input.premiumPerContract
+        : existingRow
+          ? Number(existingRow.credit_received)
+          : input.premiumPerContract,
     max_risk: calc.maxRisk,
     current_pnl: activePnl,
     pnl_percent: calc.returnOnRiskPct,
@@ -415,6 +456,8 @@ export function tradeRowFromForm(
     current_value_updated_at: preservedUpdatedAt,
     exit_debit: input.exitDebit,
     realized_pnl: calc.realizedPnl,
+    fees_commission: input.feesCommission,
+    broker_realized_pnl: input.brokerRealizedPnl,
     buying_power_used: calc.buyingPowerUsed,
     breakeven_put: calc.breakevenPut,
     breakeven_call: calc.breakevenCall,

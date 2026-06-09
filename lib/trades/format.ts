@@ -1,6 +1,14 @@
 import type { StrategyType } from "@/types/database";
-import { TRADE_STATUS_OPTIONS, TRADE_STRATEGY_OPTIONS } from "./constants";
+import { formatPnL, formatPnLPercent } from "@/lib/format/pnl";
+import {
+  formatOptionDollarTotal,
+  formatOptionPrice,
+  OPTION_PRICE_INPUT_STEP,
+} from "@/lib/format/option-price";
+import { TRADE_TRACKER_PNL_DECIMALS, TRADE_STATUS_OPTIONS, TRADE_STRATEGY_OPTIONS } from "./constants";
 import type { TradeStrikeInput, TradeTrackerStatus } from "./types";
+
+export { OPTION_PRICE_INPUT_STEP };
 
 export function formatStrategyLabel(strategy: StrategyType): string {
   return (
@@ -14,18 +22,21 @@ export function formatStatusLabel(status: TradeTrackerStatus): string {
   );
 }
 
+/** Options trade dollar totals (whole USD). */
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+  return formatOptionDollarTotal(value);
 }
 
-export function formatSignedCurrency(value: number): string {
-  const abs = formatCurrency(Math.abs(value));
-  return value >= 0 ? `+${abs}` : `-${abs}`;
+/** Signed P/L on the trade tracker dashboard (US$, 4 decimals). */
+export function formatTradeTrackerPnl(value: number): string {
+  return formatSignedCurrency(value, TRADE_TRACKER_PNL_DECIMALS);
+}
+
+export function formatSignedCurrency(
+  value: number,
+  decimals: number = TRADE_TRACKER_PNL_DECIMALS
+): string {
+  return formatPnL(value, { currency: "USD", decimals });
 }
 
 export function formatStrikesDisplay(
@@ -53,11 +64,20 @@ export function formatStrikesDisplay(
 }
 
 export function formatPercent(value: number, decimals = 1): string {
-  return `${value.toFixed(decimals)}%`;
+  return formatPnLPercent(value, decimals);
 }
 
 export function formatOptionValuePerContract(value: number): string {
-  return `$${value.toFixed(2)}`;
+  return formatOptionPrice(value);
+}
+
+export const CURRENT_OPTION_VALUE_NOT_UPDATED = "Not updated";
+
+export function formatCurrentOptionValueDisplay(
+  manualValue: number | null | undefined
+): string {
+  if (manualValue == null) return CURRENT_OPTION_VALUE_NOT_UPDATED;
+  return formatOptionValuePerContract(manualValue);
 }
 
 export function formatValueSourceLabel(

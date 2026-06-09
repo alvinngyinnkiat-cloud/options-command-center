@@ -3,18 +3,21 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
-  refreshAutoWatchlistHealth,
   refreshDividendDataHealth,
   refreshMarketDataHealth,
   refreshTechnicalIndicatorsHealth,
   runFullDataHealthCheck,
 } from "@/app/actions/data-health";
 import type { DataHealthPageData } from "@/lib/data-health/types";
+import { formatSgtAuditTimestamp } from "@/lib/time/singapore-time";
 import { RefreshCw } from "lucide-react";
 import { DataHealthStatusBadge } from "./DataHealthStatusBadge";
 import { DataSourceHealthCard } from "./DataSourceHealthCard";
+import { FmpHealthCard } from "./FmpHealthCard";
+import { WatchlistScannerHealthCard } from "./WatchlistScannerHealthCard";
 
 interface DataHealthClientProps {
   initialData: DataHealthPageData;
@@ -84,14 +87,6 @@ export function DataHealthClient({ initialData }: DataHealthClientProps) {
           variant="secondary"
           size="sm"
           disabled={busy != null}
-          onClick={() => run("watchlist", refreshAutoWatchlistHealth)}
-        >
-          Refresh Auto Watchlist
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={busy != null}
           onClick={() => run("dividends", refreshDividendDataHealth)}
         >
           Refresh Dividend Data
@@ -100,14 +95,19 @@ export function DataHealthClient({ initialData }: DataHealthClientProps) {
 
       <p className="text-[11px] text-terminal-muted">
         Manual data (support/resistance, portfolio values, contributions) is never
-        auto-refreshed. Support and resistance remain manual only.
+        auto-refreshed. Support and resistance remain manual only. Manual refresh
+        buttons do not change the daily 06:00 SGT scheduled run.
       </p>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+      <WatchlistScannerHealthCard status={data.scannerStatus} />
+
+      <FmpHealthCard diagnostics={data.fmpDiagnostics} />
+
+      <MetricCardsGrid gap="lg">
         {data.reports.map((report) => (
           <DataSourceHealthCard key={report.id} report={report} />
         ))}
-      </div>
+      </MetricCardsGrid>
 
       <section className="space-y-3">
         <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
@@ -140,10 +140,12 @@ export function DataHealthClient({ initialData }: DataHealthClientProps) {
                 >
                   <td className="px-3 py-2 font-mono">{log.sourceName}</td>
                   <td className="px-3 py-2 font-mono">
-                    {log.startedAt.slice(0, 19).replace("T", " ")}
+                    {formatSgtAuditTimestamp(log.startedAt)}
                   </td>
                   <td className="px-3 py-2 font-mono">
-                    {log.completedAt?.slice(0, 19).replace("T", " ") ?? "—"}
+                    {log.completedAt
+                      ? formatSgtAuditTimestamp(log.completedAt)
+                      : "—"}
                   </td>
                   <td className="px-3 py-2">
                     <DataHealthStatusBadge
@@ -179,7 +181,7 @@ export function DataHealthClient({ initialData }: DataHealthClientProps) {
       </section>
 
       <p className="text-[10px] text-terminal-muted">
-        Last checked: {data.checkedAt.slice(0, 19).replace("T", " ")} UTC
+        Last checked: {formatSgtAuditTimestamp(data.checkedAt)}
       </p>
     </div>
   );

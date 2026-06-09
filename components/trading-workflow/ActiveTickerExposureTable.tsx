@@ -1,4 +1,4 @@
-import { formatSignedCurrency } from "@/lib/trades/format";
+import { PnlValue } from "@/components/ui/PnlValue";
 import { formatRiskCurrency } from "@/lib/risk/format";
 import type { ActiveTickerExposureRow } from "@/lib/trading-workflow/types";
 import { cn } from "@/lib/utils";
@@ -46,16 +46,12 @@ export function ActiveTickerExposureTable({
               <td className="px-3 py-2 text-right font-mono">
                 {row.maxRisk != null ? formatRiskCurrency(row.maxRisk) : "—"}
               </td>
-              <td
-                className={cn(
-                  "px-3 py-2 text-right font-mono",
-                  row.currentPnl != null &&
-                    (row.currentPnl >= 0 ? "text-profit" : "text-loss")
+              <td className="px-3 py-2 text-right font-mono">
+                {row.currentPnl != null ? (
+                  <PnlValue value={row.currentPnl} className="inline" />
+                ) : (
+                  "—"
                 )}
-              >
-                {row.currentPnl != null
-                  ? formatSignedCurrency(row.currentPnl)
-                  : "—"}
               </td>
               <td className="px-3 py-2">{row.status ?? "—"}</td>
             </tr>

@@ -23,6 +23,10 @@ import {
 } from "./valuation";
 import type { TradeCalculations, TradeFormInput, TradeStrikeInput } from "./types";
 import type { StrategyType } from "@/types/database";
+import {
+  calculateDebitLongRealizedPnl,
+  resolveFinalRealizedPnl,
+} from "./realized-pnl";
 
 export function calculateDte(
   expirationDate: string,
@@ -99,15 +103,11 @@ export function calculateReturnOnRiskPct(
   return (profitLoss / maxRisk) * 100;
 }
 
-function roundToTwoDecimals(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
 /** Gross 25% per-contract close price before transaction fee adjustment */
 export function calculateTakeProfitNetOfFees(
   premiumPerContract: number
 ): number {
-  return roundToTwoDecimals(premiumPerContract * TP_REMAINING_PCT);
+  return premiumPerContract * TP_REMAINING_PCT;
 }
 
 /**
@@ -117,9 +117,7 @@ export function calculateTakeProfitNetOfFees(
 export function calculateTakeProfitClosePrice(
   premiumPerContract: number
 ): number {
-  const adjusted = roundToTwoDecimals(
-    premiumPerContract * TP_REMAINING_PCT - TP_CLOSE_FEE
-  );
+  const adjusted = premiumPerContract * TP_REMAINING_PCT - TP_CLOSE_FEE;
   return Math.max(0.01, adjusted);
 }
 
@@ -233,12 +231,13 @@ export function calculateCurrentPnl(
   return totalPremiumReceived - currentCloseCost;
 }
 
-/** Closed position: total premium − exit debit */
+/** Closed position: total premium − exit debit − fees */
 export function calculateRealizedPnl(
   totalPremiumReceived: number,
-  exitDebit: number
+  exitDebit: number,
+  feesCommission = 0
 ): number {
-  return totalPremiumReceived - exitDebit;
+  return totalPremiumReceived - exitDebit - feesCommission;
 }
 
 export function buildTradeCalculations(
@@ -258,6 +257,8 @@ export function buildTradeCalculations(
     currentOptionValuePerContract: number;
     underlyingCurrentPrice?: number | null;
     strikes: TradeStrikeInput;
+    feesCommission?: number;
+    brokerRealizedPnl?: number | null;
   },
   reference = new Date()
 ): TradeCalculations {
@@ -350,12 +351,27 @@ export function buildTradeCalculations(
     ? currentCloseCost - debitCost
     : calculateCurrentPnl(totalPremiumReceived, currentCloseCost);
 
-  const realizedPnl =
+  const feesCommission = Math.max(0, input.feesCommission ?? 0);
+
+  const calculatedRealizedPnl =
     input.exitDebit != null
       ? isDebitLongStrategy(input.strategy)
-        ? input.exitDebit - debitCost
-        : calculateRealizedPnl(totalPremiumReceived, input.exitDebit)
+        ? calculateDebitLongRealizedPnl({
+            exitDebitTotal: input.exitDebit,
+            debitCost,
+            feesCommission,
+          })
+        : calculateRealizedPnl(
+            totalPremiumReceived,
+            input.exitDebit,
+            feesCommission
+          )
       : null;
+
+  const realizedPnl = resolveFinalRealizedPnl({
+    calculatedRealizedPnl,
+    brokerRealizedPnl: input.brokerRealizedPnl,
+  });
 
   const activePnl =
     input.status === "closed" && realizedPnl != null
@@ -398,6 +414,8 @@ export function buildTradeCalculations(
     breakevenCallPrice: breakevenSafety.breakevenCallPrice,
     breakevenSafetyDistance: breakevenSafety.distance,
     breakevenSafetyDistancePct: breakevenSafety.distancePct,
+    breakevenPutDistancePct: breakevenSafety.putDistancePct,
+    breakevenCallDistancePct: breakevenSafety.callDistancePct,
     breakevenNearestSide: breakevenSafety.nearestSide,
     breakevenSafetyStatus: breakevenSafety.status,
     takeProfitPrice,
@@ -409,6 +427,7 @@ export function buildTradeCalculations(
     currentOptionValuePerContract: input.currentOptionValuePerContract,
     currentCloseCost,
     currentPnl,
+    calculatedRealizedPnl,
     realizedPnl,
     takeProfitReached: profitStop.takeProfitReached,
     stopLossWarning: profitStop.stopLossWarning,

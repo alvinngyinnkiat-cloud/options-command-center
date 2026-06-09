@@ -12,18 +12,31 @@ import {
   buildSgMarketData,
   buildUsMarketData,
 } from "@/lib/ticker-positions/market-aggregate";
+import {
+  buildIncomeTabSummary,
+  buildPassiveIncomeGoalProgress,
+  summarizeAllMarket,
+} from "@/lib/ticker-positions/tab-views";
 import type {
+  AllMarketSummary,
+  IncomeTabSummary,
   MarketPerformanceReport,
+  PassiveIncomeGoalProgress,
   PortfolioIncomeSummary,
   SgMarketSummary,
   SgMarketTickerRow,
   UsMarketSummary,
   UsMarketTickerRow,
 } from "@/lib/ticker-positions/market-types";
+import { DEFAULT_PASSIVE_INCOME_TARGET_SGD } from "@/lib/goals/types";
+import { getFinancialGoalsManagementData } from "@/lib/supabase/queries/financial-goals";
 
 export interface TickerPositionManagerData {
   usMarket: { rows: UsMarketTickerRow[]; summary: UsMarketSummary };
   sgMarket: { rows: SgMarketTickerRow[]; summary: SgMarketSummary };
+  allMarketSummary: AllMarketSummary;
+  incomeTab: IncomeTabSummary;
+  passiveIncomeGoal: PassiveIncomeGoalProgress;
   report: MarketPerformanceReport;
   portfolioIncome: PortfolioIncomeSummary;
   dataSource: DataSource;
@@ -38,10 +51,11 @@ export async function getTickerPositionManagerData(): Promise<TickerPositionMana
   const referenceDate = MOCK_REFERENCE_DATE;
   const referenceYear = Number(referenceDate.slice(0, 4));
 
-  const [tradesData, stockData, dividendRows] = await Promise.all([
+  const [tradesData, stockData, dividendRows, goalsManagement] = await Promise.all([
     getOptionsTradesData(),
     getStockEtfTrackerData(),
     listDividendRecordRows(userId),
+    getFinancialGoalsManagementData(userId).catch(() => null),
   ]);
 
   const dividendSummary = buildDividendPortfolioSummary(
@@ -66,9 +80,33 @@ export async function getTickerPositionManagerData(): Promise<TickerPositionMana
     categories.sgStockValueSgd
   );
 
+  const incomeGoal = goalsManagement?.goals.find(
+    (g) => g.goalType === "income" && !g.isArchived
+  );
+  const targetMonthlySgd = incomeGoal
+    ? incomeGoal.targetAmount
+    : DEFAULT_PASSIVE_INCOME_TARGET_SGD;
+
   return {
     usMarket,
     sgMarket,
+    allMarketSummary: summarizeAllMarket(
+      usMarket.rows,
+      sgMarket.rows,
+      usMarket.summary,
+      sgMarket.summary
+    ),
+    incomeTab: buildIncomeTabSummary(
+      usMarket.rows,
+      sgMarket.rows,
+      usMarket.summary,
+      sgMarket.summary
+    ),
+    passiveIncomeGoal: buildPassiveIncomeGoalProgress(
+      usMarket.summary,
+      sgMarket.summary,
+      targetMonthlySgd
+    ),
     report: buildMarketPerformanceReport(usMarket.rows, sgMarket.rows),
     portfolioIncome,
     dataSource: tradesData.dataSource,

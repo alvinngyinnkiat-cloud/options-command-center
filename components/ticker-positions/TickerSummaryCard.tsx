@@ -9,6 +9,7 @@ import {
 } from "@/lib/ticker-positions/format";
 import { formatLeapsLabel } from "@/lib/ticker-positions/leaps";
 import type { TickerPositionSummary } from "@/lib/ticker-positions/types";
+import { getPnLColor, pnlStatProps } from "@/lib/format/pnl";
 import { cn } from "@/lib/utils";
 
 interface TickerSummaryCardProps {
@@ -67,8 +68,8 @@ export function TickerSummaryCard({
   expanded = false,
   onToggle,
 }: TickerSummaryCardProps) {
-  const pnlTone =
-    summary.totalPnl >= 0 ? "text-profit" : "text-loss";
+  const pnlTone = getPnLColor(summary.totalPnl);
+  const totalPnlProps = pnlStatProps(summary.totalPnl);
 
   return (
     <div className="rounded-lg border border-terminal-border bg-terminal-surface overflow-hidden">
@@ -86,7 +87,7 @@ export function TickerSummaryCard({
           </div>
           <div className="text-right">
             <p className={cn("font-mono text-lg font-semibold", pnlTone)}>
-              {formatSignedTickerCurrency(summary.totalPnl)}
+              {totalPnlProps.value}
             </p>
             <p className="text-[11px] text-terminal-muted">
               ROI {formatRoiPct(summary.roiPct)}
@@ -97,14 +98,13 @@ export function TickerSummaryCard({
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Metric
             label="Long Position P/L"
-            value={formatSignedTickerCurrency(summary.longPositionPnl)}
-            valueClassName={
-              summary.longPositionPnl >= 0 ? "text-profit" : "text-loss"
-            }
+            value={pnlStatProps(summary.longPositionPnl).value}
+            valueClassName={getPnLColor(summary.longPositionPnl)}
           />
           <Metric
             label="Income Collected"
-            value={formatSignedTickerCurrency(summary.incomeCollected)}
+            value={pnlStatProps(summary.incomeCollected).value}
+            valueClassName={getPnLColor(summary.incomeCollected)}
           />
           <Metric
             label="Adjusted Cost Basis"
@@ -196,11 +196,13 @@ export function TickerSummaryCard({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
             <Metric
               label="Realized P/L"
-              value={formatSignedTickerCurrency(summary.realizedPnl)}
+              value={pnlStatProps(summary.realizedPnl).value}
+              valueClassName={getPnLColor(summary.realizedPnl)}
             />
             <Metric
               label="Unrealized P/L"
-              value={formatSignedTickerCurrency(summary.unrealizedPnl)}
+              value={pnlStatProps(summary.unrealizedPnl).value}
+              valueClassName={getPnLColor(summary.unrealizedPnl)}
             />
             <Metric
               label="Premium Collected"

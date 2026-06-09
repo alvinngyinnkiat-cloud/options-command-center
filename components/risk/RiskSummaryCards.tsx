@@ -1,6 +1,11 @@
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import { formatRiskCurrency, formatRiskPct } from "@/lib/risk/format";
-import { formatSignedCurrency } from "@/lib/trades/format";
+import {
+  getPnLChangeType,
+  getPnLColor,
+  pnlStatProps,
+} from "@/lib/format/pnl";
 import type { RiskDashboardSummary } from "@/lib/risk/types";
 
 interface RiskSummaryCardsProps {
@@ -8,6 +13,7 @@ interface RiskSummaryCardsProps {
 }
 
 export function RiskSummaryCards({ summary }: RiskSummaryCardsProps) {
+  const myOpenPnl = pnlStatProps(summary.myOpenPnl);
   const zoneType =
     summary.riskZone === "safe"
       ? "positive"
@@ -16,7 +22,7 @@ export function RiskSummaryCards({ summary }: RiskSummaryCardsProps) {
         : "negative";
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-10">
+    <MetricCardsGrid>
       <StatCard
         label="Trading Capital"
         value={formatRiskCurrency(summary.portfolioValue)}
@@ -37,13 +43,15 @@ export function RiskSummaryCards({ summary }: RiskSummaryCardsProps) {
       />
       <StatCard
         label="My Open P/L"
-        value={formatSignedCurrency(summary.myOpenPnl)}
-        changeType={summary.myOpenPnl >= 0 ? "positive" : "negative"}
+        value={myOpenPnl.value}
+        valueClassName={myOpenPnl.valueClassName}
+        changeType={myOpenPnl.changeType}
       />
       <StatCard
         label="Available Risk Capacity"
         value={formatRiskCurrency(summary.availableRiskCapacity)}
-        changeType={summary.availableRiskCapacity > 0 ? "positive" : "negative"}
+        valueClassName={getPnLColor(summary.availableRiskCapacity)}
+        changeType={getPnLChangeType(summary.availableRiskCapacity)}
       />
       <StatCard
         label="Options Allocation %"
@@ -72,6 +80,6 @@ export function RiskSummaryCards({ summary }: RiskSummaryCardsProps) {
         change={formatRiskPct(summary.riskUtilizationPct) + " utilized"}
         changeType={zoneType}
       />
-    </div>
+    </MetricCardsGrid>
   );
 }

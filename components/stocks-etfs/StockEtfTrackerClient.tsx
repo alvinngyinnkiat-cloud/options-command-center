@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useTransition } from "react";
+import { refreshStockMarketPricesAction } from "@/app/actions/stock-etf";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -10,15 +11,11 @@ import type {
 } from "@/lib/stocks-etfs/types";
 import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/dividends/use-dividend-sync";
 import type { StockEtfTabId } from "./StockEtfCategoryTabs";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { StockEtfCategoryTabs } from "./StockEtfCategoryTabs";
 import { StockEtfFormModal } from "./StockEtfFormModal";
 import { SgStockTabPanel } from "./SgStockTabPanel";
 import { UsEquitySummaryCards } from "./UsEquitySummaryCards";
-import {
-  HoldingsDisplayToggle,
-  type HoldingsDisplayMode,
-} from "./HoldingsDisplayToggle";
 import { UsEquityHoldingsViews } from "./UsEquityHoldingsViews";
 
 interface StockEtfTrackerClientProps {
@@ -30,8 +27,8 @@ export function StockEtfTrackerClient({
 }: StockEtfTrackerClientProps) {
   const [data, setData] = useState(initialData);
   const [activeTab, setActiveTab] = useState<StockEtfTabId>("us_etf");
-  const [displayMode, setDisplayMode] =
-    useState<HoldingsDisplayMode>("summary");
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [isPricePending, startPriceTransition] = useTransition();
   const [formHolding, setFormHolding] = useState<
     EnrichedStockEtfHolding | null | undefined
   >(undefined);
@@ -40,6 +37,18 @@ export function StockEtfTrackerClient({
     setData(refresh.stockData);
   }, []);
   useDividendDataSync(handleDividendSync);
+
+  function handleRefreshPrices() {
+    setPriceError(null);
+    startPriceTransition(async () => {
+      const result = await refreshStockMarketPricesAction();
+      if (!result.success) {
+        setPriceError(result.error);
+        return;
+      }
+      setData(result.data);
+    });
+  }
 
   function handleRefresh() {
     window.location.reload();
@@ -51,7 +60,7 @@ export function StockEtfTrackerClient({
     <div className="space-y-6">
       <PageHeader
         title="Stock & ETF Tracker"
-        description="US ETF · US Stock · SG Stock — Summary, Detailed, or Card view"
+        description="US ETF · US Stock · SG Stock — position ownership, capital, dividends, and ROI"
         actions={
           <>
             <Badge
@@ -59,6 +68,17 @@ export function StockEtfTrackerClient({
             >
               {data.dataSource === "supabase" ? "Live data" : "Mock data"}
             </Badge>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRefreshPrices}
+              disabled={isPricePending}
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${isPricePending ? "animate-spin" : ""}`}
+              />
+              {isPricePending ? "Updating…" : "Refresh Prices"}
+            </Button>
             <Button
               variant="primary"
               size="sm"
@@ -71,9 +91,11 @@ export function StockEtfTrackerClient({
         }
       />
 
-      <StockEtfCategoryTabs active={activeTab} onChange={setActiveTab} />
+      {priceError && (
+        <p className="text-xs text-loss">{priceError}</p>
+      )}
 
-      <HoldingsDisplayToggle mode={displayMode} onChange={setDisplayMode} />
+      <StockEtfCategoryTabs active={activeTab} onChange={setActiveTab} />
 
       {activeTab === "us_etf" && (
         <div className="space-y-4">
@@ -88,7 +110,7 @@ export function StockEtfTrackerClient({
             <UsEquityHoldingsViews
               rows={tabs.usEtf.rows}
               label="US ETF"
-              mode={displayMode}
+              onRefresh={handleRefresh}
             />
           </section>
         </div>
@@ -107,7 +129,7 @@ export function StockEtfTrackerClient({
             <UsEquityHoldingsViews
               rows={tabs.usStock.rows}
               label="US Stock"
-              mode={displayMode}
+              onRefresh={handleRefresh}
             />
           </section>
         </div>
@@ -117,7 +139,7 @@ export function StockEtfTrackerClient({
         <SgStockTabPanel
           rows={tabs.sgStock.rows}
           summary={tabs.sgStock.summary}
-          displayMode={displayMode}
+          onRefresh={handleRefresh}
         />
       )}
 
@@ -130,8 +152,9 @@ export function StockEtfTrackerClient({
       )}
 
       <p className="text-[11px] text-terminal-muted">
-        Summary view fits without horizontal scroll · Detailed view shows all
-        columns · My P/L only · Dividend income syncs from Dividend Tracker
+        Stock and ETF holdings only — options premium and combined performance
+        live in Options Trade Tracker and Portfolio Income &amp; Position Manager.
+        Dividend income syncs from Dividend Tracker.
       </p>
     </div>
   );

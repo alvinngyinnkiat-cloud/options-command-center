@@ -9,6 +9,7 @@ import {
   manualTradingCashFromOverride,
   type CapitalPoolsBreakdown,
 } from "./capital-pools";
+import { buildPortfolioComparisonFromPools } from "./reconciliation";
 
 function getOpenTrades(
   trades: Awaited<ReturnType<typeof getOptionsTradesData>>["trades"]
@@ -43,6 +44,7 @@ export async function buildPortfolioCapitalPools(
     clientSummary: clientData.summary,
     tradeAllocations: clientData.tradeAllocations,
     manualTradingCash: manualTradingCashFromOverride(metrics.override),
+    portfolioOverride: metrics.override,
   });
 }
 
@@ -55,12 +57,18 @@ export function applyCapitalPoolsToMetrics(
     portfolioValue: pools.myPortfolioValue,
     myPortfolioValue: pools.myPortfolioValue,
     tradingCapital: pools.tradingCapital,
-    cryptoCapital: pools.cryptoCapital,
+    cryptoPortfolioValueSgd: pools.cryptoPortfolioValueSgd,
+    cryptoCapital: pools.cryptoPortfolioValueSgd,
     tradingCashSgd: pools.tradingCashSgd,
     cryptoCashSgd: pools.cryptoCashSgd,
     totalCashSgd: pools.cash.totalCashSgd,
     cashValue: pools.tradingCashSgd,
     cryptoValue: pools.cryptoHoldingsSgd,
+    comparison: buildPortfolioComparisonFromPools(
+      pools,
+      metrics.override,
+      metrics.comparison
+    ),
   };
 }
 

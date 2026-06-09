@@ -1,11 +1,13 @@
 "use server";
 
 import {
+  enrichOptionsTradeRow,
   getOptionsTradeRow,
   getOptionsTradesData,
   persistOptionsTrade,
   removeOptionsTrade,
 } from "@/lib/supabase/queries/options-trades";
+import { ensureWatchlistIdForTicker } from "@/lib/supabase/queries/watchlist-resolve";
 import {
   removeTradeAllocation,
   syncClientTradeAllocation,
@@ -15,10 +17,16 @@ import {
   tradeFormInputFromEnriched,
   tradeRowFromForm,
 } from "@/lib/trades/map-trade";
+import { calculateExitDebitTotal } from "@/lib/trades/exit-debit";
+import {
+  formatActionError,
+  serializeServerActionPayload,
+} from "@/lib/trades/server-action-response";
 import type {
   TradeActionResult,
   TradeFormInput,
   UpdateCurrentValueInput,
+  UpdateCurrentValueResult,
 } from "@/lib/trades/types";
 import {
   findActiveTradeForTicker,
@@ -27,6 +35,7 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
+import { refreshMarketDataHealth } from "@/app/actions/data-health";
 
 async function finish(): Promise<TradeActionResult> {
   const data = await getOptionsTradesData();
@@ -52,36 +61,80 @@ async function persistTradeWithAllocation(
   userId: string,
   existingId?: string
 ) {
+  const watchlistId = await ensureWatchlistIdForTicker(userId, input.ticker);
+  const resolvedInput: TradeFormInput = {
+    ...input,
+    ticker: input.ticker.toUpperCase(),
+    watchlistId,
+  };
+
   const existingRow = existingId
     ? await getOptionsTradeRow(existingId, userId)
     : null;
-  const row = tradeRowFromForm(input, userId, existingId, existingRow);
+  const row = tradeRowFromForm(resolvedInput, userId, existingId, existingRow);
   await persistOptionsTrade(row, userId);
   await syncClientTradeAllocation(row, userId);
   return row;
 }
 
-export async function updateTradeCurrentValue(
-  tradeId: string,
-  input: UpdateCurrentValueInput
-): Promise<TradeActionResult> {
+export async function refreshUnderlyingPrices(): Promise<TradeActionResult> {
   try {
-    const userId = await requireUserId();
-    const existing = await getOptionsTradeRow(tradeId, userId);
-    if (!existing) {
-      return { success: false, error: "Trade not found." };
+    const refresh = await refreshMarketDataHealth();
+    if (!refresh.success) {
+      return { success: false, error: refresh.error };
     }
-
-    const row = applyCurrentValueUpdate(existing, input);
-    await persistOptionsTrade(row, userId);
-    revalidatePath("/risk");
     return finish();
   } catch (e) {
     return {
       success: false,
       error:
-        e instanceof Error ? e.message : "Failed to update current value.",
+        e instanceof Error ? e.message : "Failed to refresh underlying prices.",
     };
+  }
+}
+
+export async function updateTradeCurrentValue(
+  tradeId: string,
+  input: UpdateCurrentValueInput
+): Promise<UpdateCurrentValueResult> {
+  try {
+    const userId = await requireUserId();
+    const existing = await getOptionsTradeRow(tradeId, userId);
+    if (!existing) {
+      return { ok: false, error: "Trade not found." };
+    }
+
+    if (
+      input.currentOptionValue != null &&
+      (!Number.isFinite(input.currentOptionValue) ||
+        input.currentOptionValue < 0)
+    ) {
+      return {
+        ok: false,
+        error: "Current option value must be zero or greater.",
+      };
+    }
+
+    const row = applyCurrentValueUpdate(existing, input);
+
+    try {
+      await persistOptionsTrade(row, userId);
+    } catch (persistError) {
+      return { ok: false, error: formatActionError(persistError) };
+    }
+
+    const dataSource = isSupabaseConfigured() ? "supabase" : "mock";
+    const trade = await enrichOptionsTradeRow(row, dataSource, userId);
+
+    revalidatePath("/trades");
+    revalidatePath("/risk");
+
+    return {
+      ok: true,
+      trade: serializeServerActionPayload(trade),
+    };
+  } catch (error) {
+    return { ok: false, error: formatActionError(error) };
   }
 }
 
@@ -139,18 +192,30 @@ export async function updateOptionsTrade(
 
 export async function closeOptionsTrade(
   tradeId: string,
-  exitDebit: number
+  exitDebitPerContract: number,
+  feesCommission = 0
 ): Promise<TradeActionResult> {
   try {
     const data = await getOptionsTradesData();
     const trade = data.trades.find((t) => t.id === tradeId);
     if (!trade) return { success: false, error: "Trade not found." };
 
+    if (!Number.isFinite(exitDebitPerContract) || exitDebitPerContract < 0) {
+      return {
+        success: false,
+        error: "Closing debit per contract must be zero or greater.",
+      };
+    }
+
     const userId = await requireUserId();
     const input = tradeFormInputFromEnriched(trade);
     input.status = "closed";
     input.currentValue = 0;
-    input.exitDebit = exitDebit;
+    input.exitDebit = calculateExitDebitTotal(
+      exitDebitPerContract,
+      input.contracts
+    );
+    input.feesCommission = Math.max(0, feesCommission);
     await persistTradeWithAllocation(input, userId, tradeId);
     return finish();
   } catch (e) {

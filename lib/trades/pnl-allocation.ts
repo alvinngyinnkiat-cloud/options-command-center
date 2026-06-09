@@ -1,4 +1,8 @@
 import type { TradeOwnership } from "@/types/database";
+import {
+  SHARED_CLIENT_SHARE_PCT,
+  SHARED_MY_SHARE_PCT,
+} from "./constants";
 import type { EnrichedTrade } from "./types";
 
 export interface TradePnlAllocation {
@@ -13,6 +17,11 @@ export interface PortfolioPnlBreakdown {
   myTotalPnl: number;
   clientOpenPnl: number;
   clientRealizedPnl: number;
+  clientTotalPnl: number;
+  totalRealizedPnl: number;
+  totalUnrealizedPnl: number;
+  totalPnl: number;
+  /** @deprecated Open client unrealized P/L — use clientOpenPnl */
   clientPnlOwed: number;
 }
 
@@ -21,12 +30,10 @@ type TradeOwnershipInput = Pick<
   | "status"
   | "tradeOwnership"
   | "isClientTrade"
-  | "myProfitSharePercent"
-  | "clientProfitSharePercent"
   | "calculations"
 >;
 
-export function isClientProfitSharingTrade(
+export function isSharedTrade(
   trade: Pick<EnrichedTrade, "tradeOwnership" | "isClientTrade">
 ): boolean {
   return (
@@ -34,43 +41,42 @@ export function isClientProfitSharingTrade(
   );
 }
 
-/** Gross trade P/L — open uses current P/L, closed uses realized P/L. */
+/** @deprecated Use isSharedTrade */
+export function isClientProfitSharingTrade(
+  trade: Pick<EnrichedTrade, "tradeOwnership" | "isClientTrade">
+): boolean {
+  return isSharedTrade(trade);
+}
+
+/** Gross trade P/L — open uses unrealized, closed uses realized. */
 export function calculateTotalTradePnL(trade: TradeOwnershipInput): number {
-  if (
-    trade.status === "closed" &&
-    trade.calculations.realizedPnl != null
-  ) {
-    return trade.calculations.realizedPnl;
+  if (trade.status === "closed") {
+    if (trade.calculations.realizedPnl != null) {
+      return trade.calculations.realizedPnl;
+    }
+    return 0;
   }
   return trade.calculations.currentPnl;
 }
 
 export function calculateMyPnL(
-  trade: Pick<
-    EnrichedTrade,
-    "tradeOwnership" | "isClientTrade" | "myProfitSharePercent"
-  >,
+  trade: Pick<EnrichedTrade, "tradeOwnership" | "isClientTrade">,
   totalTradePnL: number
 ): number {
-  if (!isClientProfitSharingTrade(trade)) {
+  if (!isSharedTrade(trade)) {
     return totalTradePnL;
   }
-  return totalTradePnL * (trade.myProfitSharePercent / 100);
+  return totalTradePnL * (SHARED_MY_SHARE_PCT / 100);
 }
 
 export function calculateClientPnL(
-  trade: Pick<
-    EnrichedTrade,
-    | "tradeOwnership"
-    | "isClientTrade"
-    | "clientProfitSharePercent"
-  >,
+  trade: Pick<EnrichedTrade, "tradeOwnership" | "isClientTrade">,
   totalTradePnL: number
 ): number {
-  if (!isClientProfitSharingTrade(trade)) {
+  if (!isSharedTrade(trade)) {
     return 0;
   }
-  return totalTradePnL * (trade.clientProfitSharePercent / 100);
+  return totalTradePnL * (SHARED_CLIENT_SHARE_PCT / 100);
 }
 
 export function calculateTradePnlAllocation(
@@ -108,7 +114,7 @@ export function calculateClientOutstanding(
 ): number {
   return trades
     .filter(isOpenTrade)
-    .filter(isClientProfitSharingTrade)
+    .filter(isSharedTrade)
     .reduce(
       (sum, trade) =>
         sum + calculateClientPnL(trade, calculateTotalTradePnL(trade)),
@@ -123,6 +129,8 @@ export function buildPortfolioPnlBreakdown(
   let myRealizedPnl = 0;
   let clientOpenPnl = 0;
   let clientRealizedPnl = 0;
+  let totalRealizedPnl = 0;
+  let totalUnrealizedPnl = 0;
 
   for (const trade of trades) {
     const total = calculateTotalTradePnL(trade);
@@ -132,11 +140,16 @@ export function buildPortfolioPnlBreakdown(
     if (isOpenTrade(trade)) {
       myOpenPnl += my;
       clientOpenPnl += client;
+      totalUnrealizedPnl += total;
     } else if (trade.status === "closed") {
       myRealizedPnl += my;
       clientRealizedPnl += client;
+      totalRealizedPnl += total;
     }
   }
+
+  const totalPnl = totalRealizedPnl + totalUnrealizedPnl;
+  const clientTotalPnl = clientRealizedPnl + clientOpenPnl;
 
   return {
     myOpenPnl,
@@ -144,22 +157,26 @@ export function buildPortfolioPnlBreakdown(
     myTotalPnl: myOpenPnl + myRealizedPnl,
     clientOpenPnl,
     clientRealizedPnl,
-    clientPnlOwed: calculateClientOutstanding(trades),
+    clientTotalPnl,
+    totalRealizedPnl,
+    totalUnrealizedPnl,
+    totalPnl,
+    clientPnlOwed: clientOpenPnl,
   };
 }
 
 export function calculateRiskShare(
   maxRisk: number,
   tradeOwnership: TradeOwnership,
-  mySharePercent: number,
-  clientSharePercent: number
+  _mySharePercent?: number,
+  _clientSharePercent?: number
 ): { myRisk: number; clientRisk: number } {
   if (tradeOwnership !== "client_profit_sharing") {
     return { myRisk: maxRisk, clientRisk: 0 };
   }
   return {
-    myRisk: maxRisk * (mySharePercent / 100),
-    clientRisk: maxRisk * (clientSharePercent / 100),
+    myRisk: maxRisk * (SHARED_MY_SHARE_PCT / 100),
+    clientRisk: maxRisk * (SHARED_CLIENT_SHARE_PCT / 100),
   };
 }
 
@@ -167,19 +184,15 @@ export function calculateRiskShare(
 export function calculatePnLFromOptionsRow(row: {
   current_pnl: number | string;
   trade_ownership?: TradeOwnership | null;
-  my_profit_share_percent?: number | string | null;
-  client_profit_share_percent?: number | string | null;
 }): TradePnlAllocation {
   const totalTradePnl = Number(row.current_pnl);
   const isClient = row.trade_ownership === "client_profit_sharing";
   if (!isClient) {
     return { totalTradePnl, myPnl: totalTradePnl, clientPnl: 0 };
   }
-  const myPct = Number(row.my_profit_share_percent ?? 60);
-  const clientPct = Number(row.client_profit_share_percent ?? 40);
   return {
     totalTradePnl,
-    myPnl: totalTradePnl * (myPct / 100),
-    clientPnl: totalTradePnl * (clientPct / 100),
+    myPnl: totalTradePnl * (SHARED_MY_SHARE_PCT / 100),
+    clientPnl: totalTradePnl * (SHARED_CLIENT_SHARE_PCT / 100),
   };
 }

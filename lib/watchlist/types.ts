@@ -98,6 +98,9 @@ export interface WatchlistScannerRow {
   ticker: string;
   category: WatchlistCategory;
   sortOrder: number;
+  priorityRank: number;
+  notes: string | null;
+  isActive: boolean;
   market: MarketDataFields;
   previousMarket: PreviousDayMarketFields;
   averagePriceComparison: AveragePriceComparison;
@@ -107,6 +110,8 @@ export interface WatchlistScannerRow {
   distances: CalculatedDistanceFields;
   averagePricePosition: AveragePricePosition;
   supportResistance: ManualSupportResistance;
+  /** Manual weekly levels — used in scoring when set */
+  weeklySupportResistance: ManualSupportResistance | null;
   score?: ScannerScoreResult;
 }
 

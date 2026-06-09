@@ -1,3 +1,5 @@
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
+import { StatCard } from "@/components/ui/StatCard";
 import { formatRiskCurrency } from "@/lib/risk/format";
 import type { ClientProfitSharingSummary } from "@/lib/client-profit-sharing/types";
 
@@ -7,31 +9,29 @@ interface ClientLifetimeSummaryProps {
 
 export function ClientLifetimeSummary({ summary }: ClientLifetimeSummaryProps) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div className="rounded-lg border border-terminal-border bg-terminal-elevated/20 px-3 py-2">
-        <p className="text-[10px] uppercase text-terminal-muted">Lifetime Profit</p>
-        <p className="font-mono text-sm text-terminal-text">
-          {formatRiskCurrency(summary.lifetimeTradeProfit)}
-        </p>
-      </div>
-      <div className="rounded-lg border border-terminal-border bg-terminal-elevated/20 px-3 py-2">
-        <p className="text-[10px] uppercase text-terminal-muted">Lifetime Client Share</p>
-        <p className="font-mono text-sm text-profit">
-          {formatRiskCurrency(summary.lifetimeClientShare)}
-        </p>
-      </div>
-      <div className="rounded-lg border border-terminal-border bg-terminal-elevated/20 px-3 py-2">
-        <p className="text-[10px] uppercase text-terminal-muted">Lifetime My Share</p>
-        <p className="font-mono text-sm text-accent">
-          {formatRiskCurrency(summary.lifetimeMyShare)}
-        </p>
-      </div>
-      <div className="rounded-lg border border-terminal-border bg-terminal-elevated/20 px-3 py-2">
-        <p className="text-[10px] uppercase text-terminal-muted">Paid To Client</p>
-        <p className="font-mono text-sm text-terminal-muted">
-          {formatRiskCurrency(summary.totalPaidToClient)}
-        </p>
-      </div>
-    </div>
+    <MetricCardsGrid>
+      <StatCard
+        label="Lifetime Profit"
+        value={formatRiskCurrency(summary.lifetimeTradeProfit)}
+        changeType="neutral"
+      />
+      <StatCard
+        label="Lifetime Client Share"
+        value={formatRiskCurrency(summary.lifetimeClientShare)}
+        changeType="positive"
+        valueClassName="text-profit"
+      />
+      <StatCard
+        label="Lifetime My Share"
+        value={formatRiskCurrency(summary.lifetimeMyShare)}
+        changeType="neutral"
+        valueClassName="text-accent"
+      />
+      <StatCard
+        label="Paid To Client"
+        value={formatRiskCurrency(summary.totalPaidToClient)}
+        changeType="neutral"
+      />
+    </MetricCardsGrid>
   );
 }

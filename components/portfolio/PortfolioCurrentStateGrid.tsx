@@ -1,12 +1,14 @@
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import type { CapitalPoolsBreakdown } from "@/lib/portfolio/capital-pools";
 import type { PortfolioCurrentState } from "@/lib/portfolio/daily-snapshot-types";
 import type { PortfolioMetrics } from "@/lib/portfolio/types";
 import {
-  formatReturnPercent,
-  formatSGD,
-  formatSignedSGD,
-} from "@/lib/utils";
+  getPnLChangeType,
+  pnlPercentStatProps,
+  pnlStatProps,
+} from "@/lib/format/pnl";
+import { formatSGD } from "@/lib/utils";
 
 interface PortfolioCurrentStateGridProps {
   metrics: PortfolioMetrics;
@@ -22,34 +24,33 @@ export function PortfolioCurrentStateGrid({
   const dailyChangeType =
     currentState.dailyChange == null
       ? "neutral"
-      : currentState.dailyChange >= 0
-        ? "positive"
-        : "negative";
+      : getPnLChangeType(currentState.dailyChange);
+  const dailyChangeProps =
+    currentState.dailyChange != null
+      ? pnlStatProps(currentState.dailyChange, { currency: "SGD" })
+      : null;
+  const dailyChangePctProps =
+    currentState.dailyChangePct != null
+      ? pnlPercentStatProps(currentState.dailyChangePct, 2)
+      : null;
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <MetricCardsGrid gap="lg">
       <StatCard
         label="My Portfolio Value"
         value={formatSGD(currentState.portfolioValue)}
         change={
-          metrics.comparison.useManualOverride
-            ? "Manual reconciliation"
-            : `Trading ${formatSGD(capitalPools.tradingCapital)} + Crypto ${formatSGD(capitalPools.cryptoCapital)}`
+          `Trading ${formatSGD(capitalPools.tradingCapital)} + Crypto ${formatSGD(capitalPools.cryptoPortfolioValueSgd)}`
         }
         changeType="neutral"
       />
       <StatCard
         label="Daily Change"
-        value={
-          currentState.dailyChange != null
-            ? formatSignedSGD(currentState.dailyChange)
-            : "—"
-        }
+        value={dailyChangeProps?.value ?? "—"}
         change={
-          currentState.dailyChangePct != null
-            ? formatReturnPercent(currentState.dailyChangePct)
-            : "From latest daily record"
+          dailyChangePctProps?.value ?? "From latest daily record"
         }
+        valueClassName={dailyChangeProps?.valueClassName}
         changeType={dailyChangeType}
       />
       <StatCard
@@ -76,6 +77,6 @@ export function PortfolioCurrentStateGrid({
         change="Latest daily portfolio record"
         changeType="neutral"
       />
-    </div>
+    </MetricCardsGrid>
   );
 }

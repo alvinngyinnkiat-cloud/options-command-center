@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { refreshWatchlistScannerAction } from "@/app/actions/watchlist";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { sortRowsByWatchlistRank } from "@/lib/watchlist/watchlist-rank";
 import {
   WATCHLIST_CATEGORIES,
-  WATCHLIST_CATEGORY_DEFAULTS,
+  WATCHLIST_CATEGORY_LABELS,
+  getCategoryLabel,
   type WatchlistCategory,
 } from "@/lib/watchlist/categories";
 import type { EnrichedAlert } from "@/lib/alerts/types";
@@ -14,7 +17,7 @@ import type { WatchlistScannerData } from "@/lib/watchlist/types";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
 import type { TradeReadinessResult } from "@/lib/trading-workflow/types";
 import { WeekendMarketReviewPanel } from "@/components/weekend-review/WeekendMarketReviewPanel";
-import { LayoutGrid, ScanLine, Table2 } from "lucide-react";
+import { LayoutGrid, RefreshCw, ScanLine, Table2 } from "lucide-react";
 import { AddTickerForm } from "./AddTickerForm";
 import { StrategyRecommendationsPanel } from "./StrategyRecommendationsPanel";
 import { TradingAnalysisPanel } from "./TradingAnalysisPanel";
@@ -42,17 +45,37 @@ export function WatchlistScannerClient({
   const [activeCategory, setActiveCategory] =
     useState<WatchlistCategory>("ETF");
   const [viewMode, setViewMode] = useState<WatchlistViewMode>("categories");
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [isRefreshing, startRefresh] = useTransition();
+
+  const activeRows = useMemo(
+    () => rows.filter((row) => row.isActive),
+    [rows]
+  );
 
   const rowsByCategory = useMemo(() => {
     const map = new Map<WatchlistCategory, number>();
     for (const category of WATCHLIST_CATEGORIES) {
       map.set(
         category,
-        rows.filter((row) => row.category === category).length
+        activeRows.filter((row) => row.category === category).length
       );
     }
     return map;
-  }, [rows]);
+  }, [activeRows]);
+
+  const tickersByCategory = useMemo(() => {
+    const map = new Map<WatchlistCategory, string[]>();
+    for (const category of WATCHLIST_CATEGORIES) {
+      map.set(
+        category,
+        sortRowsByWatchlistRank(
+          activeRows.filter((row) => row.category === category)
+        ).map((row) => row.ticker)
+      );
+    }
+    return map;
+  }, [activeRows]);
 
   function handleRowsChange(
     updated: typeof rows,
@@ -63,21 +86,53 @@ export function WatchlistScannerClient({
   }
 
   const categoryRows = useMemo(
-    () => rows.filter((row) => row.category === activeCategory),
-    [rows, activeCategory]
+    () =>
+      sortRowsByWatchlistRank(
+        activeRows.filter((row) => row.category === activeCategory)
+      ),
+    [activeRows, activeCategory]
   );
+
+  function handleRefresh() {
+    setRefreshError(null);
+    startRefresh(async () => {
+      const result = await refreshWatchlistScannerAction();
+      if (!result.success) {
+        setRefreshError(result.error);
+        return;
+      }
+      handleRowsChange(result.rows, result.dataSource);
+    });
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Watchlist Scanner"
-        description="Phase 6 recommendation engine — categorized universe with expandable detail"
+        description={`${activeRows.length} Active Tickers · Saved Supabase data · Use Refresh to pull latest market data`}
         actions={
-          <Badge variant={dataSource === "supabase" ? "success" : "outline"}>
-            {dataSource === "supabase" ? "Live data" : "Mock data"}
-          </Badge>
+          <>
+            <Badge variant={dataSource === "supabase" ? "success" : "outline"}>
+              {dataSource === "supabase" ? "Live data" : "Mock data"}
+            </Badge>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw
+                className={isRefreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+              />
+              {isRefreshing ? "Refreshing…" : "Refresh Data"}
+            </Button>
+          </>
         }
       />
+
+      {refreshError && (
+        <p className="text-xs text-loss">{refreshError}</p>
+      )}
 
       <WeekendMarketReviewPanel
         initialStatus={reviewStatus}
@@ -93,12 +148,10 @@ export function WatchlistScannerClient({
             className="rounded-lg border border-terminal-border bg-terminal-elevated/30 px-3 py-2"
           >
             <p className="text-[10px] uppercase tracking-wider text-terminal-muted">
-              {category}
+              {WATCHLIST_CATEGORY_LABELS[category]}
             </p>
             <p className="mt-1 text-xs font-mono text-terminal-muted leading-relaxed">
-              {category === "Pullbacks"
-                ? "Auto Watchlist + manual adds"
-                : WATCHLIST_CATEGORY_DEFAULTS[category].join(" · ")}
+              {(tickersByCategory.get(category) ?? []).join(" · ") || "—"}
             </p>
             <p className="mt-1 text-[11px] text-terminal-muted">
               {rowsByCategory.get(category) ?? 0} active
@@ -107,14 +160,9 @@ export function WatchlistScannerClient({
         ))}
       </div>
 
-      {activeCategory === "Pullbacks" && (
-        <div className="rounded-lg border border-terminal-border bg-terminal-surface p-4">
-          <AddTickerForm
-            category="Pullbacks"
-            onAdded={handleRowsChange}
-          />
-        </div>
-      )}
+      <div className="rounded-lg border border-terminal-border bg-terminal-surface p-4">
+        <AddTickerForm category={activeCategory} onAdded={handleRowsChange} />
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap items-center gap-1 rounded-md border border-terminal-border p-1">
@@ -128,7 +176,7 @@ export function WatchlistScannerClient({
                 setViewMode("categories");
               }}
             >
-              {category}
+              {getCategoryLabel(category)}
             </Button>
           ))}
         </div>
@@ -170,11 +218,11 @@ export function WatchlistScannerClient({
       {viewMode === "categories" && (
         <WatchlistCategoryTable
           category={activeCategory}
-          rows={rows}
+          rows={activeRows}
           reviewStatus={reviewStatus}
           alerts={alerts}
           readinessByTicker={readinessByTicker}
-          allowRemove={activeCategory === "Pullbacks"}
+          allowRemove
           onRowsChange={handleRowsChange}
           dataSource={dataSource}
         />
@@ -183,14 +231,14 @@ export function WatchlistScannerClient({
       {viewMode === "scanner" && (
         <div>
           <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
-            Trading Analysis Scanner — {activeCategory}
+            Trading Analysis Scanner — {getCategoryLabel(activeCategory)}
           </h2>
           <TradingAnalysisScannerGrid
             rows={categoryRows}
             reviewStatus={reviewStatus}
             alerts={alerts}
             readinessByTicker={readinessByTicker}
-            emptyMessage={`No tickers in ${activeCategory}.`}
+            emptyMessage={`No tickers in ${getCategoryLabel(activeCategory)}.`}
           />
           <p className="mt-2 text-[11px] text-terminal-muted">
             Quick trade overview · Ticker · Strategy · Action only · Click a row

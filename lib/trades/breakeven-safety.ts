@@ -10,6 +10,10 @@ export interface BreakevenSafetyResult {
   breakevenCallPrice: number | null;
   distance: number | null;
   distancePct: number | null;
+  /** Iron condor — put side distance % vs current stock price */
+  putDistancePct: number | null;
+  /** Iron condor — call side distance % vs current stock price */
+  callDistancePct: number | null;
   nearestSide: BreakevenNearestSide | null;
   status: BreakevenSafetyStatus | null;
 }
@@ -46,10 +50,35 @@ export function getBreakevenSafetyTone(
   }
 }
 
+export const UNDERLYING_PRICE_UNAVAILABLE = "Underlying price not updated";
+
 export function formatBreakevenSafetyPct(pct: number | null): string {
   if (pct == null) return "—";
   const sign = pct >= 0 ? "+" : "";
   return `${sign}${pct.toFixed(1)}%`;
+}
+
+export function formatUnderlyingPriceDisplay(
+  price: number | null | undefined
+): string {
+  if (price == null) return UNDERLYING_PRICE_UNAVAILABLE;
+  return `$${price.toFixed(2)}`;
+}
+
+export function formatBreakevenDistancePctDisplay(input: {
+  underlyingPrice: number | null | undefined;
+  distancePct: number | null;
+  putDistancePct?: number | null;
+  callDistancePct?: number | null;
+  isIronCondor?: boolean;
+}): string {
+  if (input.underlyingPrice == null) return UNDERLYING_PRICE_UNAVAILABLE;
+  if (input.isIronCondor) {
+    const put = formatBreakevenSafetyPct(input.putDistancePct ?? null);
+    const call = formatBreakevenSafetyPct(input.callDistancePct ?? null);
+    return `P ${put} · C ${call}`;
+  }
+  return formatBreakevenSafetyPct(input.distancePct);
 }
 
 export function formatBreakevenDistanceDollars(distance: number | null): string {
@@ -77,6 +106,8 @@ export function calculateBreakevenSafety(input: {
       breakevenCallPrice: input.breakevenCall,
       distance: null,
       distancePct: null,
+      putDistancePct: null,
+      callDistancePct: null,
       nearestSide: null,
       status: null,
     };
@@ -91,13 +122,15 @@ export function calculateBreakevenSafety(input: {
       return emptyResult(null, null);
     }
     const distance = price - breakevenPrice;
-    const distancePct = round2((distance / breakevenPrice) * 100);
+    const distancePct = round2((distance / price) * 100);
     return {
       breakevenPrice: round2(breakevenPrice),
       breakevenPutPrice: round2(breakevenPrice),
       breakevenCallPrice: null,
       distance: round2(distance),
       distancePct,
+      putDistancePct: null,
+      callDistancePct: null,
       nearestSide: null,
       status: getBreakevenSafetyStatus(distancePct),
     };
@@ -112,13 +145,15 @@ export function calculateBreakevenSafety(input: {
       return emptyResult(null, null);
     }
     const distance = breakevenPrice - price;
-    const distancePct = round2((distance / breakevenPrice) * 100);
+    const distancePct = round2((distance / price) * 100);
     return {
       breakevenPrice: round2(breakevenPrice),
       breakevenPutPrice: null,
       breakevenCallPrice: round2(breakevenPrice),
       distance: round2(distance),
       distancePct,
+      putDistancePct: null,
+      callDistancePct: null,
       nearestSide: null,
       status: getBreakevenSafetyStatus(distancePct),
     };
@@ -143,7 +178,9 @@ export function calculateBreakevenSafety(input: {
     const nearestSide: BreakevenNearestSide =
       putSideDistance <= callSideDistance ? "Put Side" : "Call Side";
     const distance = Math.min(putSideDistance, callSideDistance);
-    const distancePct = round2((distance / price) * 100);
+    const putDistancePct = round2((putSideDistance / price) * 100);
+    const callDistancePct = round2((callSideDistance / price) * 100);
+    const distancePct = Math.min(putDistancePct, callDistancePct);
     const breakevenPrice =
       nearestSide === "Put Side" ? putBreakeven : callBreakeven;
 
@@ -153,6 +190,8 @@ export function calculateBreakevenSafety(input: {
       breakevenCallPrice: round2(callBreakeven),
       distance: round2(distance),
       distancePct,
+      putDistancePct,
+      callDistancePct,
       nearestSide,
       status: getBreakevenSafetyStatus(distancePct),
     };
@@ -167,13 +206,15 @@ export function calculateBreakevenSafety(input: {
       return emptyResult(null, null);
     }
     const distance = price - breakevenPrice;
-    const distancePct = round2((distance / breakevenPrice) * 100);
+    const distancePct = round2((distance / price) * 100);
     return {
       breakevenPrice: round2(breakevenPrice),
       breakevenPutPrice: round2(breakevenPrice),
       breakevenCallPrice: null,
       distance: round2(distance),
       distancePct,
+      putDistancePct: null,
+      callDistancePct: null,
       nearestSide: null,
       status: getBreakevenSafetyStatus(distancePct),
     };
@@ -188,13 +229,15 @@ export function calculateBreakevenSafety(input: {
       return emptyResult(null, null);
     }
     const distance = breakevenPrice - price;
-    const distancePct = round2((distance / breakevenPrice) * 100);
+    const distancePct = round2((distance / price) * 100);
     return {
       breakevenPrice: round2(breakevenPrice),
       breakevenPutPrice: null,
       breakevenCallPrice: round2(breakevenPrice),
       distance: round2(distance),
       distancePct,
+      putDistancePct: null,
+      callDistancePct: null,
       nearestSide: null,
       status: getBreakevenSafetyStatus(distancePct),
     };
@@ -213,6 +256,8 @@ function emptyResult(
     breakevenCallPrice: call,
     distance: null,
     distancePct: null,
+    putDistancePct: null,
+    callDistancePct: null,
     nearestSide: null,
     status: null,
   };

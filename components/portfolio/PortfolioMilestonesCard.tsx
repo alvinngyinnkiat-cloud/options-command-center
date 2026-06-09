@@ -1,5 +1,6 @@
 "use client";
 
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import type { PortfolioMilestones } from "@/lib/portfolio/daily-snapshot-types";
 import { formatCurrency } from "@/lib/utils";
@@ -12,7 +13,7 @@ export function PortfolioMilestonesCard({
   milestones,
 }: PortfolioMilestonesCardProps) {
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <MetricCardsGrid>
       <StatCard
         label="Highest Value"
         value={
@@ -45,6 +46,6 @@ export function PortfolioMilestonesCard({
             : "—"
         }
       />
-    </div>
+    </MetricCardsGrid>
   );
 }

@@ -33,11 +33,41 @@ export function scoreSupportResistance(
   }
 }
 
+function averageComponentScores(
+  results: ScoreComponentResult[],
+  maxScore: number,
+  emptyReason: string
+): ScoreComponentResult {
+  const scored = results.filter((r) => r.score > 0 || r.passed);
+  if (scored.length === 0) {
+    return (
+      results[0] ?? {
+        score: 0,
+        maxScore,
+        passed: false,
+        reason: emptyReason,
+      }
+    );
+  }
+
+  const score = Math.round(
+    scored.reduce((sum, r) => sum + r.score, 0) / scored.length
+  );
+  return {
+    score: Math.min(maxScore, score),
+    maxScore,
+    passed: score > 0,
+    reason: scored.map((r) => r.reason).join(" · "),
+  };
+}
+
 function scoreBullPutSr(
   input: SupportResistanceScoreInput,
   maxScore: number
 ): ScoreComponentResult {
-  if (input.support == null) {
+  const results: ScoreComponentResult[] = [];
+
+  if (input.support == null && input.weeklySupport == null) {
     return {
       score: 0,
       maxScore,
@@ -46,15 +76,35 @@ function scoreBullPutSr(
     };
   }
 
-  const atrDistance = (input.averagePrice - input.support) / input.atr14;
-  return scoreAtrDistance(atrDistance, maxScore, "support", "Bull Put");
+  if (input.support != null) {
+    const atrDistance = (input.averagePrice - input.support) / input.atr14;
+    results.push(
+      scoreAtrDistance(atrDistance, maxScore, "daily support", "Bull Put")
+    );
+  }
+
+  if (input.weeklySupport != null) {
+    const atrDistance =
+      (input.averagePrice - input.weeklySupport) / input.atr14;
+    results.push(
+      scoreAtrDistance(atrDistance, maxScore, "weekly support", "Bull Put")
+    );
+  }
+
+  return averageComponentScores(
+    results,
+    maxScore,
+    "Manual support required — never auto-generated"
+  );
 }
 
 function scoreBearCallSr(
   input: SupportResistanceScoreInput,
   maxScore: number
 ): ScoreComponentResult {
-  if (input.resistance == null) {
+  const results: ScoreComponentResult[] = [];
+
+  if (input.resistance == null && input.weeklyResistance == null) {
     return {
       score: 0,
       maxScore,
@@ -63,15 +113,73 @@ function scoreBearCallSr(
     };
   }
 
-  const atrDistance = (input.resistance - input.averagePrice) / input.atr14;
-  return scoreAtrDistance(atrDistance, maxScore, "resistance", "Bear Call");
+  if (input.resistance != null) {
+    const atrDistance = (input.resistance - input.averagePrice) / input.atr14;
+    results.push(
+      scoreAtrDistance(atrDistance, maxScore, "daily resistance", "Bear Call")
+    );
+  }
+
+  if (input.weeklyResistance != null) {
+    const atrDistance =
+      (input.weeklyResistance - input.averagePrice) / input.atr14;
+    results.push(
+      scoreAtrDistance(atrDistance, maxScore, "weekly resistance", "Bear Call")
+    );
+  }
+
+  return averageComponentScores(
+    results,
+    maxScore,
+    "Manual resistance required — never auto-generated"
+  );
+}
+
+function scoreIronCondorRange(
+  support: number,
+  resistance: number,
+  atr14: number,
+  maxScore: number,
+  label: string
+): ScoreComponentResult {
+  const rangeAtr = (resistance - support) / atr14;
+
+  if (rangeAtr > 4) {
+    return {
+      score: maxScore,
+      maxScore,
+      passed: true,
+      reason: `${label} range ${rangeAtr.toFixed(2)} ATR > 4`,
+    };
+  }
+  if (rangeAtr >= 3 && rangeAtr <= 4) {
+    return {
+      score: 16,
+      maxScore,
+      passed: true,
+      reason: `${label} range ${rangeAtr.toFixed(2)} ATR in 3–4`,
+    };
+  }
+  return {
+    score: 0,
+    maxScore,
+    passed: false,
+    reason: `${label} range ${rangeAtr.toFixed(2)} ATR < 3`,
+  };
 }
 
 function scoreIronCondorSr(
   input: SupportResistanceScoreInput,
   maxScore: number
 ): ScoreComponentResult {
-  if (input.support == null || input.resistance == null) {
+  const results: ScoreComponentResult[] = [];
+
+  const hasDaily =
+    input.support != null && input.resistance != null;
+  const hasWeekly =
+    input.weeklySupport != null && input.weeklyResistance != null;
+
+  if (!hasDaily && !hasWeekly) {
     return {
       score: 0,
       maxScore,
@@ -80,30 +188,35 @@ function scoreIronCondorSr(
     };
   }
 
-  const rangeAtr = (input.resistance - input.support) / input.atr14;
+  if (hasDaily) {
+    results.push(
+      scoreIronCondorRange(
+        input.support!,
+        input.resistance!,
+        input.atr14,
+        maxScore,
+        "Daily S/R"
+      )
+    );
+  }
 
-  if (rangeAtr > 4) {
-    return {
-      score: maxScore,
-      maxScore,
-      passed: true,
-      reason: `S/R range ${rangeAtr.toFixed(2)} ATR > 4`,
-    };
+  if (hasWeekly) {
+    results.push(
+      scoreIronCondorRange(
+        input.weeklySupport!,
+        input.weeklyResistance!,
+        input.atr14,
+        maxScore,
+        "Weekly S/R"
+      )
+    );
   }
-  if (rangeAtr >= 3 && rangeAtr <= 4) {
-    return {
-      score: 16,
-      maxScore,
-      passed: true,
-      reason: `S/R range ${rangeAtr.toFixed(2)} ATR in 3–4`,
-    };
-  }
-  return {
-    score: 0,
+
+  return averageComponentScores(
+    results,
     maxScore,
-    passed: false,
-    reason: `S/R range ${rangeAtr.toFixed(2)} ATR < 3`,
-  };
+    "Manual support and resistance required — never auto-generated"
+  );
 }
 
 function scoreAtrDistance(

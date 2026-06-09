@@ -31,6 +31,8 @@ export function computeScannerScore(input: ScannerScoringInput): ComputedScore {
     averagePrice: input.averagePrice,
     support: input.support,
     resistance: input.resistance,
+    weeklySupport: input.weeklySupport ?? null,
+    weeklyResistance: input.weeklyResistance ?? null,
     atr14: input.technicals.atr14,
     strategy,
   });

@@ -1,0 +1,2 @@
+watchlist_id,ticker,strategy,status,entry_date,expiration_date,dte,contracts,credit_received,short_strike_put,long_strike_put,short_strike_call,long_strike_call,take_profit_target,stop_loss_target,trade_ownership,notes
+00000000-0000-0000-0000-000000000000,SPY,bull_put_spread,open,2026-06-01,2026-07-18,47,2,1.85,560.0000,555.0000,,,75,175,personal,Replace watchlist_id with a real UUID from your watchlist table

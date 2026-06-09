@@ -10,7 +10,7 @@ export interface CashBalances {
   cashUsdNative: number;
   /** @deprecated Not used — USD cash is reference-only, never added to SGD trading cash */
   cashUsdSgd: number;
-  /** Trading cash SGD only — manual broker SGD cash */
+  /** Trading Cash USD — options liquidity, stress test, close coverage */
   cashAvailable: number;
   tradingCashSgd: number;
   cryptoCashSgd: number;
@@ -83,7 +83,7 @@ export function extractCashBalances(
     cashSgd,
     cashUsdNative,
     cashUsdSgd: 0,
-    cashAvailable: tradingCashSgd,
+    cashAvailable: cashUsdNative,
     tradingCashSgd,
     cryptoCashSgd,
   };
@@ -206,7 +206,7 @@ export function buildCapitalLiquidityBase(input: {
     cashUsdNative,
     cashUsdSgd: 0,
     tradingCashSgd,
-    cashAvailable: tradingCashSgd,
+    cashAvailable: cashUsdNative,
     cryptoCashSgd: input.cryptoCashSgd ?? extracted.cryptoCashSgd,
   };
   const usStocksOptionsValueUsd = input.usStocksOptionsValueUsd;
@@ -236,20 +236,21 @@ export function buildCapitalLiquidityCheck(
   base: CapitalLiquidityBase,
   newTradeRisk: number
 ): CapitalLiquidityResult {
+  const tradingCashUsd = base.cash.cashUsdNative;
   const stockDeployableCapital = calculateStockDeployableCapital(
     base.stocksEtfValue,
     base.currentOpenRisk
   );
   const remainingCapitalAfterNewTrade =
-    stockDeployableCapital - newTradeRisk;
+    tradingCashUsd - base.currentOpenRisk - newTradeRisk;
   const liquidityRatio = calculateLiquidityRatio(
-    base.cash.cashAvailable,
+    tradingCashUsd,
     base.currentPositionCloseRequirement
   );
   const emergencyBuffer =
-    base.cash.cashAvailable - base.currentPositionCloseRequirement;
+    tradingCashUsd - base.currentPositionCloseRequirement;
   const afterNewTradeBuffer =
-    base.cash.cashAvailable -
+    tradingCashUsd -
     base.currentPositionCloseRequirement -
     newTradeRisk;
   const capitalUtilizationPct = calculateCapitalUtilizationPct(
@@ -267,7 +268,7 @@ export function buildCapitalLiquidityCheck(
     capitalUtilizationPct <= 75;
 
   const canCloseAllPositions =
-    base.cash.cashAvailable >= base.currentPositionCloseRequirement;
+    tradingCashUsd >= base.currentPositionCloseRequirement;
 
   const finalStatus = getCapitalLiquidityStatus({
     liquidityRatio: Number.isFinite(liquidityRatio) ? liquidityRatio : 999,
@@ -277,7 +278,7 @@ export function buildCapitalLiquidityCheck(
 
   const worstCaseOpenRisk = base.currentOpenRisk;
   const remainingCashAfterWorstCase =
-    base.cash.cashAvailable -
+    tradingCashUsd -
     base.currentPositionCloseRequirement -
     worstCaseOpenRisk;
 
@@ -294,7 +295,7 @@ export function buildCapitalLiquidityCheck(
     canCloseAllPositions,
     finalStatus,
     stressTest: {
-      cashAvailable: base.cash.cashAvailable,
+      cashAvailable: tradingCashUsd,
       currentCloseRequirement: base.currentPositionCloseRequirement,
       worstCaseOpenRisk,
       remainingCashAfterWorstCase,

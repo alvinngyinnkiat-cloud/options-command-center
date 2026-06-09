@@ -6,9 +6,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import type { CapitalPoolsBreakdown } from "@/lib/portfolio/capital-pools";
-import { formatSGD } from "@/lib/utils";
+import { formatSGD, formatUsd } from "@/lib/utils";
 
 interface CashBreakdownSectionProps {
   pools: CapitalPoolsBreakdown;
@@ -32,15 +33,16 @@ export function CashBreakdownSection({ pools }: CashBreakdownSectionProps) {
         Cash Breakdown
       </h2>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         <Card variant="bordered">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-sm">Trading Cash</CardTitle>
+              <CardTitle className="text-sm">Trading Cash SGD</CardTitle>
               <Badge variant="info">Trading Use</Badge>
             </div>
             <CardDescription>
-              Broker cash for stocks, ETFs and options.
+              Broker SGD cash for stocks, ETFs and options — in Portfolio Value
+              and Trading Capital.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -64,9 +66,25 @@ export function CashBreakdownSection({ pools }: CashBreakdownSectionProps) {
                 value={formatSGD(cash.availableForOptionsSgd)}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card variant="bordered">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm">Trading Cash USD</CardTitle>
+              <Badge variant="outline">Reference Only</Badge>
+            </div>
+            <CardDescription>
+              Broker USD cash — not converted to SGD and not in any total.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="font-mono text-2xl font-semibold text-terminal-text">
+              {formatUsd(cash.brokerUsdCashNative)}
+            </p>
             <p className="text-[10px] text-terminal-muted">
-              USD {cash.brokerUsdCashNative.toLocaleString()} (reference only) ·
-              SGD {cash.brokerSgdCash.toLocaleString()}
+              US stocks/options buying-power reference only.
             </p>
           </CardContent>
         </Card>
@@ -78,7 +96,8 @@ export function CashBreakdownSection({ pools }: CashBreakdownSectionProps) {
               <Badge variant="outline">Crypto Only</Badge>
             </div>
             <CardDescription>
-              Cash/stablecoins held for crypto investing.
+              Stablecoins / exchange cash — breakdown only; included in Crypto
+              Value, not added separately to Portfolio Value.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -95,7 +114,8 @@ export function CashBreakdownSection({ pools }: CashBreakdownSectionProps) {
               />
             </div>
             <p className="text-[10px] text-terminal-muted">
-              Not used for stock or options trading decisions.
+              Excluded from Trading Capital and Trading Cash SGD — edit via Manual
+              Crypto Cash card.
             </p>
           </CardContent>
         </Card>
@@ -134,48 +154,13 @@ interface PortfolioSummarySectionProps {
 
 export function PortfolioSummarySection({ pools }: PortfolioSummarySectionProps) {
   return (
-    <section className="space-y-4">
-      <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
-        Portfolio Summary
-      </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-        <StatCard
-          label="My Portfolio Value"
-          value={formatSGD(pools.myPortfolioValue)}
-          change="Trading + Crypto capital"
-          changeType="neutral"
-        />
-        <StatCard
-          label="Trading Capital"
-          value={formatSGD(pools.tradingCapital)}
-          change="Stocks, ETFs, options, trading cash"
-          changeType="neutral"
-        />
-        <StatCard
-          label="Crypto Capital"
-          value={formatSGD(pools.cryptoCapital)}
-          change="Crypto holdings + crypto cash"
-          changeType="neutral"
-        />
-        <StatCard
-          label="Trading Cash"
-          value={formatSGD(pools.tradingCashSgd)}
-          change="Manual SGD only — USD shown separately"
-          changeType="neutral"
-        />
-        <StatCard
-          label="Crypto Cash"
-          value={formatSGD(pools.cryptoCashSgd)}
-          change="Exchange stablecoins"
-          changeType="neutral"
-        />
-        <StatCard
-          label="Total Cash"
-          value={formatSGD(pools.cash.totalCashSgd)}
-          change="Net worth tracking"
-          changeType="neutral"
-        />
-      </div>
-    </section>
+    <MetricCardsGrid>
+      <StatCard
+        label="Trading Capital"
+        value={formatSGD(pools.tradingCapital)}
+        change="US/SG + Trading Cash SGD + options — excludes crypto"
+        changeType="neutral"
+      />
+    </MetricCardsGrid>
   );
 }

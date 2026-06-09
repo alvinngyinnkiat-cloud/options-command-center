@@ -7,10 +7,12 @@ import {
   updateOptionsTrade,
 } from "@/app/actions/trades";
 import type { ActiveTradeConflict } from "@/lib/trading-workflow/types";
-import { formatCurrency, formatSignedCurrency } from "@/lib/trades/format";
+import { formatCurrency, OPTION_PRICE_INPUT_STEP } from "@/lib/trades/format";
+import { formatPnL, formatPnLPercent, getPnLColor } from "@/lib/format/pnl";
 import { formatRiskCurrency } from "@/lib/risk/format";
 import { Button } from "@/components/ui/Button";
 import { buildTradeCalculations } from "@/lib/trades/calculations";
+import { calculateExitDebitTotal } from "@/lib/trades/exit-debit";
 import {
   CONFIDENCE_LEVELS,
   DEFAULT_STOP_LOSS_PCT,
@@ -47,7 +49,7 @@ function emptyForm(ticker = "SPY"): TradeFormInput {
   const expiry = new Date();
   expiry.setDate(expiry.getDate() + 30);
   return {
-    watchlistId: `mock-${ticker}`,
+    watchlistId: "",
     ticker,
     strategy: "bull_put_spread",
     status: "open",
@@ -57,6 +59,8 @@ function emptyForm(ticker = "SPY"): TradeFormInput {
     premiumPerContract: 2,
     currentValue: 0,
     exitDebit: null,
+    feesCommission: 0,
+    brokerRealizedPnl: null,
     shortStrikePut: null,
     longStrikePut: null,
     shortStrikeCall: null,
@@ -94,7 +98,12 @@ function formFromTrade(trade: EnrichedTrade): TradeFormInput {
     contracts: trade.contracts,
     premiumPerContract: trade.premiumPerContract,
     currentValue: trade.currentValue,
-    exitDebit: trade.exitDebit,
+    exitDebit:
+      trade.status === "closed" && trade.exitDebitPerContract != null
+        ? trade.exitDebitPerContract
+        : trade.exitDebit,
+    feesCommission: trade.feesCommission,
+    brokerRealizedPnl: trade.brokerRealizedPnl,
     shortStrikePut: trade.strikes.shortStrikePut,
     longStrikePut: trade.strikes.longStrikePut,
     shortStrikeCall: trade.strikes.shortStrikeCall,
@@ -172,7 +181,12 @@ export function TradeFormModal({
         contracts: form.contracts,
         premiumPerContract: form.premiumPerContract,
         currentOptionValuePerContract: previewOptionValue,
-        exitDebit: form.exitDebit,
+        exitDebit:
+          form.status === "closed" && form.exitDebit != null
+            ? calculateExitDebitTotal(form.exitDebit, form.contracts)
+            : form.exitDebit,
+        feesCommission: form.feesCommission,
+        brokerRealizedPnl: form.brokerRealizedPnl,
         status: form.status,
         takeProfitTargetPct: form.takeProfitTargetPct,
         stopLossTargetPct: form.stopLossTargetPct,
@@ -198,9 +212,12 @@ export function TradeFormModal({
     setError(null);
     const payload = {
       ...form,
-      watchlistId: `mock-${form.ticker.toUpperCase()}`,
       ticker: form.ticker.toUpperCase(),
       allowDuplicateOverride: overrideDuplicate,
+      exitDebit:
+        form.status === "closed" && form.exitDebit != null
+          ? calculateExitDebitTotal(form.exitDebit, form.contracts)
+          : form.exitDebit,
     };
     const result = isEdit
       ? await updateOptionsTrade(trade!.id, payload)
@@ -558,7 +575,7 @@ export function TradeFormModal({
               </span>
               <input
                 type="number"
-                step="0.01"
+                step={OPTION_PRICE_INPUT_STEP}
                 min={0}
                 className="w-full rounded border border-terminal-border bg-terminal-elevated px-2 py-1.5 text-sm font-mono"
                 value={form.originalCost ?? ""}
@@ -666,7 +683,7 @@ export function TradeFormModal({
               <span className="text-[10px] uppercase text-terminal-muted">Premium / Contract</span>
               <input
                 type="number"
-                step="0.01"
+                step={OPTION_PRICE_INPUT_STEP}
                 className="w-full rounded border border-terminal-border bg-terminal-elevated px-2 py-1.5 text-sm font-mono"
                 value={form.premiumPerContract}
                 onChange={(e) =>
@@ -681,16 +698,104 @@ export function TradeFormModal({
               </p>
             )}
             {form.status === "closed" && (
-              <label className="space-y-1">
-                <span className="text-[10px] uppercase text-terminal-muted">Exit Debit</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="w-full rounded border border-terminal-border bg-terminal-elevated px-2 py-1.5 text-sm font-mono"
-                  value={form.exitDebit ?? ""}
-                  onChange={(e) => set("exitDebit", parseNum(e.target.value))}
-                />
-              </label>
+              <>
+                <label className="space-y-1">
+                  <span className="text-[10px] uppercase text-terminal-muted">
+                    Closing Debit Per Contract
+                  </span>
+                  <input
+                    type="number"
+                    step={OPTION_PRICE_INPUT_STEP}
+                    min="0"
+                    className="w-full rounded border border-terminal-border bg-terminal-elevated px-2 py-1.5 text-sm font-mono"
+                    value={form.exitDebit ?? ""}
+                    onChange={(e) => set("exitDebit", parseNum(e.target.value))}
+                  />
+                  {form.exitDebit != null && (
+                    <p className="text-[10px] text-terminal-muted font-mono">
+                      Total closing debit:{" "}
+                      {formatCurrency(
+                        calculateExitDebitTotal(form.exitDebit, form.contracts)
+                      )}
+                    </p>
+                  )}
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] uppercase text-terminal-muted">
+                    Fees / Commission (USD)
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="w-full rounded border border-terminal-border bg-terminal-elevated px-2 py-1.5 text-sm font-mono"
+                    value={form.feesCommission}
+                    onChange={(e) =>
+                      set("feesCommission", parseFloat(e.target.value) || 0)
+                    }
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] uppercase text-terminal-muted">
+                    Broker Realized P/L Override (USD)
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full rounded border border-terminal-border bg-terminal-elevated px-2 py-1.5 text-sm font-mono"
+                    value={form.brokerRealizedPnl ?? ""}
+                    onChange={(e) =>
+                      set("brokerRealizedPnl", parseNum(e.target.value))
+                    }
+                    placeholder="Optional — overrides calculated P/L"
+                  />
+                </label>
+                {form.exitDebit != null && (
+                  <div className="col-span-2 rounded border border-terminal-border bg-terminal-elevated/40 p-3 text-xs space-y-1">
+                    <p className="text-[10px] uppercase text-terminal-muted">
+                      Closed Trade P/L Preview
+                    </p>
+                    <p className="font-mono">
+                      Calculated:{" "}
+                      {formatPnL(
+                        buildTradeCalculations({
+                          ...form,
+                          exitDebit: calculateExitDebitTotal(
+                            form.exitDebit,
+                            form.contracts
+                          ),
+                          currentOptionValuePerContract: 0,
+                          strikes: {
+                            shortStrikePut: form.shortStrikePut,
+                            longStrikePut: form.longStrikePut,
+                            shortStrikeCall: form.shortStrikeCall,
+                            longStrikeCall: form.longStrikeCall,
+                          },
+                        }).calculatedRealizedPnl ?? 0
+                      )}
+                    </p>
+                    <p className="font-mono">
+                      Final:{" "}
+                      {formatPnL(
+                        buildTradeCalculations({
+                          ...form,
+                          exitDebit: calculateExitDebitTotal(
+                            form.exitDebit,
+                            form.contracts
+                          ),
+                          currentOptionValuePerContract: 0,
+                          strikes: {
+                            shortStrikePut: form.shortStrikePut,
+                            longStrikePut: form.longStrikePut,
+                            shortStrikeCall: form.shortStrikeCall,
+                            longStrikeCall: form.longStrikeCall,
+                          },
+                        }).realizedPnl ?? 0
+                      )}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -782,10 +887,10 @@ export function TradeFormModal({
               <p
                 className={cn(
                   "font-mono font-semibold",
-                  calc.returnOnRiskPct >= 0 ? "text-profit" : "text-loss"
+                  getPnLColor(calc.returnOnRiskPct)
                 )}
               >
-                {calc.returnOnRiskPct.toFixed(1)}%
+                {formatPnLPercent(calc.returnOnRiskPct)}
               </p>
             </div>
           </div>
@@ -818,8 +923,10 @@ export function TradeFormModal({
                 </div>
                 <div>
                   <dt className="text-terminal-muted">Current P/L</dt>
-                  <dd className="font-mono">
-                    {formatSignedCurrency(displayConflict.currentPnl)}
+                  <dd className={cn("font-mono", getPnLColor(displayConflict.currentPnl))}>
+                    {formatPnL(displayConflict.currentPnl, {
+                      currency: "USD",
+                    })}
                   </dd>
                 </div>
                 <div>

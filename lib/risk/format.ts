@@ -1,13 +1,9 @@
+import { formatUsd } from "@/lib/format/currency";
 import type { RiskZone } from "./constants";
 import type { StressTestStatus } from "./capital-liquidity";
 
 export function formatRiskCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+  return formatUsd(value);
 }
 
 export function formatRiskPct(value: number, decimals = 1): string {

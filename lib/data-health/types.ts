@@ -1,3 +1,7 @@
+import type { WatchlistScannerHealthStatus } from "@/lib/watchlist/scanner-status";
+import type { FmpHealthDiagnostics } from "@/lib/data-health/fmp-status";
+import type { TickerSyncDiagnostic } from "@/lib/watchlist/sync-watchlist-data";
+
 export type DataSourceHealthStatus =
   | "healthy"
   | "warning"
@@ -9,10 +13,13 @@ export type DataSourceLogStatus = "success" | "partial" | "failed";
 export type DataSourceName =
   | "market_data"
   | "technical_indicators"
-  | "auto_watchlist"
+  | "watchlist_scheduled_refresh"
+  | "us_stock_etf_prices"
+  | "sg_stock_prices"
   | "dividend_data"
   | "manual_data"
-  | "options_trades";
+  | "options_trades"
+  | "crypto_manual";
 
 export interface DataSourceDetailRow {
   label: string;
@@ -50,6 +57,9 @@ export interface DataHealthPageData {
   reports: DataSourceHealthReport[];
   logs: DataSourceLogView[];
   widgetLines: DataHealthWidgetLine[];
+  scannerStatus: WatchlistScannerHealthStatus;
+  fmpDiagnostics: FmpHealthDiagnostics;
+  marketDataTickerDiagnostics: TickerSyncDiagnostic[];
   checkedAt: string;
   supabaseConfigured: boolean;
 }

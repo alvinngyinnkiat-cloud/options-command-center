@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import type {
   MonthlyContributionRecord,
@@ -82,7 +83,7 @@ export function MonthlyContributionTrackerPanel({
             <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
               YTD Summary ({data.currentYear})
             </h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <MetricCardsGrid>
               <StatCard
                 label="Stocks & Options"
                 value={formatSGD(ytdBreakdown.stockOptionsAmountSgd)}
@@ -101,7 +102,7 @@ export function MonthlyContributionTrackerPanel({
                 change={`Avg. ${formatSGD(data.averageMonthlyContribution)}/mo`}
                 changeType="neutral"
               />
-            </div>
+            </MetricCardsGrid>
           </div>
 
           <div>

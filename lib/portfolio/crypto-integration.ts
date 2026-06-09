@@ -1,7 +1,8 @@
 import type { EnrichedCryptoHolding } from "@/lib/crypto/types";
 import type { CryptoHolding } from "@/types/database";
 import type { HoldingInput, PortfolioRawInput } from "./types";
-import { isCryptoCashAsset } from "./capital-pools";
+import { isCryptoCashAsset, splitCryptoTrackerValues } from "./capital-pools";
+import { buildCryptoPortfolioValueSgd } from "./cash-architecture";
 
 const CRYPTO_TICKERS = new Set(["BTC", "ETH", "SOL", "CRYPTO"]);
 
@@ -68,11 +69,7 @@ export function applyCryptoTrackerToPortfolioRaw(
 export function getCryptoPortfolioValueSgd(
   cryptoRows: (CryptoHolding | EnrichedCryptoHolding)[]
 ): number {
-  return cryptoRows.reduce((s, h) => {
-    const v =
-      "current_value_sgd" in h
-        ? Number(h.current_value_sgd)
-        : h.currentValueSgd;
-    return s + v;
-  }, 0);
+  const { cryptoHoldingsSgd, cryptoCashSgd } =
+    splitCryptoTrackerValues(cryptoRows);
+  return buildCryptoPortfolioValueSgd(cryptoHoldingsSgd, cryptoCashSgd);
 }

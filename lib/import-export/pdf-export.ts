@@ -1,3 +1,5 @@
+import { formatSgd, formatUsd } from "@/lib/format/currency";
+import { formatPnL } from "@/lib/format/pnl";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { FileDownloadPayload, PdfReportType } from "./types";
@@ -17,7 +19,15 @@ import { collectExportContext } from "./data-bundle";
 
 function fmt(value: number | null): string {
   if (value == null) return "—";
-  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  return formatSgd(value);
+}
+
+function fmtUsd(value: number): string {
+  return formatUsd(value);
+}
+
+function fmtUsdPnl(value: number): string {
+  return formatPnL(value, { currency: "USD" });
 }
 
 function fmtPct(value: number | null): string {
@@ -239,20 +249,20 @@ export async function exportPdfReport(
           ["Total Trades", String(ctx.trades.trades.length)],
           ["Closed Trades", String(closed.length)],
           ["Win Rate (My P/L)", `${ctx.trades.summary.winRate.toFixed(1)}%`],
-          ["My Unrealized P/L", `$${ctx.trades.summary.myCurrentPnl.toFixed(0)}`],
-          ["My Realized P/L", `$${ctx.trades.summary.myRealizedPnl.toFixed(0)}`],
+          ["My Unrealized P/L", fmtUsdPnl(ctx.trades.summary.myCurrentPnl)],
+          ["My Realized P/L", fmtUsdPnl(ctx.trades.summary.myRealizedPnl)],
           ["Profit Factor (My P/L)", profitFactor.toFixed(2)],
-          ["Expectancy (My P/L)", `$${expectancy.toFixed(0)}`],
+          ["Expectancy (My P/L)", fmtUsdPnl(expectancy)],
           [
             "Best Trade (My Share)",
             best
-              ? `${best.ticker} $${calculateMyPnL(best, calculateTotalTradePnL(best)).toFixed(0)}`
+              ? `${best.ticker} ${fmtUsdPnl(calculateMyPnL(best, calculateTotalTradePnL(best)))}`
               : "—",
           ],
           [
             "Worst Trade (My Share)",
             worst
-              ? `${worst.ticker} $${calculateMyPnL(worst, calculateTotalTradePnL(worst)).toFixed(0)}`
+              ? `${worst.ticker} ${fmtUsdPnl(calculateMyPnL(worst, calculateTotalTradePnL(worst)))}`
               : "—",
           ],
         ],
@@ -276,7 +286,7 @@ export async function exportPdfReport(
         body: [...byStrategy.entries()].map(([strategy, v]) => [
           strategy,
           String(v.count),
-          `$${v.pnl.toFixed(0)}`,
+          fmtUsdPnl(v.pnl),
         ]),
         styles: { fontSize: 8 },
         headStyles: { fillColor: [30, 64, 120] },
@@ -303,9 +313,9 @@ export async function exportPdfReport(
         head: [["Ticker", "Total P/L", "ROI %", "Premium"]],
         body: tickerReport.topPerformers.map((s) => [
           s.ticker,
-          `$${s.totalPnl.toFixed(0)}`,
+          fmtUsdPnl(s.totalPnl),
           `${s.roiPct.toFixed(1)}%`,
-          `$${s.totalPremiumCollected.toFixed(0)}`,
+          fmtUsd(s.totalPremiumCollected),
         ]),
         styles: { fontSize: 8 },
         headStyles: { fillColor: [30, 64, 120] },
@@ -320,7 +330,7 @@ export async function exportPdfReport(
         head: [["Ticker", "Premium Collected"]],
         body: tickerReport.premiumByTicker.slice(0, 10).map((r) => [
           r.ticker,
-          `$${r.premiumCollected.toFixed(0)}`,
+          fmtUsd(r.premiumCollected),
         ]),
         styles: { fontSize: 8 },
         headStyles: { fillColor: [30, 64, 120] },
@@ -333,10 +343,10 @@ export async function exportPdfReport(
         startY: clientY + 4,
         head: [["Metric", "Value"]],
         body: [
-          ["Client Unrealized P/L", `$${ctx.trades.summary.clientUnrealizedPnl.toFixed(0)}`],
-          ["Client Realized P/L", `$${ctx.trades.summary.clientRealizedPnl.toFixed(0)}`],
-          ["Client P/L Owed (Open)", `$${ctx.trades.summary.clientPnlOwed.toFixed(0)}`],
-          ["Client Closed P/L", `$${clientClosedPnl.toFixed(0)}`],
+          ["Client Unrealized P/L", fmtUsdPnl(ctx.trades.summary.clientUnrealizedPnl)],
+          ["Client Realized P/L", fmtUsdPnl(ctx.trades.summary.clientRealizedPnl)],
+          ["Client P/L Owed (Open)", fmtUsdPnl(ctx.trades.summary.clientPnlOwed)],
+          ["Client Closed P/L", fmtUsdPnl(clientClosedPnl)],
         ],
         styles: { fontSize: 8 },
         headStyles: { fillColor: [80, 80, 80] },
@@ -373,7 +383,7 @@ export async function exportPdfReport(
           r.strategy,
           `$${r.maxRisk.toLocaleString()}`,
           `${r.riskPct.toFixed(2)}%`,
-          `$${r.myCurrentPnl.toFixed(0)}`,
+          fmtUsdPnl(r.myCurrentPnl),
         ]),
         styles: { fontSize: 8 },
         headStyles: { fillColor: [30, 64, 120] },

@@ -274,6 +274,44 @@ export interface Database {
           },
         ];
       };
+      stock_etf_transactions: {
+        Row: StockEtfTransaction;
+        Insert: StockEtfTransactionInsert;
+        Update: StockEtfTransactionUpdate;
+        Relationships: [
+          {
+            foreignKeyName: "stock_etf_transactions_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "stock_etf_transactions_holding_id_fkey";
+            columns: ["holding_id"];
+            referencedRelation: "stock_etf_holdings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      stock_etf_position_adjustments: {
+        Row: StockEtfPositionAdjustment;
+        Insert: StockEtfPositionAdjustmentInsert;
+        Update: StockEtfPositionAdjustmentUpdate;
+        Relationships: [
+          {
+            foreignKeyName: "stock_etf_position_adjustments_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "stock_etf_position_adjustments_holding_id_fkey";
+            columns: ["holding_id"];
+            referencedRelation: "stock_etf_holdings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       dividend_records: {
         Row: DividendRecordRow;
         Insert: DividendRecordInsert;
@@ -563,8 +601,14 @@ export interface PortfolioOverride {
   manual_us_stocks_options_value_usd: number | null;
   manual_us_stocks_options_sgd_equivalent: number | null;
   manual_sg_stocks_cash_value_sgd: number | null;
+  manual_sg_stocks_value_sgd: number | null;
+  manual_sg_cash_value_sgd: number | null;
   manual_trading_cash_usd: number | null;
   manual_trading_cash_sgd: number | null;
+  manual_crypto_cash_sgd: number;
+  manual_crypto_holdings_sgd: number | null;
+  manual_crypto_contributions_sgd: number | null;
+  manual_client_portfolio_sgd: number;
   override_reason: string | null;
   override_updated_at: string | null;
   created_at: string;
@@ -620,6 +664,7 @@ export interface WatchlistItem {
   display_name: string | null;
   is_active: boolean;
   sort_order: number;
+  priority_rank: number;
   watchlist_category: string;
   notes: string | null;
   created_at: string;
@@ -639,6 +684,8 @@ export interface MarketData {
   vix: number | null;
   iv_rank: number | null;
   source: string;
+  average_price: number | null;
+  fetched_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -711,6 +758,8 @@ export interface OptionsTrade {
   current_value_updated_at: string | null;
   exit_debit: number | null;
   realized_pnl: number | null;
+  fees_commission: number;
+  broker_realized_pnl: number | null;
   buying_power_used: number | null;
   breakeven_put: number | null;
   breakeven_call: number | null;
@@ -794,6 +843,7 @@ export interface AutoWatchlistResult {
   distance_from_high_percent: number;
   distance_from_low_percent: number;
   generated_at: string;
+  data_source: string;
   created_at: string;
   updated_at: string;
 }
@@ -812,10 +862,48 @@ export interface StockEtfHolding {
   current_value_sgd: number;
   shares_held: number | null;
   average_cost: number | null;
+  last_market_price_native: number | null;
+  last_price_date: string | null;
+  price_source: string | null;
+  manual_value_override: boolean;
   notes: string | null;
   last_updated: string;
   created_at: string;
   updated_at: string;
+}
+
+export type StockEtfTransactionType = "buy" | "sell";
+
+export interface StockEtfTransaction {
+  id: string;
+  user_id: string;
+  holding_id: string;
+  transaction_type: StockEtfTransactionType;
+  transaction_date: string;
+  shares: number;
+  price_per_share: number;
+  total_amount: number;
+  fees: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockEtfPositionAdjustment {
+  id: string;
+  user_id: string;
+  holding_id: string;
+  adjustment_date: string;
+  previous_shares: number | null;
+  new_shares: number | null;
+  previous_average_cost: number | null;
+  new_average_cost: number | null;
+  previous_total_cost: number | null;
+  new_total_cost: number | null;
+  previous_notes: string | null;
+  new_notes: string | null;
+  adjustment_reason: string;
+  created_at: string;
 }
 
 export type DividendMarket = "US" | "SG";
@@ -1071,6 +1159,16 @@ export type StockEtfHoldingInsert = Omit<
   "id" | "created_at" | "updated_at"
 > & { id?: string; created_at?: string; updated_at?: string };
 
+export type StockEtfTransactionInsert = Omit<
+  StockEtfTransaction,
+  "id" | "created_at" | "updated_at"
+> & { id?: string; created_at?: string; updated_at?: string };
+
+export type StockEtfPositionAdjustmentInsert = Omit<
+  StockEtfPositionAdjustment,
+  "id" | "created_at"
+> & { id?: string; created_at?: string };
+
 export type AutoWatchlistResultInsert = Omit<
   AutoWatchlistResult,
   "id" | "created_at" | "updated_at"
@@ -1140,6 +1238,9 @@ export type TechnicalIndicatorUpdate = Partial<TechnicalIndicatorInsert>;
 export type OptionsTradeUpdate = Partial<OptionsTradeInsert>;
 export type CryptoHoldingUpdate = Partial<CryptoHoldingInsert>;
 export type StockEtfHoldingUpdate = Partial<StockEtfHoldingInsert>;
+export type StockEtfTransactionUpdate = Partial<StockEtfTransactionInsert>;
+export type StockEtfPositionAdjustmentUpdate =
+  Partial<StockEtfPositionAdjustmentInsert>;
 
 export type DividendRecordInsert = Omit<
   DividendRecordRow,

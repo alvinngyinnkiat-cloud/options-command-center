@@ -1,4 +1,6 @@
 import { formatCurrency } from "@/lib/trades/format";
+import { formatPnL, getPnLColor } from "@/lib/format/pnl";
+import { cn } from "@/lib/utils";
 import type { ExpectedReturnDashboard } from "@/lib/trading-workflow/types";
 
 interface ExpectedReturnPanelProps {
@@ -6,6 +8,11 @@ interface ExpectedReturnPanelProps {
 }
 
 export function ExpectedReturnPanel({ data }: ExpectedReturnPanelProps) {
+  const unrealizedProps = {
+    value: formatPnL(data.currentUnrealizedPnl, { currency: "USD" }),
+    className: getPnLColor(data.currentUnrealizedPnl),
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-[10px] text-terminal-muted italic">{data.disclaimer}</p>
@@ -22,7 +29,8 @@ export function ExpectedReturnPanel({ data }: ExpectedReturnPanelProps) {
           },
           {
             label: "Unrealized P/L",
-            value: formatCurrency(data.currentUnrealizedPnl),
+            value: unrealizedProps.value,
+            valueClassName: unrealizedProps.className,
           },
         ].map((m) => (
           <div
@@ -30,7 +38,14 @@ export function ExpectedReturnPanel({ data }: ExpectedReturnPanelProps) {
             className="rounded-lg border border-terminal-border bg-terminal-elevated px-3 py-2"
           >
             <p className="text-[10px] text-terminal-muted">{m.label}</p>
-            <p className="text-sm font-mono font-semibold">{m.value}</p>
+            <p
+              className={cn(
+                "text-sm font-mono font-semibold",
+                m.valueClassName ?? "text-terminal-text"
+              )}
+            >
+              {m.value}
+            </p>
           </div>
         ))}
       </div>

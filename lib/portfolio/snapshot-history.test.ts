@@ -5,8 +5,12 @@ import {
   buildGoalProgressMilestones,
   buildHistoryComparisons,
   buildPerformanceMetrics,
+  EXCLUDED_SNAPSHOT_DATE,
+  filterRealPortfolioSnapshots,
   filterSnapshotsByPeriod,
   findFirstThresholdAchievement,
+  isRealPortfolioSnapshot,
+  selectLatestSnapshot,
 } from "@/lib/portfolio/snapshot-history";
 
 function snap(date: string, value: number): DailyPortfolioSnapshot {
@@ -119,5 +123,29 @@ describe("snapshot history", () => {
     expect(goals[0].currentValueSgd).toBe(276_486);
     expect(goals[0].progressPct).toBeCloseTo(55.2972, 2);
     expect(goals[0].remainingSgd).toBe(223_514);
+  });
+
+  it("ignores future smoke-test snapshots when selecting latest", () => {
+    const withFuture = [
+      ...snapshots,
+      snap("2099-01-15", 1_000),
+    ];
+    const latest = selectLatestSnapshot(withFuture, "2026-06-06");
+    expect(latest?.snapshotDate).toBe("2026-06-06");
+    expect(latest?.portfolioValueSgd).toBe(384_120);
+  });
+
+  it("filters smoke-test and mock snapshot rows", () => {
+    const withFake = [
+      ...snapshots,
+      snap(EXCLUDED_SNAPSHOT_DATE, 1_000),
+      { ...snap("2026-06-07", 390_000), id: "mock-daily-2026-06-07" },
+    ];
+    const real = filterRealPortfolioSnapshots(withFake);
+    expect(real).toHaveLength(3);
+    expect(real.every(isRealPortfolioSnapshot)).toBe(true);
+    expect(
+      real.find((s) => s.snapshotDate === EXCLUDED_SNAPSHOT_DATE)
+    ).toBeUndefined();
   });
 });

@@ -1,12 +1,13 @@
 "use server";
 
-import { getPortfolioDashboardData } from "@/lib/supabase/queries/portfolio";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
   getPortfolioHistoryData,
   upsertDailyPortfolioSnapshot,
 } from "@/lib/supabase/queries/daily-portfolio-snapshots";
 import type { PortfolioHistoryData } from "@/lib/portfolio/daily-snapshot-types";
+import { getEnrichedPortfolioMetrics } from "@/lib/portfolio/enrich-capital-pools";
+import { getSingaporeSnapshotDate } from "@/lib/portfolio/snapshot-date";
 import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
@@ -17,21 +18,27 @@ export type PortfolioSnapshotActionResult =
 export async function createDailyPortfolioSnapshot(): Promise<PortfolioSnapshotActionResult> {
   try {
     const userId = await requireUserId();
-    const [metrics, tradesData] = await Promise.all([
-      getPortfolioDashboardData(),
+    const [{ metrics, capitalPools }, tradesData] = await Promise.all([
+      getEnrichedPortfolioMetrics(),
       getOptionsTradesData(),
     ]);
+    const today = getSingaporeSnapshotDate();
 
     await upsertDailyPortfolioSnapshot({
       userId,
       metrics,
       trades: tradesData.trades,
+      capitalPools,
+      snapshotDate: today,
+      allowManualOverwrite: true,
     });
 
     const history = await getPortfolioHistoryData({
       userId,
       metrics,
       trades: tradesData.trades,
+      capitalPools,
+      asOfDate: today,
     });
 
     revalidatePath("/");
@@ -48,8 +55,8 @@ export async function createDailyPortfolioSnapshot(): Promise<PortfolioSnapshotA
 
 export async function loadPortfolioHistoryData(): Promise<PortfolioHistoryData> {
   const userId = await requireUserId();
-  const [metrics, tradesData] = await Promise.all([
-    getPortfolioDashboardData(),
+  const [{ metrics, capitalPools }, tradesData] = await Promise.all([
+    getEnrichedPortfolioMetrics(),
     getOptionsTradesData(),
   ]);
 
@@ -57,5 +64,6 @@ export async function loadPortfolioHistoryData(): Promise<PortfolioHistoryData> 
     userId,
     metrics,
     trades: tradesData.trades,
+    capitalPools,
   });
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { formatOptionPrice } from "@/lib/format/option-price";
 import { formatOptionValuePerContract } from "@/lib/trades/format";
 import { Check, Copy } from "lucide-react";
 
@@ -19,7 +20,7 @@ export function TakeProfitClosePriceCard({
   const [copied, setCopied] = useState(false);
 
   async function copyTpOrder() {
-    await navigator.clipboard.writeText(takeProfitClosePrice.toFixed(2));
+    await navigator.clipboard.writeText(formatOptionPrice(takeProfitClosePrice));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   }
@@ -31,7 +32,7 @@ export function TakeProfitClosePriceCard({
       </p>
       <dl className="grid grid-cols-3 gap-2 text-xs">
         <div>
-          <dt className="text-terminal-muted">Premium Received</dt>
+          <dt className="text-terminal-muted">Premium / Contract</dt>
           <dd className="font-mono font-semibold text-terminal-text">
             {formatOptionValuePerContract(premiumPerContract)}
           </dd>

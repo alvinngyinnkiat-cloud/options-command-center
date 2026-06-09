@@ -30,6 +30,8 @@ export function scoreWatchlistRow(
     distanceEma20Pct,
     support: row.supportResistance.support1,
     resistance: row.supportResistance.resistance1,
+    weeklySupport: row.weeklySupportResistance?.support1 ?? null,
+    weeklyResistance: row.weeklySupportResistance?.resistance1 ?? null,
   });
 
   const recommendation = computeStrategyRecommendation({

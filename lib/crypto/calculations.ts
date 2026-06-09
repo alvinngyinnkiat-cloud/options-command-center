@@ -1,10 +1,12 @@
 import type {
   CryptoHoldingMetrics,
+  CryptoPortfolioManualState,
   CryptoTrackerSummary,
   EnrichedCryptoHolding,
 } from "./types";
+import type { PortfolioOverrideInput } from "@/lib/portfolio/types";
 
-/** Current Value SGD − Total SGD Invested */
+/** Current Crypto Value SGD − Total Crypto Contributions / Cost SGD */
 export function calculateCryptoProfitLossSgd(
   currentValueSgd: number,
   totalInvestedSgd: number
@@ -93,4 +95,54 @@ export function buildCryptoTrackerSummary(
       ? { ticker: best.ticker, returnPct: best.returnPct }
       : null,
   };
+}
+
+export function resolveTotalCryptoContributionsSgd(
+  override: PortfolioOverrideInput | null | undefined,
+  holdings: EnrichedCryptoHolding[]
+): number {
+  if (override?.manualCryptoContributionsSgd != null) {
+    return override.manualCryptoContributionsSgd;
+  }
+  return holdings.reduce((s, h) => s + h.totalInvestedSgd, 0);
+}
+
+export function buildCryptoPortfolioManualState(input: {
+  cryptoHoldingsValueSgd: number;
+  cryptoCashSgd: number;
+  totalContributionsSgd: number;
+}): CryptoPortfolioManualState {
+  const totalCryptoPortfolioValueSgd =
+    input.cryptoHoldingsValueSgd + input.cryptoCashSgd;
+  const profitLossSgd = calculateCryptoProfitLossSgd(
+    totalCryptoPortfolioValueSgd,
+    input.totalContributionsSgd
+  );
+  return {
+    cryptoHoldingsValueSgd: input.cryptoHoldingsValueSgd,
+    cryptoCashSgd: input.cryptoCashSgd,
+    totalCryptoPortfolioValueSgd,
+    totalContributionsSgd: input.totalContributionsSgd,
+    profitLossSgd,
+    returnPct: calculateCryptoReturnPct(
+      profitLossSgd,
+      input.totalContributionsSgd
+    ),
+  };
+}
+
+export function buildCryptoPortfolioManualFromTracker(input: {
+  override: PortfolioOverrideInput | null | undefined;
+  cryptoHoldingsValueSgd: number;
+  cryptoCashSgd: number;
+  holdings: EnrichedCryptoHolding[];
+}): CryptoPortfolioManualState {
+  return buildCryptoPortfolioManualState({
+    cryptoHoldingsValueSgd: input.cryptoHoldingsValueSgd,
+    cryptoCashSgd: input.cryptoCashSgd,
+    totalContributionsSgd: resolveTotalCryptoContributionsSgd(
+      input.override,
+      input.holdings
+    ),
+  });
 }

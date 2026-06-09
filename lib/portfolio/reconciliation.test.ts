@@ -1,91 +1,258 @@
 import { describe, expect, it } from "vitest";
+import { buildCapitalPoolsBreakdown } from "./capital-pools";
 import {
-  applyManualOverride,
-  buildCalculatedValues,
-  classifyReconciliationBuckets,
-} from "./calculations";
-import type { HoldingInput } from "./types";
+  buildAppCalculatedPortfolioValue,
+  buildSectionPortfolioValueSgd,
+  resolveActivePortfolioValueSgd,
+  resolveBrokerReferencePortfolioValueSgd,
+} from "./reconciliation";
+import type { PortfolioOverrideInput } from "./types";
 
-const holdings: HoldingInput[] = [
-  {
-    ticker: "AAPL",
-    asset_type: "stock",
-    currency: "USD",
-    market_value_native: 10_000,
-    fx_rate_to_sgd: 1.35,
-    market_value_sgd: 13_500,
-    market_value: 13_500,
-    cost_basis: null,
-  },
-  {
-    ticker: "D05",
-    asset_type: "stock",
-    currency: "SGD",
-    market_value_native: 20_000,
-    fx_rate_to_sgd: 1,
-    market_value_sgd: 20_000,
-    market_value: 20_000,
-    cost_basis: null,
-  },
-  {
-    ticker: "BTC",
-    asset_type: "other",
-    currency: "USD",
-    market_value_native: 5_000,
-    fx_rate_to_sgd: 1.35,
-    market_value_sgd: 6_750,
-    market_value: 6_750,
-    cost_basis: null,
-  },
-  {
-    ticker: "CASH.USD",
-    asset_type: "other",
-    currency: "USD",
-    market_value_native: 2_000,
-    fx_rate_to_sgd: 1.35,
-    market_value_sgd: 2_700,
-    market_value: 2_700,
-    cost_basis: null,
-  },
-  {
-    ticker: "CASH",
-    asset_type: "other",
-    currency: "SGD",
-    market_value_native: 3_000,
-    fx_rate_to_sgd: 1,
-    market_value_sgd: 3_000,
-    market_value: 3_000,
-    cost_basis: null,
-  },
-];
+const emptyClientSummary = {
+  totalClientCapital: 0,
+  allocatedTradesCount: 0,
+  totalClientProfit: 0,
+  totalClientLoss: 0,
+  totalClientNetPl: 0,
+  totalMySharePl: 0,
+  clientSharePaid: 0,
+  clientShareOwed: 0,
+  totalPaidToClient: 0,
+  outstandingAmountOwed: 0,
+  lifetimeTradeProfit: 0,
+  lifetimeClientShare: 0,
+  lifetimeMyShare: 0,
+};
 
 describe("portfolio reconciliation", () => {
-  it("classifies holdings into reconciliation buckets", () => {
-    const buckets = classifyReconciliationBuckets(holdings);
-    expect(buckets.usStocksOptionsValueUsd).toBe(12_000);
-    expect(buckets.usStocksOptionsSgdEquivalent).toBe(16_200);
-    expect(buckets.cryptoValueSgd).toBe(6_750);
-    expect(buckets.sgStocksCashValueSgd).toBe(23_000);
-    expect(buckets.overallPortfolioValueSgd).toBe(45_950);
+  it("builds app calculated value from module components", () => {
+    expect(
+      buildAppCalculatedPortfolioValue({
+        usEtfValueSgd: 50_000,
+        usStockValueSgd: 30_000,
+        sgStockValueSgd: 15_000,
+        optionsValueSgd: 5_000,
+        cryptoHoldingsSgd: 12_000,
+        cryptoCashSgd: 3_000,
+        tradingCashSgd: 20_000,
+      })
+    ).toBe(135_000);
   });
 
-  it("uses manual SGD buckets without FX conversion when override is on", () => {
-    const calculated = buildCalculatedValues(holdings);
-    const { display, comparison } = applyManualOverride(calculated, {
+  it("section portfolio value includes trading cash SGD once", () => {
+    const override: PortfolioOverrideInput = {
       useManualOverride: true,
       manualUsStocksOptionsValueUsd: 250_000,
       manualUsStocksOptionsSgdEquivalent: 330_000,
       manualCryptoValueSgd: 18_500,
       manualSgStocksCashValueSgd: 78_000,
+      manualSgStocksValueSgd: null,
+      manualSgCashValueSgd: null,
+      manualTradingCashUsd: 15_000,
+      manualTradingCashSgd: 20_000,
+      manualCryptoCashSgd: 0,
+      manualCryptoHoldingsSgd: null,
+      manualCryptoContributionsSgd: null,
+      manualClientPortfolioSgd: 0,
       manualUsdSgdRate: 1.35,
-      manualTotalPortfolioValueSgd: null,
+      manualTotalPortfolioValueSgd: 426_500,
       overrideReason: null,
       overrideUpdatedAt: null,
+    };
+
+    expect(resolveBrokerReferencePortfolioValueSgd(override)).toBe(426_500);
+
+    const pools = buildCapitalPoolsBreakdown({
+      holdings: [],
+      cryptoRows: [
+        {
+          id: "usdt",
+          asset_label: "USDT",
+          ticker: "USDT",
+          total_invested_sgd: 500,
+          current_value_sgd: 500,
+          notes: null,
+          last_updated: "2026-06-08",
+          user_id: "u",
+          created_at: "",
+          updated_at: "",
+        },
+      ],
+      usEtfValueSgd: 50_000,
+      usStockValueSgd: 30_000,
+      sgStockValueSgd: 15_000,
+      openTrades: [],
+      clientSummary: emptyClientSummary,
+      tradeAllocations: [],
+      manualTradingCash: { tradingCashUsd: 15_000, tradingCashSgd: 20_000 },
+      portfolioOverride: override,
     });
 
-    expect(display.portfolioValue).toBe(426_500);
-    expect(display.usStocksOptionsValueUsd).toBe(250_000);
-    expect(comparison.useManualOverride).toBe(true);
-    expect(comparison.differenceSgd).toBe(426_500 - calculated.portfolioValue);
+    expect(pools.cryptoCashSgd).toBe(0);
+    expect(pools.cryptoHoldingsSgd).toBe(500);
+    expect(pools.appCalculatedValueSgd).toBe(115_500);
+    expect(pools.totalPortfolioSgd).toBe(428_500);
+    expect(pools.myPortfolioValue).toBe(428_500);
+    expect(pools.myPortfolioValue).toBe(
+      330_000 + 500 + 78_000 + 20_000
+    );
+    expect(pools.portfolioValueDifferenceSgd).toBe(426_500 - 428_500);
+    expect(pools.portfolioValueSource).toBe("sections");
+    expect(pools.tradingCapital).toBe(330_000 + 20_000 + 78_000);
+  });
+
+  it("uses manual trading capital excluding crypto with split SG", () => {
+    const pools = buildCapitalPoolsBreakdown({
+      holdings: [],
+      cryptoRows: [],
+      usEtfValueSgd: 0,
+      usStockValueSgd: 0,
+      sgStockValueSgd: 0,
+      openTrades: [],
+      clientSummary: emptyClientSummary,
+      tradeAllocations: [],
+      manualTradingCash: { tradingCashUsd: 1_000, tradingCashSgd: 6_914.9 },
+      portfolioOverride: {
+        useManualOverride: true,
+        manualUsStocksOptionsValueUsd: 15_675.89,
+        manualUsStocksOptionsSgdEquivalent: 27_149.08,
+        manualCryptoValueSgd: 7_689,
+        manualSgStocksCashValueSgd: null,
+        manualSgStocksValueSgd: 8_000,
+        manualSgCashValueSgd: 1_334,
+        manualTradingCashUsd: 1_000,
+        manualTradingCashSgd: 6_914.9,
+        manualCryptoCashSgd: 0,
+        manualCryptoHoldingsSgd: null,
+        manualCryptoContributionsSgd: null,
+        manualClientPortfolioSgd: 0,
+        manualUsdSgdRate: 1.35,
+        manualTotalPortfolioValueSgd: null,
+        overrideReason: null,
+        overrideUpdatedAt: null,
+      },
+    });
+
+    expect(pools.tradingCapital).toBeCloseTo(42_063.98, 2);
+    expect(pools.totalPortfolioSgd).toBeCloseTo(42_063.98, 2);
+  });
+
+  it("uses tracker modules when manual reconciliation is off", () => {
+    expect(resolveActivePortfolioValueSgd(130_000)).toBe(130_000);
+
+    const pools = buildCapitalPoolsBreakdown({
+      holdings: [],
+      cryptoRows: [],
+      usEtfValueSgd: 50_000,
+      usStockValueSgd: 30_000,
+      sgStockValueSgd: 15_000,
+      openTrades: [],
+      clientSummary: emptyClientSummary,
+      tradeAllocations: [],
+      manualTradingCash: { tradingCashUsd: 0, tradingCashSgd: 20_000 },
+      portfolioOverride: null,
+    });
+
+    expect(pools.totalPortfolioSgd).toBe(115_000);
+    expect(pools.myPortfolioValue).toBe(115_000);
+    expect(pools.portfolioValueSource).toBe("app");
+  });
+
+  it("splits ownership when client portfolio is set", () => {
+    const pools = buildCapitalPoolsBreakdown({
+      holdings: [],
+      cryptoRows: [],
+      usEtfValueSgd: 50_000,
+      usStockValueSgd: 30_000,
+      sgStockValueSgd: 15_000,
+      openTrades: [],
+      clientSummary: emptyClientSummary,
+      tradeAllocations: [],
+      manualTradingCash: { tradingCashUsd: 0, tradingCashSgd: 20_000 },
+      portfolioOverride: {
+        useManualOverride: false,
+        manualUsStocksOptionsValueUsd: null,
+        manualUsStocksOptionsSgdEquivalent: null,
+        manualCryptoValueSgd: null,
+        manualSgStocksCashValueSgd: null,
+        manualSgStocksValueSgd: null,
+        manualSgCashValueSgd: null,
+        manualTradingCashUsd: null,
+        manualTradingCashSgd: 20_000,
+        manualCryptoCashSgd: 0,
+        manualCryptoHoldingsSgd: null,
+        manualCryptoContributionsSgd: null,
+        manualClientPortfolioSgd: 15_000,
+        manualUsdSgdRate: 1.35,
+        manualTotalPortfolioValueSgd: null,
+        overrideReason: null,
+        overrideUpdatedAt: null,
+      },
+    });
+
+    expect(pools.totalPortfolioSgd).toBe(115_000);
+    expect(pools.clientPortfolioSgd).toBe(15_000);
+    expect(pools.myPortfolioValue).toBe(100_000);
+    expect(pools.clientOwnershipPct).toBeCloseTo(13.0, 1);
+    expect(pools.myOwnershipPct).toBeCloseTo(87.0, 1);
+  });
+
+  it("tallies broker-style section entry with trading cash", () => {
+    const sectionTotal = buildSectionPortfolioValueSgd({
+      usEtfValueSgd: 0,
+      usStockValueSgd: 0,
+      sgStockValueSgd: 0,
+      optionsValueSgd: 0,
+      cryptoHoldingsSgd: 0,
+      cryptoCashSgd: 0,
+      tradingCashSgd: 6_914.9,
+      portfolioOverride: {
+        useManualOverride: true,
+        manualUsStocksOptionsValueUsd: 15_675.89,
+        manualUsStocksOptionsSgdEquivalent: 27_149.08,
+        manualCryptoValueSgd: 0,
+        manualSgStocksCashValueSgd: 9_334,
+        manualTradingCashUsd: 1_000,
+        manualTradingCashSgd: 6_914.9,
+        manualCryptoCashSgd: 0,
+        manualUsdSgdRate: 1.35,
+        manualTotalPortfolioValueSgd: 36_483.08,
+        overrideReason: null,
+        overrideUpdatedAt: null,
+      },
+    });
+
+    expect(sectionTotal).toBe(27_149.08 + 9_334 + 6_914.9);
+  });
+
+  it("uses computed crypto portfolio value from coin rows and exchange cash", () => {
+    const sectionTotal = buildSectionPortfolioValueSgd({
+      usEtfValueSgd: 0,
+      usStockValueSgd: 0,
+      sgStockValueSgd: 0,
+      optionsValueSgd: 0,
+      cryptoHoldingsSgd: 7_000,
+      cryptoCashSgd: 500,
+      tradingCashSgd: 6_914.9,
+      portfolioOverride: {
+        useManualOverride: true,
+        manualUsStocksOptionsValueUsd: null,
+        manualUsStocksOptionsSgdEquivalent: 27_149.08,
+        manualCryptoValueSgd: 7_689,
+        manualSgStocksCashValueSgd: 9_334,
+        manualTradingCashUsd: null,
+        manualTradingCashSgd: 6_914.9,
+        manualCryptoCashSgd: 3_000,
+        manualCryptoHoldingsSgd: null,
+        manualCryptoContributionsSgd: null,
+        manualClientPortfolioSgd: 0,
+        manualUsdSgdRate: 1.35,
+        manualTotalPortfolioValueSgd: null,
+        overrideReason: null,
+        overrideUpdatedAt: null,
+      },
+    });
+
+    expect(sectionTotal).toBe(27_149.08 + 10_000 + 9_334 + 6_914.9);
   });
 });

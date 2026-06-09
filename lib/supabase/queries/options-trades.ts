@@ -1,43 +1,55 @@
-import { buildMockScannerRows } from "@/lib/mock/watchlist-scanner";
 import {
   deleteMockTrade,
   getMockTrades,
   upsertMockTrade,
 } from "@/lib/mock/trades-store";
+import { buildMockScannerRows } from "@/lib/mock/watchlist-scanner";
 import { enrichTrade, type TradeMarketContext } from "@/lib/trades/map-trade";
 import { buildTradeTrackerSummary } from "@/lib/trades/summary";
-import { resolveUnderlyingCurrentPrices } from "@/lib/trades/underlying-price";
+import { formatSupabaseError } from "@/lib/trades/server-action-response";
+import {
+  resolveUnderlyingPriceSnapshots,
+  UNAVAILABLE_UNDERLYING_SNAPSHOT,
+  type UnderlyingPriceSnapshot,
+} from "@/lib/trades/underlying-price";
 import type { EnrichedTrade, TradeTrackerData } from "@/lib/trades/types";
 import { getJournalCountForTrade } from "@/lib/supabase/queries/trading-journal";
 import { readSupabasePrimary } from "@/lib/supabase/data-access";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { MOCK_USER_ID, isValidSupabaseUserId, warnMissingDevUserIdForWrite, withSupabaseQuery } from "@/lib/supabase/resolve-user";
-import type { OptionsTrade, SupportResistance, TechnicalIndicator } from "@/types/database";
+import {
+  MOCK_USER_ID,
+  isValidSupabaseUserId,
+  warnMissingDevUserIdForWrite,
+  withSupabaseQuery,
+} from "@/lib/supabase/resolve-user";
+import type {
+  OptionsTrade,
+  SupportResistance,
+  TechnicalIndicator,
+} from "@/types/database";
 
-function buildAlertContextFromMock(
-  currentPrices: Map<string, number>
-): Map<string, TradeMarketContext> {
-  const map = new Map<string, TradeMarketContext>();
-  for (const row of buildMockScannerRows()) {
-    const ticker = row.ticker.toUpperCase();
-    map.set(ticker, {
-      underlyingAveragePrice: row.market.averagePrice,
-      underlyingCurrentPrice:
-        currentPrices.get(ticker) ?? row.market.currentPrice,
-      manualSupport: row.supportResistance.support1,
-      manualResistance: row.supportResistance.resistance1,
-      atr14: row.technicals.atr14,
-    });
-  }
-  return map;
+function snapshotToMarketContext(
+  snap: UnderlyingPriceSnapshot
+): Pick<
+  TradeMarketContext,
+  | "underlyingCurrentPrice"
+  | "underlyingPriceSource"
+  | "underlyingPriceUpdatedAt"
+  | "underlyingPriceUsable"
+> {
+  return {
+    underlyingCurrentPrice: snap.isUsable ? snap.price : null,
+    underlyingPriceSource: snap.source,
+    underlyingPriceUpdatedAt: snap.updatedAt,
+    underlyingPriceUsable: snap.isUsable,
+  };
 }
 
-async function buildAlertContextByTicker(
-  userId: string | undefined,
-  currentPrices: Map<string, number>
+async function buildSupabaseAlertContext(
+  userId: string
 ): Promise<Map<string, TradeMarketContext>> {
   if (!isSupabaseConfigured() || !isValidSupabaseUserId(userId)) {
-    return buildAlertContextFromMock(currentPrices);
+    return new Map();
   }
 
   try {
@@ -72,7 +84,6 @@ async function buildAlertContextByTicker(
         const map = new Map<string, TradeMarketContext>();
         for (const [ticker, sr] of srByTicker) {
           map.set(ticker, {
-            underlyingCurrentPrice: currentPrices.get(ticker) ?? null,
             manualSupport: sr.support_1 != null ? Number(sr.support_1) : null,
             manualResistance:
               sr.resistance_1 != null ? Number(sr.resistance_1) : null,
@@ -80,22 +91,44 @@ async function buildAlertContextByTicker(
           });
         }
 
-        for (const [ticker, price] of currentPrices) {
+        for (const [ticker, atr] of atrByTicker) {
           if (!map.has(ticker)) {
-            map.set(ticker, {
-              underlyingCurrentPrice: price,
-              atr14: atrByTicker.get(ticker) ?? null,
-            });
+            map.set(ticker, { atr14: atr });
           }
         }
 
         return map;
       },
-      () => buildAlertContextFromMock(currentPrices)
+      () => new Map()
     );
   } catch {
-    return buildAlertContextFromMock(currentPrices);
+    return new Map();
   }
+}
+
+function buildMockAlertContext(
+  priceSnapshots: Map<string, UnderlyingPriceSnapshot>
+): Map<string, TradeMarketContext> {
+  const map = new Map<string, TradeMarketContext>();
+  for (const row of buildMockScannerRows()) {
+    const ticker = row.ticker.toUpperCase();
+    const snap =
+      priceSnapshots.get(ticker) ??
+      ({
+        price: row.market.currentPrice,
+        source: "mock",
+        updatedAt: null,
+        isUsable: true,
+      } satisfies UnderlyingPriceSnapshot);
+    map.set(ticker, {
+      ...snapshotToMarketContext(snap),
+      underlyingAveragePrice: row.market.averagePrice,
+      manualSupport: row.supportResistance.support1,
+      manualResistance: row.supportResistance.resistance1,
+      atr14: row.technicals.atr14,
+    });
+  }
+  return map;
 }
 
 async function fetchTradeRows(_userId: string): Promise<OptionsTrade[]> {
@@ -120,18 +153,29 @@ async function enrichAll(
   userId?: string
 ): Promise<TradeTrackerData> {
   const tickers = rows.map((row) => row.ticker);
-  const currentPrices = await resolveUnderlyingCurrentPrices(tickers, userId);
-  const alertContextByTicker = await buildAlertContextByTicker(
+  const priceSnapshots = await resolveUnderlyingPriceSnapshots(
+    tickers,
     userId,
-    currentPrices
+    dataSource
   );
+  const alertContextByTicker =
+    dataSource === "mock"
+      ? buildMockAlertContext(priceSnapshots)
+      : userId
+        ? await buildSupabaseAlertContext(userId)
+        : new Map<string, TradeMarketContext>();
+
   const trades: EnrichedTrade[] = await Promise.all(
     rows.map(async (row) => {
+      const ticker = row.ticker.toUpperCase();
       const journalEntryCount = await getJournalCountForTrade(row.id);
+      const snap =
+        priceSnapshots.get(ticker) ?? UNAVAILABLE_UNDERLYING_SNAPSHOT;
+      const alertContext = alertContextByTicker.get(ticker) ?? {};
+
       return enrichTrade(row, {
-        ...(alertContextByTicker.get(row.ticker.toUpperCase()) ?? {
-          underlyingCurrentPrice: currentPrices.get(row.ticker.toUpperCase()) ?? null,
-        }),
+        ...alertContext,
+        ...snapshotToMarketContext(snap),
         journalEntryCount,
       });
     })
@@ -147,6 +191,36 @@ async function enrichAll(
     summary: buildTradeTrackerSummary(trades),
     dataSource,
   };
+}
+
+export async function enrichOptionsTradeRow(
+  row: OptionsTrade,
+  dataSource: "supabase" | "mock",
+  userId?: string
+): Promise<EnrichedTrade> {
+  const ticker = row.ticker.toUpperCase();
+  const priceSnapshots = await resolveUnderlyingPriceSnapshots(
+    [ticker],
+    userId,
+    dataSource
+  );
+  const alertContextByTicker =
+    dataSource === "mock"
+      ? buildMockAlertContext(priceSnapshots)
+      : userId
+        ? await buildSupabaseAlertContext(userId)
+        : new Map<string, TradeMarketContext>();
+
+  const journalEntryCount = await getJournalCountForTrade(row.id);
+  const snap =
+    priceSnapshots.get(ticker) ?? UNAVAILABLE_UNDERLYING_SNAPSHOT;
+  const alertContext = alertContextByTicker.get(ticker) ?? {};
+
+  return enrichTrade(row, {
+    ...alertContext,
+    ...snapshotToMarketContext(snap),
+    journalEntryCount,
+  });
 }
 
 export async function getOptionsTradesData(): Promise<TradeTrackerData> {
@@ -219,7 +293,9 @@ export async function persistOptionsTrade(
         .from("options_trades")
         .upsert(payload as never);
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        throw new Error(formatSupabaseError(error));
+      }
       return payload;
     },
     () => {
@@ -246,7 +322,9 @@ export async function removeOptionsTrade(
         .eq("id", id)
         .eq("user_id", effectiveUserId);
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        throw new Error(formatSupabaseError(error));
+      }
     },
     () => {
       warnMissingDevUserIdForWrite();

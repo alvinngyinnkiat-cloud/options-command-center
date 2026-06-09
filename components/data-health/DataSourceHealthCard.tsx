@@ -7,14 +7,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { EXCLUDED_SNAPSHOT_DATE } from "@/lib/portfolio/snapshot-history";
 import type { DataSourceHealthReport } from "@/lib/data-health/types";
+import { formatSgtAuditTimestamp } from "@/lib/time/singapore-time";
 import { DataHealthStatusBadge } from "./DataHealthStatusBadge";
+
+function formatHealthTimestamp(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.startsWith(EXCLUDED_SNAPSHOT_DATE)) return null;
+  if (value.startsWith("2099-")) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return formatSgtAuditTimestamp(`${value}T12:00:00+08:00`);
+  }
+  return formatSgtAuditTimestamp(value);
+}
 
 export function DataSourceHealthCard({
   report,
 }: {
   report: DataSourceHealthReport;
 }) {
+  const lastSuccess = formatHealthTimestamp(report.lastSuccessfulUpdate);
+  const lastFailure = formatHealthTimestamp(report.lastFailedUpdate);
+
   return (
     <Card variant="bordered" className="h-full">
       <CardHeader className="pb-2">
@@ -35,15 +50,11 @@ export function DataSourceHealthCard({
             </div>
           ))}
         </dl>
-        {(report.lastSuccessfulUpdate || report.lastFailedUpdate) && (
+        {(lastSuccess || lastFailure) && (
           <div className="mt-3 border-t border-terminal-border pt-2 text-[10px] text-terminal-muted space-y-0.5">
-            {report.lastSuccessfulUpdate && (
-              <p>Last success: {report.lastSuccessfulUpdate.slice(0, 19).replace("T", " ")}</p>
-            )}
-            {report.lastFailedUpdate && (
-              <p className="text-loss">
-                Last failure: {report.lastFailedUpdate.slice(0, 19).replace("T", " ")}
-              </p>
+            {lastSuccess && <p>Last success: {lastSuccess}</p>}
+            {lastFailure && (
+              <p className="text-loss">Last failure: {lastFailure}</p>
             )}
           </div>
         )}

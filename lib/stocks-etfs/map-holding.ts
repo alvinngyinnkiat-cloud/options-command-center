@@ -6,21 +6,44 @@ import type {
   StockEtfHoldingFormInput,
   StockEtfSector,
 } from "./types";
-import type { StockEtfHolding } from "@/types/database";
+import type { StockEtfHolding, CurrencyCode } from "@/types/database";
 
 export function enrichStockEtfHolding(
   row: StockEtfHolding,
   totalPortfolioValueSgd: number,
   dividendTotals?: Map<string, TickerDividendTotals>
 ): EnrichedStockEtfHolding {
+  const shares = row.shares_held != null ? Number(row.shares_held) : null;
+  const lastPrice =
+    row.last_market_price_native != null
+      ? Number(row.last_market_price_native)
+      : null;
+  const manualOverride = Boolean(
+    (row as { manual_value_override?: boolean }).manual_value_override
+  );
+
+  let currentValueNative = Number(row.current_value_native);
+  if (
+    !manualOverride &&
+    shares != null &&
+    shares > 0 &&
+    lastPrice != null &&
+    lastPrice > 0
+  ) {
+    currentValueNative = Math.round(shares * lastPrice * 100) / 100;
+  }
+
   const totalInvestedSgd = Number(row.total_invested_sgd);
-  const currentValueSgd = Number(row.current_value_sgd);
+  const currentValueSgd = toSgdAmount(
+    currentValueNative,
+    row.currency as CurrencyCode,
+    Number(row.fx_rate_to_sgd)
+  );
   const metrics = buildStockEtfHoldingMetrics(
     totalInvestedSgd,
     currentValueSgd,
     totalPortfolioValueSgd
   );
-  const currentValueNative = Number(row.current_value_native);
   const dividendResolved = resolveTickerDividendIncome(
     row.ticker,
     dividendTotals ?? new Map()
@@ -38,7 +61,7 @@ export function enrichStockEtfHolding(
     currency: row.currency as EnrichedStockEtfHolding["currency"],
     sector: row.sector as StockEtfSector,
     totalInvestedNative: Number(row.total_invested_native),
-    currentValueNative: Number(row.current_value_native),
+    currentValueNative,
     fxRateToSgd: Number(row.fx_rate_to_sgd),
     totalInvestedSgd: metrics.totalInvestedSgd,
     currentValueSgd: metrics.currentValueSgd,
@@ -102,6 +125,10 @@ export function stockEtfRowFromForm(
     current_value_sgd: currentValueSgd,
     shares_held: input.sharesHeld,
     average_cost: input.averageCost,
+    last_market_price_native: null,
+    last_price_date: null,
+    price_source: null,
+    manual_value_override: false,
     notes: input.notes,
     last_updated: today,
     created_at: existingCreatedAt ?? now,

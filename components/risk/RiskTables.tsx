@@ -1,7 +1,6 @@
-import { formatSignedCurrency } from "@/lib/trades/format";
+import { PnlValue } from "@/components/ui/PnlValue";
 import { formatRiskCurrency, formatRiskPct } from "@/lib/risk/format";
 import type { OpenRiskByStrategyRow } from "@/lib/risk/types";
-import { cn } from "@/lib/utils";
 
 interface RiskTablesProps {
   byStrategy: OpenRiskByStrategyRow[];
@@ -39,13 +38,8 @@ export function RiskTables({ byStrategy }: RiskTablesProps) {
                 <td className="px-3 py-2 font-mono text-right">
                   {formatRiskCurrency(row.totalMaxRisk)}
                 </td>
-                <td
-                  className={cn(
-                    "px-3 py-2 font-mono text-right",
-                    row.totalCurrentPnl >= 0 ? "text-profit" : "text-loss"
-                  )}
-                >
-                  {formatSignedCurrency(row.totalCurrentPnl)}
+                <td className="px-3 py-2 font-mono text-right">
+                  <PnlValue value={row.totalCurrentPnl} className="inline" />
                 </td>
                 <td className="px-3 py-2 font-mono text-right text-terminal-muted">
                   {formatRiskPct(row.riskPct)}

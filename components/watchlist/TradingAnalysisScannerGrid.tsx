@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { buildTradingAnalysisViewModel } from "@/lib/watchlist/analysis-card";
 import { decisionClass, strategyClass } from "@/lib/watchlist/scanner-grid-colors";
+import { resolveDisplayRank, sortRowsByWatchlistRank } from "@/lib/watchlist/watchlist-rank";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
 import type { TradeReadinessResult } from "@/lib/trading-workflow/types";
@@ -25,8 +26,8 @@ interface TradingAnalysisScannerGridProps {
   emptyMessage?: string;
 }
 
-/** Expand + Ticker + Alert + Strategy + Action */
-const COLUMN_COUNT = 5;
+/** Expand + Ticker + Rank + Alert + Strategy + Action */
+const COLUMN_COUNT = 6;
 
 export function TradingAnalysisScannerGrid({
   rows,
@@ -47,12 +48,7 @@ export function TradingAnalysisScannerGrid({
         return ra - rb || a.ticker.localeCompare(b.ticker);
       });
     }
-    return [...rows].sort(
-      (a, b) =>
-        (b.score?.combinedScore ?? b.score?.totalScore ?? 0) -
-          (a.score?.combinedScore ?? a.score?.totalScore ?? 0) ||
-        a.ticker.localeCompare(b.ticker)
-    );
+    return sortRowsByWatchlistRank(rows);
   }, [rows, rankByWatchlistId]);
 
   function toggleExpanded(watchlistId: string) {
@@ -79,6 +75,7 @@ export function TradingAnalysisScannerGrid({
           <tr className="border-b border-terminal-border bg-terminal-elevated/80 text-left uppercase tracking-wider text-terminal-muted">
             <th className="w-10 px-3 py-3" />
             <th className="px-4 py-3 font-medium w-[120px]">Ticker</th>
+            <th className="px-4 py-3 font-medium w-16">Rank</th>
             <th className="w-10 px-3 py-3" />
             <th className="px-4 py-3 font-medium">Strategy</th>
             <th className="px-4 py-3 font-medium">Action</th>
@@ -107,6 +104,9 @@ export function TradingAnalysisScannerGrid({
                   </td>
                   <td className="px-4 py-3 font-mono font-semibold text-terminal-text">
                     {model.ticker}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-terminal-muted">
+                    #{resolveDisplayRank(row)}
                   </td>
                   <td className="px-3 py-3">
                     <AlertWarningIcon

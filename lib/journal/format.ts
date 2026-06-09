@@ -1,4 +1,6 @@
 import { STRATEGY_LABELS } from "@/lib/portfolio/types";
+import { formatUsd } from "@/lib/format/currency";
+import { formatPnL } from "@/lib/format/pnl";
 import type { StrategyType } from "@/types/database";
 
 export function formatStrategyLabel(strategy: StrategyType | null): string {
@@ -7,15 +9,9 @@ export function formatStrategyLabel(strategy: StrategyType | null): string {
 }
 
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+  return formatUsd(value);
 }
 
 export function formatSignedCurrency(value: number): string {
-  const abs = formatCurrency(Math.abs(value));
-  return value >= 0 ? `+${abs}` : `-${abs}`;
+  return formatPnL(value, { currency: "USD" });
 }

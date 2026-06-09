@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { savePortfolioOverride } from "@/app/actions/portfolio";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -11,65 +11,117 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
-import { formatNativeValue } from "@/lib/portfolio/format-holdings";
+import type { CapitalPoolsBreakdown } from "@/lib/portfolio/capital-pools";
+import {
+  sumManualOverallPortfolioValueSgd,
+  sumManualTradingCapitalSgd,
+} from "@/lib/portfolio/manual-breakdown";
 import type { PortfolioMetrics, PortfolioOverrideInput } from "@/lib/portfolio/types";
-import { formatSGD, formatSignedSGD } from "@/lib/utils";
+import { formatSGD } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Scale } from "lucide-react";
+import { Layers } from "lucide-react";
 
 interface ManualPortfolioOverrideCardProps {
   metrics: PortfolioMetrics;
-  onMetricsChange: (metrics: PortfolioMetrics) => void;
+  pools: CapitalPoolsBreakdown;
+  onSaved: (
+    metrics: PortfolioMetrics,
+    capitalPools: CapitalPoolsBreakdown
+  ) => void;
 }
 
 function parseNum(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const n = parseFloat(trimmed);
-  return isNaN(n) ? null : n;
+  return Number.isFinite(n) ? n : null;
+}
+
+function initialSgStocks(override: PortfolioMetrics["override"]): string {
+  if (override?.manualSgStocksValueSgd != null) {
+    return String(override.manualSgStocksValueSgd);
+  }
+  if (override?.manualSgStocksCashValueSgd != null) {
+    return String(override.manualSgStocksCashValueSgd);
+  }
+  return "";
 }
 
 export function ManualPortfolioOverrideCard({
   metrics,
-  onMetricsChange,
+  pools,
+  onSaved,
 }: ManualPortfolioOverrideCardProps) {
   const override = metrics.override;
-  const [useManual, setUseManual] = useState(
-    override?.useManualOverride ?? false
-  );
   const [usUsd, setUsUsd] = useState(
     String(override?.manualUsStocksOptionsValueUsd ?? "")
   );
   const [usSgd, setUsSgd] = useState(
     String(override?.manualUsStocksOptionsSgdEquivalent ?? "")
   );
-  const [crypto, setCrypto] = useState(
-    String(override?.manualCryptoValueSgd ?? "")
+  const [tradingCashSgd, setTradingCashSgd] = useState(
+    String(
+      override?.manualTradingCashSgd ?? pools.cash.tradingCashSgd ?? ""
+    )
   );
-  const [sgSgd, setSgSgd] = useState(
-    String(override?.manualSgStocksCashValueSgd ?? "")
+  const [tradingCashUsd, setTradingCashUsd] = useState(
+    String(
+      override?.manualTradingCashUsd ?? pools.cash.brokerUsdCashNative ?? ""
+    )
   );
+  const [sgStocks, setSgStocks] = useState(initialSgStocks(override));
   const [reason, setReason] = useState(override?.overrideReason ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { comparison, calculated } = metrics;
-  const diff = comparison.differenceSgd;
+  const parsedUsUsd = parseNum(usUsd);
+  const parsedUsSgd = parseNum(usSgd);
+  const parsedTradingCashSgd = parseNum(tradingCashSgd);
+  const parsedTradingCashUsd = parseNum(tradingCashUsd);
+  const parsedSgStocks = parseNum(sgStocks);
+  const cryptoPortfolioValueSgd = pools.cryptoPortfolioValueSgd;
+
+  const breakdownComponents = useMemo(
+    () => ({
+      usStocksOptionsSgdEquivalent: parsedUsSgd,
+      cryptoValueSgd: cryptoPortfolioValueSgd,
+      sgStocksValueSgd: parsedSgStocks,
+      sgCashValueSgd: null,
+      tradingCashSgd: parsedTradingCashSgd,
+    }),
+    [parsedUsSgd, cryptoPortfolioValueSgd, parsedSgStocks, parsedTradingCashSgd]
+  );
+
+  const overallPortfolioValueSgd = useMemo(
+    () => sumManualOverallPortfolioValueSgd(breakdownComponents),
+    [breakdownComponents]
+  );
+
+  const tradingCapitalSgd = useMemo(
+    () => sumManualTradingCapitalSgd(breakdownComponents),
+    [breakdownComponents]
+  );
 
   async function handleSave() {
     setSaving(true);
     setError(null);
 
     const input: PortfolioOverrideInput = {
-      useManualOverride: useManual,
-      manualUsStocksOptionsValueUsd: parseNum(usUsd),
-      manualUsStocksOptionsSgdEquivalent: parseNum(usSgd),
-      manualCryptoValueSgd: parseNum(crypto),
-      manualSgStocksCashValueSgd: parseNum(sgSgd),
-      manualTradingCashUsd: override?.manualTradingCashUsd ?? null,
-      manualTradingCashSgd: override?.manualTradingCashSgd ?? null,
+      useManualOverride: true,
+      manualUsStocksOptionsValueUsd: parsedUsUsd,
+      manualUsStocksOptionsSgdEquivalent: parsedUsSgd,
+      manualCryptoValueSgd: cryptoPortfolioValueSgd,
+      manualSgStocksCashValueSgd: parsedSgStocks,
+      manualSgStocksValueSgd: parsedSgStocks,
+      manualSgCashValueSgd: null,
+      manualTradingCashUsd: parsedTradingCashUsd,
+      manualTradingCashSgd: parsedTradingCashSgd,
+      manualCryptoCashSgd: override?.manualCryptoCashSgd ?? 0,
+      manualCryptoHoldingsSgd: override?.manualCryptoHoldingsSgd ?? null,
+      manualCryptoContributionsSgd: override?.manualCryptoContributionsSgd ?? null,
+      manualClientPortfolioSgd: override?.manualClientPortfolioSgd ?? 0,
       manualUsdSgdRate: override?.manualUsdSgdRate ?? 1.35,
-      manualTotalPortfolioValueSgd: null,
+      manualTotalPortfolioValueSgd: overallPortfolioValueSgd,
       overrideReason: reason.trim() || null,
       overrideUpdatedAt: new Date().toISOString(),
     };
@@ -82,8 +134,11 @@ export function ManualPortfolioOverrideCard({
       return;
     }
 
-    onMetricsChange(result.metrics);
+    onSaved(result.metrics, result.capitalPools);
   }
+
+  const inputClass =
+    "mt-1 w-full h-9 rounded-md border border-terminal-border bg-terminal-surface px-3 font-mono text-sm text-terminal-text focus:outline-none focus:ring-1 focus:ring-accent/50";
 
   return (
     <Card variant="bordered">
@@ -91,206 +146,112 @@ export function ManualPortfolioOverrideCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent/15 border border-accent/20">
-              <Scale className="h-4 w-4 text-accent" />
+              <Layers className="h-4 w-4 text-accent" />
             </div>
             <div>
-              <CardTitle>Daily Portfolio Reconciliation</CardTitle>
+              <CardTitle>Manual Portfolio Breakdown</CardTitle>
               <CardDescription>
-                Enter broker-reported values — US stays in USD, overall portfolio
-                in SGD. No FX conversion.
+                All manually maintained portfolio values in one place. These
+                fields are the source of truth for portfolio tracking.
               </CardDescription>
             </div>
           </div>
-          <Badge variant={comparison.useManualOverride ? "success" : "outline"}>
-            {comparison.useManualOverride ? "Manual ON" : "Calculated"}
-          </Badge>
+          <Badge variant="info">Source of truth</Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <ComparisonBox
-            label="Overall Portfolio (manual)"
-            value={
-              comparison.overallPortfolioValueSgd != null
-                ? formatSGD(comparison.overallPortfolioValueSgd)
-                : "—"
-            }
-            highlight={comparison.useManualOverride}
-          />
-          <ComparisonBox
-            label="App Calculated Value"
-            value={formatSGD(comparison.calculatedOverallPortfolioValueSgd)}
-          />
-          <ComparisonBox
-            label="Difference"
-            value={diff != null ? formatSignedSGD(diff) : "—"}
-            valueClassName={
-              diff != null
-                ? diff >= 0
-                  ? "text-profit"
-                  : "text-loss"
-                : undefined
-            }
-          />
-        </div>
-
-        <SectionDisplay title="US">
-          <ComparisonBox
+        <SectionDisplay title="US Portfolio">
+          <InputField
             label="US Stocks & Options Value (USD)"
-            value={
-              comparison.manualUsStocksOptionsValueUsd != null
-                ? formatNativeValue(
-                    comparison.manualUsStocksOptionsValueUsd,
-                    "USD"
-                  )
-                : "—"
-            }
-            sub={`App: ${formatNativeValue(
-              comparison.calculatedUsStocksOptionsValueUsd,
-              "USD"
-            )}`}
+            description="Broker value for US stocks, ETFs, options."
+            value={usUsd}
+            onChange={setUsUsd}
+            placeholder="e.g. 245000"
+            inputClass={inputClass}
           />
-          <ComparisonBox
+          <InputField
             label="US Stocks & Options SGD Equivalent"
-            value={
-              comparison.manualUsStocksOptionsSgdEquivalent != null
-                ? formatSGD(comparison.manualUsStocksOptionsSgdEquivalent)
-                : "—"
-            }
-            sub={`App: ${formatSGD(
-              comparison.calculatedUsStocksOptionsSgdEquivalent
-            )}`}
+            description="Broker-reported SGD equivalent."
+            value={usSgd}
+            onChange={setUsSgd}
+            placeholder="e.g. 332000"
+            inputClass={inputClass}
           />
         </SectionDisplay>
 
-        <SectionDisplay title="Crypto">
-          <ComparisonBox
-            label="Crypto Value (SGD)"
-            value={
-              comparison.manualCryptoValueSgd != null
-                ? formatSGD(comparison.manualCryptoValueSgd)
-                : "—"
-            }
-            sub={`App: ${formatSGD(comparison.calculatedCryptoValueSgd)}`}
+        <SectionDisplay title="Trading Cash">
+          <InputField
+            label="Trading Cash SGD"
+            description="Broker SGD cash — included in Overall Portfolio Value and Trading Capital."
+            value={tradingCashSgd}
+            onChange={setTradingCashSgd}
+            placeholder="e.g. 24336"
+            inputClass={inputClass}
+          />
+          <InputField
+            label="Trading Cash USD"
+            description="Reference only — not included in SGD totals."
+            value={tradingCashUsd}
+            onChange={setTradingCashUsd}
+            placeholder="e.g. 18000"
+            inputClass={inputClass}
           />
         </SectionDisplay>
 
-        <SectionDisplay title="Singapore">
-          <ComparisonBox
-            label="SG Stocks / SG Cash Value (SGD)"
-            value={
-              comparison.manualSgStocksCashValueSgd != null
-                ? formatSGD(comparison.manualSgStocksCashValueSgd)
-                : "—"
-            }
-            sub={`App: ${formatSGD(
-              comparison.calculatedSgStocksCashValueSgd
-            )}`}
+        <SectionDisplay title="Crypto & Singapore">
+          <ValueBox
+            label="Current Crypto Portfolio Value (SGD)"
+            value={formatSGD(cryptoPortfolioValueSgd)}
+            sub="Auto-calculated — coin holdings total + exchange cash"
+          />
+          <InputField
+            label="SG Stock Value (SGD)"
+            description="Singapore stocks and ETFs."
+            value={sgStocks}
+            onChange={setSgStocks}
+            placeholder="e.g. 70000"
+            inputClass={inputClass}
           />
         </SectionDisplay>
 
         <SectionDisplay title="Total">
-          <ComparisonBox
+          <ValueBox
             label="Overall Portfolio Value (SGD)"
-            value={formatSGD(metrics.portfolioValue)}
-            highlight={comparison.useManualOverride}
-            sub={
-              comparison.useManualOverride
-                ? "US SGD equiv + Crypto + SG"
-                : "From holdings"
+            value={
+              overallPortfolioValueSgd != null
+                ? formatSGD(overallPortfolioValueSgd)
+                : "—"
             }
+            highlight
+            sub="US SGD + Trading Cash SGD + Crypto Value + SG Stock Value"
           />
-        </SectionDisplay>
-
-        <div className="flex items-center justify-between rounded-md border border-terminal-border bg-terminal-elevated px-4 py-3">
-          <div>
-            <p className="text-sm font-medium text-terminal-text">
-              Use Manual Reconciliation
-            </p>
-            <p className="text-xs text-terminal-muted">
-              Broker-reported values become the main portfolio total (SGD)
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={useManual}
-            onClick={() => setUseManual((v) => !v)}
-            className={cn(
-              "relative h-6 w-11 rounded-full transition-colors",
-              useManual ? "bg-accent" : "bg-terminal-border"
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform",
-                useManual && "translate-x-5"
-              )}
-            />
-          </button>
-        </div>
-
-        <SectionDisplay title="Manual Inputs">
-          <div className="col-span-full grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <InputField
-              label="US Stocks & Options Value (USD)"
-              description="Actual broker value for US stocks, ETFs, options, and USD cash."
-              value={usUsd}
-              onChange={setUsUsd}
-              placeholder="e.g. 245000"
-            />
-            <InputField
-              label="US Stocks & Options SGD Equivalent"
-              description="Broker-reported SGD equivalent — enter manually, do not calculate."
-              value={usSgd}
-              onChange={setUsSgd}
-              placeholder="e.g. 332000"
-            />
-            <InputField
-              label="Crypto Value (SGD)"
-              description="Actual crypto portfolio value in SGD."
-              value={crypto}
-              onChange={setCrypto}
-              placeholder="e.g. 18500"
-            />
-            <InputField
-              label="SG Stocks / SG Cash Value (SGD)"
-              description="Singapore stocks, ETFs, cash, or local SGD holdings."
-              value={sgSgd}
-              onChange={setSgSgd}
-              placeholder="e.g. 78000"
-            />
-          </div>
+          <ValueBox
+            label="Trading Capital (SGD)"
+            value={
+              tradingCapitalSgd != null ? formatSGD(tradingCapitalSgd) : "—"
+            }
+            sub="US SGD + Trading Cash SGD + SG Stock Value — excludes crypto"
+          />
         </SectionDisplay>
 
         <div>
           <label className="text-[10px] uppercase tracking-wider text-terminal-muted">
-            Reconciliation Notes
+            Notes
           </label>
           <input
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. Broker marks options at market, app uses cost basis"
-            className="mt-1 w-full h-9 rounded-md border border-terminal-border bg-terminal-surface px-3 text-sm text-terminal-text focus:outline-none focus:ring-1 focus:ring-accent/50"
+            placeholder="Optional notes on manual values"
+            className={inputClass}
           />
         </div>
-
-        <p className="text-[11px] text-terminal-muted">
-          Active portfolio value:{" "}
-          <span className="font-mono text-terminal-text">
-            {formatSGD(metrics.portfolioValue)}
-          </span>
-          {comparison.useManualOverride ? " (manual SGD total)" : " (calculated)"}
-          {" · "}
-          App calculated: {formatSGD(calculated.portfolioValue)}
-        </p>
 
         {error && <p className="text-xs text-loss">{error}</p>}
 
         <div className="flex justify-end">
           <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : "Save Reconciliation"}
+            {saving ? "Saving…" : "Save Portfolio Breakdown"}
           </Button>
         </div>
       </CardContent>
@@ -303,7 +264,7 @@ function SectionDisplay({
   children,
 }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="rounded-md border border-terminal-border bg-terminal-elevated/30 p-3 space-y-3">
@@ -321,12 +282,14 @@ function InputField({
   value,
   onChange,
   placeholder,
+  inputClass,
 }: {
   label: string;
   description: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  inputClass: string;
 }) {
   return (
     <div>
@@ -335,28 +298,26 @@ function InputField({
       </label>
       <input
         type="number"
-        step="1"
+        step="0.01"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 w-full h-9 rounded-md border border-terminal-border bg-terminal-surface px-3 font-mono text-sm text-terminal-text focus:outline-none focus:ring-1 focus:ring-accent/50"
+        className={inputClass}
       />
       <p className="mt-1 text-[10px] text-terminal-muted">{description}</p>
     </div>
   );
 }
 
-function ComparisonBox({
+function ValueBox({
   label,
   value,
   highlight,
-  valueClassName,
   sub,
 }: {
   label: string;
   value: string;
   highlight?: boolean;
-  valueClassName?: string;
   sub?: string;
 }) {
   return (
@@ -371,12 +332,7 @@ function ComparisonBox({
       <p className="text-[10px] uppercase tracking-wider text-terminal-muted">
         {label}
       </p>
-      <p
-        className={cn(
-          "mt-1 font-mono text-lg font-semibold text-terminal-text",
-          valueClassName
-        )}
-      >
+      <p className="mt-1 font-mono text-lg font-semibold text-terminal-text">
         {value}
       </p>
       {sub && <p className="mt-1 text-[10px] text-terminal-muted">{sub}</p>}

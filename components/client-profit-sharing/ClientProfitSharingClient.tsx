@@ -2,6 +2,8 @@
 
 import { Badge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { formatUsd } from "@/lib/format/currency";
+import { formatPnL } from "@/lib/format/pnl";
 import type { ClientProfitSharingData } from "@/lib/client-profit-sharing/types";
 import { ClientLifetimeSummary } from "./ClientLifetimeSummary";
 import { ClientProfitReportTable } from "./ClientProfitReportTable";
@@ -58,13 +60,15 @@ export function ClientProfitSharingClient({
             <div className="rounded border border-terminal-border px-2 py-1.5">
               <span className="text-terminal-muted">Client Profit </span>
               <span className="font-mono text-profit">
-                ${initialData.summary.totalClientProfit.toFixed(0)}
+                {formatUsd(initialData.summary.totalClientProfit)}
               </span>
             </div>
             <div className="rounded border border-terminal-border px-2 py-1.5">
               <span className="text-terminal-muted">Client Loss </span>
               <span className="font-mono text-loss">
-                ${initialData.summary.totalClientLoss.toFixed(0)}
+                {formatPnL(-Math.abs(initialData.summary.totalClientLoss), {
+                  currency: "USD",
+                })}
               </span>
             </div>
           </div>

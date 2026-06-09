@@ -1,4 +1,10 @@
-import { buildCryptoTrackerSummary } from "@/lib/crypto/calculations";
+import { buildCryptoTrackerSummary, buildCryptoPortfolioManualFromTracker } from "@/lib/crypto/calculations";
+import {
+  buildCryptoAllocationSlices,
+  buildCryptoDeploymentPlan,
+  buildCryptoRankings,
+} from "@/lib/crypto/allocation";
+import { splitCryptoTrackerValues, resolveCryptoCashSgd } from "@/lib/portfolio/capital-pools";
 import { enrichAllCryptoHoldings } from "@/lib/crypto/map-holding";
 import type { CryptoTrackerData } from "@/lib/crypto/types";
 import {
@@ -17,14 +23,48 @@ import type { CryptoHolding } from "@/types/database";
 
 function buildData(
   rows: CryptoHolding[],
-  dataSource: "supabase" | "mock"
+  dataSource: "supabase" | "mock",
+  override?: import("@/lib/portfolio/types").PortfolioOverrideInput | null,
+  pools?: { cryptoHoldingsSgd: number; cryptoCashSgd: number }
 ): CryptoTrackerData {
-  const holdings = enrichAllCryptoHoldings(rows);
+  const split = splitCryptoTrackerValues(rows);
+  const cryptoHoldingsSgd = pools?.cryptoHoldingsSgd ?? split.cryptoHoldingsSgd;
+  const cryptoCashSgd =
+    pools?.cryptoCashSgd ??
+    resolveCryptoCashSgd(override ?? null, split.cryptoCashSgd);
+  const totalPortfolio = cryptoHoldingsSgd + cryptoCashSgd;
+  const holdings = enrichAllCryptoHoldings(rows, totalPortfolio);
+  const portfolioManual = buildCryptoPortfolioManualFromTracker({
+    override: override ?? null,
+    cryptoHoldingsValueSgd: cryptoHoldingsSgd,
+    cryptoCashSgd,
+    holdings,
+  });
+
   return {
     holdings,
     summary: buildCryptoTrackerSummary(holdings),
+    portfolioManual,
+    allocationSlices: buildCryptoAllocationSlices(holdings, cryptoCashSgd),
+    rankings: buildCryptoRankings(holdings),
+    deploymentPlan: buildCryptoDeploymentPlan(cryptoCashSgd),
     dataSource,
   };
+}
+
+export async function buildCryptoTrackerPageData(
+  override: import("@/lib/portfolio/types").PortfolioOverrideInput | null,
+  pools: { cryptoHoldingsSgd: number; cryptoCashSgd: number }
+): Promise<CryptoTrackerData> {
+  const { value, dataSource } = await readSupabasePrimary({
+    module: "buildCryptoTrackerPageData",
+    mock: () => buildData(getMockCryptoHoldings(), "mock", override, pools),
+    empty: () => buildData([], "supabase", override, pools),
+    read: async (userId) =>
+      buildData(await fetchCryptoRows(userId), "supabase", override, pools),
+  });
+
+  return { ...value, dataSource };
 }
 
 async function fetchCryptoRows(_userId: string): Promise<CryptoHolding[]> {

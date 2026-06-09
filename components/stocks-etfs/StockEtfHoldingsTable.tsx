@@ -1,134 +1,129 @@
 "use client";
 
-import { useState } from "react";
-import { deleteStockEtfHolding } from "@/app/actions/stock-etf";
-import { Button } from "@/components/ui/Button";
-import { formatNativeValue } from "@/lib/portfolio/format-holdings";
-import type { EnrichedStockEtfHolding } from "@/lib/stocks-etfs/types";
+import type { StockEtfHoldingsTableRow } from "@/lib/stocks-etfs/table-rows";
+import {
+  formatRoiPct,
+  formatSignedTickerCurrency,
+  formatTickerCurrency,
+} from "@/lib/ticker-positions/format";
 import { cn, formatSGD, formatSignedSGD } from "@/lib/utils";
-import { Pencil, Trash2 } from "lucide-react";
+import { getPnLColor } from "@/lib/format/pnl";
+import { StockEtfPositionActionsMenu } from "./StockEtfPositionActionsMenu";
 
 interface StockEtfHoldingsTableProps {
-  holdings: EnrichedStockEtfHolding[];
-  onEdit: (holding: EnrichedStockEtfHolding) => void;
+  rows: StockEtfHoldingsTableRow[];
+  emptyLabel: string;
   onRefresh: () => void;
 }
 
+function formatMoney(row: StockEtfHoldingsTableRow, value: number): string {
+  return row.currency === "SGD" ? formatSGD(value) : formatTickerCurrency(value);
+}
+
+function formatSignedMoney(row: StockEtfHoldingsTableRow, value: number): string {
+  return row.currency === "SGD"
+    ? formatSignedSGD(value)
+    : formatSignedTickerCurrency(value);
+}
+
+function pnlClass(value: number) {
+  return getPnLColor(value);
+}
+
 export function StockEtfHoldingsTable({
-  holdings,
-  onEdit,
+  rows,
+  emptyLabel,
   onRefresh,
 }: StockEtfHoldingsTableProps) {
-  const [removingId, setRemovingId] = useState<string | null>(null);
-
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this holding?")) return;
-    setRemovingId(id);
-    await deleteStockEtfHolding(id);
-    setRemovingId(null);
-    onRefresh();
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-terminal-muted">No {emptyLabel} positions yet.</p>
+    );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-terminal-border">
-      <table className="w-full min-w-[1100px] text-xs">
-        <thead>
-          <tr className="border-b border-terminal-border bg-terminal-elevated/80 text-left uppercase tracking-wider text-terminal-muted">
-            <th className="px-3 py-2.5 font-medium">Ticker</th>
-            <th className="px-3 py-2.5 font-medium">Type</th>
-            <th className="px-3 py-2.5 font-medium">Currency</th>
-            <th className="px-3 py-2.5 font-medium text-right">Capital Invested</th>
-            <th className="px-3 py-2.5 font-medium text-right">Current Value</th>
-            <th className="px-3 py-2.5 font-medium text-right">P/L (SGD)</th>
-            <th className="px-3 py-2.5 font-medium text-right">Return %</th>
-            <th className="px-3 py-2.5 font-medium text-right">Alloc %</th>
-            <th className="px-3 py-2.5 font-medium">Sector</th>
-            <th className="px-3 py-2.5 font-medium">Actions</th>
+    <div className="rounded-lg border border-terminal-border w-full min-w-0">
+      <table className="w-full table-fixed text-xs">
+        <colgroup>
+          <col className="w-[12%]" />
+          <col className="w-[14%]" />
+          <col className="w-[14%]" />
+          <col className="w-[14%]" />
+          <col className="w-[14%]" />
+          <col className="w-[12%]" />
+          <col className="w-[20%]" />
+        </colgroup>
+        <thead className="bg-terminal-elevated/40 border-b border-terminal-border">
+          <tr>
+            {[
+              "Ticker",
+              "Shares",
+              "Capital",
+              "Current Value",
+              "Dividend",
+              "P/L",
+              "ROI",
+              "Actions",
+            ].map((header) => (
+              <th
+                key={header}
+                className="px-2 py-2 text-left text-[9px] sm:text-[10px] font-medium uppercase tracking-wider text-terminal-muted"
+              >
+                {header}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {holdings.map((h) => (
+          {rows.map((row) => (
             <tr
-              key={h.id}
-              className="border-b border-terminal-border/50 hover:bg-terminal-elevated/40"
+              key={row.id}
+              className="border-b border-terminal-border/50 hover:bg-terminal-elevated/20"
             >
-              <td className="px-3 py-2.5 font-mono font-semibold text-accent">
-                {h.ticker}
+              <td className="px-2 py-2 font-mono font-semibold truncate">
+                {row.ticker}
               </td>
-              <td className="px-3 py-2.5 capitalize text-terminal-muted">
-                {h.assetType}
+              <td className="px-2 py-2 font-mono tabular-nums truncate">
+                {row.shares > 0 ? row.shares.toLocaleString() : "—"}
               </td>
-              <td className="px-3 py-2.5 text-terminal-muted">{h.currency}</td>
-              <td className="px-3 py-2.5 text-right">
-                <p className="font-mono text-terminal-text">
-                  {formatSGD(h.totalInvestedSgd)}
-                </p>
-                <p className="text-[10px] text-terminal-muted">
-                  {formatNativeValue(h.totalInvestedNative, h.currency)}
-                </p>
+              <td className="px-2 py-2 font-mono tabular-nums truncate">
+                {formatMoney(row, row.capital)}
               </td>
-              <td className="px-3 py-2.5 text-right">
-                <p className="font-mono text-terminal-text">
-                  {formatSGD(h.currentValueSgd)}
-                </p>
-                <p className="text-[10px] text-terminal-muted">
-                  {formatNativeValue(h.currentValueNative, h.currency)}
-                </p>
+              <td className="px-2 py-2 font-mono tabular-nums truncate">
+                {formatMoney(row, row.currentValue)}
               </td>
               <td
                 className={cn(
-                  "px-3 py-2.5 font-mono text-right font-medium",
-                  h.profitLossSgd >= 0 ? "text-profit" : "text-loss"
+                  "px-2 py-2 font-mono tabular-nums truncate",
+                  pnlClass(row.dividend)
                 )}
               >
-                {formatSignedSGD(h.profitLossSgd)}
+                {formatSignedMoney(row, row.dividend)}
               </td>
               <td
                 className={cn(
-                  "px-3 py-2.5 font-mono text-right",
-                  h.returnPct >= 0 ? "text-profit" : "text-loss"
+                  "px-2 py-2 font-mono tabular-nums truncate",
+                  pnlClass(row.pl)
                 )}
               >
-                {h.returnPct.toFixed(1)}%
+                {formatSignedMoney(row, row.pl)}
               </td>
-              <td className="px-3 py-2.5 font-mono text-right text-terminal-muted">
-                {h.allocationPct.toFixed(1)}%
+              <td
+                className={cn(
+                  "px-2 py-2 font-mono tabular-nums truncate",
+                  pnlClass(row.roiPct)
+                )}
+              >
+                {formatRoiPct(row.roiPct)}
               </td>
-              <td className="px-3 py-2.5 text-terminal-muted">{h.sector}</td>
-              <td className="px-3 py-2.5">
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onEdit(h)}
-                    aria-label={`Edit ${h.ticker}`}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-loss"
-                    disabled={removingId === h.id}
-                    onClick={() => handleDelete(h.id)}
-                    aria-label={`Delete ${h.ticker}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+              <td className="px-2 py-2">
+                <StockEtfPositionActionsMenu
+                  holding={row.holding}
+                  onRefresh={onRefresh}
+                />
               </td>
             </tr>
           ))}
-          {holdings.length === 0 && (
-            <tr>
-              <td
-                colSpan={10}
-                className="px-3 py-10 text-center text-terminal-muted"
-              >
-                No stock or ETF holdings. Add your first position.
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
     </div>

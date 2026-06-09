@@ -37,6 +37,9 @@ function mockTrade(
     currentValueUpdatedAt: null,
     valueDifference: null,
     exitDebit: null,
+    exitDebitPerContract: null,
+    feesCommission: 0,
+    brokerRealizedPnl: null,
     strikes: {
       shortStrikePut: 500,
       longStrikePut: 495,
@@ -53,6 +56,9 @@ function mockTrade(
     notes: null,
     underlyingAveragePrice: null,
     underlyingCurrentPrice: null,
+    underlyingPriceSource: "unavailable",
+    underlyingPriceUpdatedAt: null,
+    underlyingPriceUsable: false,
     manualSupport: null,
     manualResistance: null,
     atr14: null,
@@ -72,6 +78,8 @@ function mockTrade(
       breakevenCallPrice: null,
       breakevenSafetyDistance: null,
       breakevenSafetyDistancePct: null,
+      breakevenPutDistancePct: null,
+      breakevenCallDistancePct: null,
       breakevenNearestSide: null,
       breakevenSafetyStatus: null,
       takeProfitPrice: 150,
@@ -83,6 +91,12 @@ function mockTrade(
       currentOptionValuePerContract: 0.8,
       currentCloseCost: 80,
       currentPnl: overrides.currentPnl,
+      calculatedRealizedPnl:
+        overrides.realizedPnl !== undefined
+          ? overrides.realizedPnl
+          : status === "closed"
+            ? overrides.currentPnl
+            : null,
       realizedPnl:
         overrides.realizedPnl !== undefined
           ? overrides.realizedPnl
@@ -108,6 +122,34 @@ function mockTrade(
 }
 
 describe("pnl allocation", () => {
+  it("closed trade uses realized P/L not premium fallback", () => {
+    const closed = mockTrade({
+      status: "closed",
+      currentPnl: 113.51,
+      calculations: {
+        ...mockTrade({ currentPnl: 113.51 }).calculations,
+        currentPnl: 113.51,
+        realizedPnl: 62.11,
+        totalPremiumReceived: 113.51,
+      },
+    });
+    expect(calculateTotalTradePnL(closed)).toBeCloseTo(62.11, 2);
+  });
+
+  it("closed trade without exit debit does not use open P/L fallback", () => {
+    const closed = mockTrade({
+      status: "closed",
+      currentPnl: 113.51,
+      calculations: {
+        ...mockTrade({ currentPnl: 113.51 }).calculations,
+        currentPnl: 113.51,
+        realizedPnl: null,
+        totalPremiumReceived: 113.51,
+      },
+    });
+    expect(calculateTotalTradePnL(closed)).toBe(0);
+  });
+
   it("personal trade assigns 100% to my P/L", () => {
     const trade = mockTrade({ currentPnl: 100 });
     expect(calculateTotalTradePnL(trade)).toBe(100);
@@ -115,24 +157,24 @@ describe("pnl allocation", () => {
     expect(calculateClientPnL(trade, 100)).toBe(0);
   });
 
-  it("client profit sharing splits profit 60/40", () => {
+  it("client profit sharing splits profit 55/45", () => {
     const trade = mockTrade({
       currentPnl: 100,
       tradeOwnership: "client_profit_sharing",
       isClientTrade: true,
     });
-    expect(calculateMyPnL(trade, 100)).toBe(60);
-    expect(calculateClientPnL(trade, 100)).toBe(40);
+    expect(calculateMyPnL(trade, 100)).toBeCloseTo(55, 4);
+    expect(calculateClientPnL(trade, 100)).toBeCloseTo(45, 4);
   });
 
-  it("client profit sharing splits loss 60/40", () => {
+  it("client profit sharing splits loss 55/45", () => {
     const trade = mockTrade({
       currentPnl: -100,
       tradeOwnership: "client_profit_sharing",
       isClientTrade: true,
     });
-    expect(calculateMyPnL(trade, -100)).toBe(-60);
-    expect(calculateClientPnL(trade, -100)).toBe(-40);
+    expect(calculateMyPnL(trade, -100)).toBeCloseTo(-55, 4);
+    expect(calculateClientPnL(trade, -100)).toBeCloseTo(-45, 4);
   });
 
   it("portfolio personal P/L excludes full client share", () => {
@@ -144,7 +186,7 @@ describe("pnl allocation", () => {
         isClientTrade: true,
       }),
     ];
-    expect(calculatePortfolioPersonalPnL(trades)).toBe(260);
+    expect(calculatePortfolioPersonalPnL(trades)).toBe(255);
   });
 
   it("client outstanding is open client share only", () => {
@@ -162,7 +204,7 @@ describe("pnl allocation", () => {
         realizedPnl: 50,
       }),
     ];
-    expect(calculateClientOutstanding(trades)).toBe(40);
+    expect(calculateClientOutstanding(trades)).toBe(45);
   });
 
   it("builds portfolio breakdown", () => {
@@ -174,9 +216,10 @@ describe("pnl allocation", () => {
         isClientTrade: true,
       }),
     ]);
-    expect(breakdown.myOpenPnl).toBe(180);
-    expect(breakdown.clientOpenPnl).toBe(40);
-    expect(breakdown.clientPnlOwed).toBe(40);
+    expect(breakdown.myOpenPnl).toBe(175);
+    expect(breakdown.clientOpenPnl).toBe(45);
+    expect(breakdown.clientPnlOwed).toBe(45);
+    expect(breakdown.totalPnl).toBe(220);
   });
 
   it("calculateTradePnlAllocation bundles all fields", () => {
@@ -187,10 +230,8 @@ describe("pnl allocation", () => {
         isClientTrade: true,
       })
     );
-    expect(alloc).toEqual({
-      totalTradePnl: 100,
-      myPnl: 60,
-      clientPnl: 40,
-    });
+    expect(alloc.totalTradePnl).toBe(100);
+    expect(alloc.myPnl).toBeCloseTo(55, 4);
+    expect(alloc.clientPnl).toBeCloseTo(45, 4);
   });
 });

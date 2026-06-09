@@ -90,6 +90,8 @@ function buildTradeFromParsed(
     current_value_updated_at: null,
     exit_debit: null,
     realized_pnl: null,
+    fees_commission: 0,
+    broker_realized_pnl: null,
     buying_power_used: calc.buyingPowerUsed,
     breakeven_put: calc.breakevenPut,
     breakeven_call: calc.breakevenCall,

@@ -1,5 +1,10 @@
 import { StatCard } from "@/components/ui/StatCard";
-import { formatCurrency, formatSignedCurrency } from "@/lib/journal/format";
+import { formatCurrency } from "@/lib/journal/format";
+import {
+  getPnLChangeType,
+  getPnLColor,
+  pnlStatProps,
+} from "@/lib/format/pnl";
 import type { JournalTrackerSummary } from "@/lib/journal/types";
 
 interface JournalSummaryCardsProps {
@@ -7,6 +12,9 @@ interface JournalSummaryCardsProps {
 }
 
 export function JournalSummaryCards({ summary }: JournalSummaryCardsProps) {
+  const netPnl = pnlStatProps(summary.myNetProfitLoss);
+  const avgLoss = pnlStatProps(summary.averageLoss);
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
       <StatCard label="Total Trades" value={String(summary.totalTrades)} />
@@ -14,21 +22,26 @@ export function JournalSummaryCards({ summary }: JournalSummaryCardsProps) {
         label="Win Rate"
         value={`${summary.winRate.toFixed(0)}%`}
         change={`${summary.closedTrades} closed`}
+        valueClassName={getPnLColor(0)}
+        changeType={getPnLChangeType(0)}
       />
       <StatCard
         label="My Net P/L"
-        value={formatSignedCurrency(summary.myNetProfitLoss)}
-        changeType={summary.myNetProfitLoss >= 0 ? "positive" : "negative"}
+        value={netPnl.value}
+        valueClassName={netPnl.valueClassName}
+        changeType={netPnl.changeType}
       />
       <StatCard
         label="Avg Win"
         value={formatCurrency(summary.averageWin)}
-        changeType="positive"
+        valueClassName={getPnLColor(summary.averageWin)}
+        changeType={getPnLChangeType(summary.averageWin)}
       />
       <StatCard
         label="Avg Loss"
-        value={formatSignedCurrency(summary.averageLoss)}
-        changeType="negative"
+        value={avgLoss.value}
+        valueClassName={avgLoss.valueClassName}
+        changeType={avgLoss.changeType}
       />
       <StatCard
         label="Profit Factor"

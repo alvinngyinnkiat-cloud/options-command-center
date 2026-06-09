@@ -1,0 +1,2 @@
+snapshot_date,portfolio_value_sgd,client_current_value_sgd,usd_cash,sgd_cash,crypto_cash_sgd,crypto_value_sgd,notes,is_manual_entry,entered_by
+2026-06-01,485000.00,120000.00,15000.00,25000.00,5000.00,45000.00,Month-end manual snapshot,true,user

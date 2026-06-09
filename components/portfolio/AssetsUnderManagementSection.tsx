@@ -1,6 +1,11 @@
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import type { CapitalPoolsBreakdown } from "@/lib/portfolio/capital-pools";
-import { formatReturnPercent, formatSGD, formatSignedSGD } from "@/lib/utils";
+import {
+  pnlPercentStatProps,
+  pnlStatProps,
+} from "@/lib/format/pnl";
+import { formatSGD } from "@/lib/utils";
 
 interface AssetsUnderManagementSectionProps {
   pools: CapitalPoolsBreakdown;
@@ -12,7 +17,8 @@ export function AssetsUnderManagementSection({
   pools,
   recordedTotalAssetsManagedSgd,
 }: AssetsUnderManagementSectionProps) {
-  const clientPnlPositive = pools.clientPnl >= 0;
+  const clientPnl = pnlStatProps(pools.clientPnl, { currency: "SGD" });
+  const clientReturn = pnlPercentStatProps(pools.clientReturnPct, 2);
   const totalAssetsManaged =
     recordedTotalAssetsManagedSgd ?? pools.totalAssetsManaged;
 
@@ -28,7 +34,7 @@ export function AssetsUnderManagementSection({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <MetricCardsGrid>
         <StatCard
           label="My Portfolio Value"
           value={formatSGD(pools.myPortfolioValue)}
@@ -49,15 +55,17 @@ export function AssetsUnderManagementSection({
         />
         <StatCard
           label="Client P/L"
-          value={formatSignedSGD(pools.clientPnl)}
+          value={clientPnl.value}
           change="Current value − initial capital"
-          changeType={clientPnlPositive ? "positive" : "negative"}
+          valueClassName={clientPnl.valueClassName}
+          changeType={clientPnl.changeType}
         />
         <StatCard
           label="Client Return %"
-          value={formatReturnPercent(pools.clientReturnPct)}
+          value={clientReturn.value}
           change="Client P/L ÷ initial capital"
-          changeType={clientPnlPositive ? "positive" : "negative"}
+          valueClassName={clientReturn.valueClassName}
+          changeType={clientReturn.changeType}
         />
         <StatCard
           label="Total Assets Managed"
@@ -65,7 +73,7 @@ export function AssetsUnderManagementSection({
           change="My portfolio + client current value (recorded daily snapshot)"
           changeType="neutral"
         />
-      </div>
+      </MetricCardsGrid>
     </section>
   );
 }

@@ -6,8 +6,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { PnlPercentValue, PnlValue } from "@/components/ui/PnlValue";
 import type { OpenPositionSummary } from "@/lib/portfolio/types";
-import { cn, formatCurrency, formatPercent } from "@/lib/utils";
+import { formatPnL, getPnLColor } from "@/lib/format/pnl";
+import { cn } from "@/lib/utils";
 import type { TradeStatus } from "@/types/database";
 
 interface OpenPositionsSummaryProps {
@@ -41,11 +43,10 @@ export function OpenPositionsSummary({ positions }: OpenPositionsSummaryProps) {
           <span
             className={cn(
               "font-mono text-sm font-semibold",
-              totalPnl >= 0 ? "text-profit" : "text-loss"
+              getPnLColor(totalPnl)
             )}
           >
-            {totalPnl >= 0 ? "+" : ""}
-            {formatCurrency(totalPnl)} my share
+            {formatPnL(totalPnl, { currency: "SGD" })} my share
           </span>
         </div>
       </CardHeader>
@@ -77,21 +78,18 @@ export function OpenPositionsSummary({ positions }: OpenPositionsSummaryProps) {
                   <td className="px-4 py-3 font-mono text-terminal-text">
                     {position.dte}
                   </td>
-                  <td
-                    className={cn(
-                      "px-4 py-3 font-mono text-right",
-                      position.pnl >= 0 ? "text-profit" : "text-loss"
-                    )}
-                  >
-                    {formatCurrency(position.pnl)}
+                  <td className="px-4 py-3 font-mono text-right">
+                    <PnlValue
+                      value={position.pnl}
+                      currency="SGD"
+                      className="inline"
+                    />
                   </td>
-                  <td
-                    className={cn(
-                      "px-4 py-3 font-mono text-right",
-                      position.pnlPercent >= 0 ? "text-profit" : "text-loss"
-                    )}
-                  >
-                    {formatPercent(position.pnlPercent)}
+                  <td className="px-4 py-3 font-mono text-right">
+                    <PnlPercentValue
+                      value={position.pnlPercent}
+                      className="inline"
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={statusVariant(position.status)}>

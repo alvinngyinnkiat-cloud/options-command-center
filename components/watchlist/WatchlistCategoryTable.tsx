@@ -8,6 +8,8 @@ import { filterAlertsByTicker } from "@/lib/alerts/summary";
 import type { EnrichedAlert } from "@/lib/alerts/types";
 import { buildTradingAnalysisViewModel } from "@/lib/watchlist/analysis-card";
 import type { WatchlistCategory } from "@/lib/watchlist/categories";
+import { getCategoryLabel } from "@/lib/watchlist/categories";
+import { resolveDisplayRank, sortRowsByWatchlistRank } from "@/lib/watchlist/watchlist-rank";
 import { formatScore } from "@/lib/watchlist/format";
 import {
   decisionClass,
@@ -19,6 +21,7 @@ import type { TradeReadinessResult } from "@/lib/trading-workflow/types";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { TradingAnalysisExpandedRow } from "./TradingAnalysisExpandedRow";
+import { WatchlistTickerSettings } from "./WatchlistTickerSettings";
 
 interface WatchlistCategoryTableProps {
   category: WatchlistCategory;
@@ -49,7 +52,7 @@ function ReviewStatusCell({
   return <span className="text-[11px] text-terminal-muted">Current</span>;
 }
 
-const COLUMN_COUNT = 7;
+const COLUMN_COUNT = 8;
 
 export function WatchlistCategoryTable({
   category,
@@ -66,12 +69,7 @@ export function WatchlistCategoryTable({
 
   const categoryRows = useMemo(
     () =>
-      [...rows]
-        .filter((row) => row.category === category)
-        .sort(
-          (a, b) =>
-            a.sortOrder - b.sortOrder || a.ticker.localeCompare(b.ticker)
-        ),
+      sortRowsByWatchlistRank(rows.filter((row) => row.category === category)),
     [rows, category]
   );
 
@@ -97,9 +95,7 @@ export function WatchlistCategoryTable({
   if (categoryRows.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-terminal-border p-8 text-center text-sm text-terminal-muted">
-        No tickers in {category}.
-        {category === "Pullbacks" &&
-          " Add tickers from Auto Watchlist or manually below."}
+        No tickers in {getCategoryLabel(category)}.
       </div>
     );
   }
@@ -111,6 +107,7 @@ export function WatchlistCategoryTable({
           <tr className="border-b border-terminal-border bg-terminal-elevated/80 text-left uppercase tracking-wider text-terminal-muted">
             <th className="w-10 px-3 py-3" />
             <th className="px-4 py-3 font-medium">Ticker</th>
+            <th className="px-4 py-3 font-medium w-16">Rank</th>
             <th className="w-10 px-3 py-3" />
             <th className="px-4 py-3 font-medium">Strategy</th>
             <th className="px-4 py-3 font-medium">Action</th>
@@ -144,6 +141,9 @@ export function WatchlistCategoryTable({
                   </td>
                   <td className="px-4 py-3 font-mono font-semibold text-terminal-text">
                     {model.ticker}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-terminal-muted">
+                    #{resolveDisplayRank(row)}
                   </td>
                   <td className="px-3 py-3">
                     <AlertWarningIcon
@@ -194,13 +194,26 @@ export function WatchlistCategoryTable({
                   )}
                 </tr>
                 {expanded && (
-                  <TradingAnalysisExpandedRow
-                    row={row}
-                    model={model}
-                    reviewStatus={reviewStatus}
-                    readiness={readinessByTicker[row.ticker]}
-                    colSpan={allowRemove ? COLUMN_COUNT + 1 : COLUMN_COUNT}
-                  />
+                  <>
+                    <TradingAnalysisExpandedRow
+                      row={row}
+                      model={model}
+                      reviewStatus={reviewStatus}
+                      readiness={readinessByTicker[row.ticker]}
+                      colSpan={allowRemove ? COLUMN_COUNT + 1 : COLUMN_COUNT}
+                    />
+                    <tr className="bg-terminal-elevated/10">
+                      <td
+                        colSpan={allowRemove ? COLUMN_COUNT + 1 : COLUMN_COUNT}
+                        className="px-4 pb-4"
+                      >
+                        <WatchlistTickerSettings
+                          row={row}
+                          onUpdated={onRowsChange}
+                        />
+                      </td>
+                    </tr>
+                  </>
                 )}
               </Fragment>
             );

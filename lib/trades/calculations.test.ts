@@ -79,7 +79,7 @@ describe("trade calculations", () => {
   it.each([
     { premium: 1.0, close: 0.24, net: 0.25 },
     { premium: 1.2, close: 0.29, net: 0.3 },
-    { premium: 1.5, close: 0.37, net: 0.38 },
+    { premium: 1.5, close: 0.365, net: 0.375 },
     { premium: 2.0, close: 0.49, net: 0.5 },
   ])(
     "calculates TP close price for premium $premium",
@@ -88,6 +88,11 @@ describe("trade calculations", () => {
       expect(calculateTakeProfitNetOfFees(premium)).toBe(net);
     }
   );
+
+  it("calculates TP at 75% with full precision for fractional premium", () => {
+    expect(calculateTakeProfitNetOfFees(1.0096)).toBeCloseTo(0.2524, 4);
+    expect(calculateTakeProfitClosePrice(1.0096)).toBeCloseTo(0.2424, 4);
+  });
 
   it("never allows TP close price below 0.01", () => {
     expect(calculateTakeProfitClosePrice(0.02)).toBe(0.01);
@@ -249,7 +254,7 @@ describe("trade calculations", () => {
     });
     expect(calc.breakevenPrice).toBe(498);
     expect(calc.breakevenSafetyDistance).toBe(12);
-    expect(calc.breakevenSafetyDistancePct).toBeCloseTo(2.41, 1);
+    expect(calc.breakevenSafetyDistancePct).toBeCloseTo(2.35, 1);
     expect(calc.breakevenSafetyStatus).toBe("Caution");
   });
 });

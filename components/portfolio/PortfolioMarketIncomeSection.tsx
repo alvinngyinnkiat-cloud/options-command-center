@@ -1,3 +1,4 @@
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import type { CapitalPoolsBreakdown } from "@/lib/portfolio/capital-pools";
 import type { PortfolioIncomeSummary } from "@/lib/ticker-positions/market-types";
@@ -19,7 +20,7 @@ export function PortfolioMarketIncomeSection({
         Market &amp; Income Overview
       </h2>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <MetricCardsGrid>
         <StatCard
           label="US Market Value"
           value={formatSGD(income.usMarketValueSgd)}
@@ -33,26 +34,32 @@ export function PortfolioMarketIncomeSection({
           changeType="neutral"
         />
         <StatCard
-          label="Crypto Value"
+          label="Coin Holdings Total"
           value={formatSGD(pools.cryptoHoldingsSgd)}
-          change="Excludes crypto cash"
+          change="All tokens incl. stablecoins"
           changeType="neutral"
         />
         <StatCard
-          label="Total Cash"
-          value={formatSGD(pools.cash.totalCashSgd)}
-          change={`Trading ${formatSGD(pools.tradingCashSgd)} + Crypto ${formatSGD(pools.cryptoCashSgd)}`}
+          label="Available Exchange Cash"
+          value={formatSGD(pools.cryptoCashSgd)}
+          change="Uninvested exchange fiat"
+          changeType="neutral"
+        />
+        <StatCard
+          label="Current Crypto Portfolio Value"
+          value={formatSGD(pools.cryptoPortfolioValueSgd)}
+          change="Coin holdings + exchange cash"
           changeType="neutral"
         />
         <StatCard
           label="My Portfolio Value"
           value={formatSGD(pools.myPortfolioValue)}
-          change="Trading + Crypto capital"
+          change="Trading Capital + Crypto Portfolio Value"
           changeType="neutral"
         />
-      </div>
+      </MetricCardsGrid>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <MetricCardsGrid>
         <StatCard
           label="Total Premium Collected"
           value={formatTickerCurrency(income.totalPremiumCollected)}
@@ -89,7 +96,7 @@ export function PortfolioMarketIncomeSection({
           change="Annual passive ÷ capital deployed"
           changeType="neutral"
         />
-      </div>
+      </MetricCardsGrid>
     </section>
   );
 }

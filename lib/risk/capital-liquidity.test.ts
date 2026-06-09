@@ -21,8 +21,8 @@ const base: CapitalLiquidityBase = {
     cashSgd: 30_000,
     cashUsdNative: 10_000,
     cashUsdSgd: 13_500,
-    cashAvailable: 43_500,
-    tradingCashSgd: 43_500,
+    cashAvailable: 10_000,
+    tradingCashSgd: 30_000,
     cryptoCashSgd: 0,
   },
   usdTradingBuyingPower: -40_000,
@@ -64,7 +64,7 @@ describe("capital liquidity", () => {
     expect(cash.cashUsdNative).toBe(18_000);
     expect(cash.cashUsdSgd).toBe(0);
     expect(cash.tradingCashSgd).toBe(12_000);
-    expect(cash.cashAvailable).toBe(12_000);
+    expect(cash.cashAvailable).toBe(18_000);
   });
 
   it("calculates USD trading buying power", () => {
@@ -106,10 +106,13 @@ describe("capital liquidity", () => {
   it("builds full capital liquidity check", () => {
     const result = buildCapitalLiquidityCheck(base, 5_000);
     expect(result.stockDeployableCapital).toBe(150_000);
-    expect(result.remainingCapitalAfterNewTrade).toBe(145_000);
-    expect(result.emergencyBuffer).toBe(28_500);
-    expect(result.tradeEligible).toBe(true);
-    expect(result.canCloseAllPositions).toBe(true);
+    expect(result.remainingCapitalAfterNewTrade).toBe(-45_000);
+    expect(result.emergencyBuffer).toBe(-5_000);
+    expect(result.afterNewTradeBuffer).toBe(-10_000);
+    expect(result.tradeEligible).toBe(false);
+    expect(result.canCloseAllPositions).toBe(false);
+    expect(result.stressTest.cashAvailable).toBe(10_000);
+    expect(result.stressTest.remainingCashAfterWorstCase).toBe(-55_000);
   });
 
   it("stress test underfunded when remaining negative", () => {

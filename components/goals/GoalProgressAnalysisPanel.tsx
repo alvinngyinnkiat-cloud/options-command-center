@@ -1,5 +1,6 @@
 "use client";
 
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import { MonthlyContributionTracker } from "@/components/goals/MonthlyContributionTracker";
 import type { GoalsDashboardData } from "@/lib/goals/types";
@@ -37,7 +38,7 @@ export function GoalProgressAnalysisPanel({ data }: GoalProgressAnalysisPanelPro
         Goal Progress Analysis
       </h3>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <MetricCardsGrid>
         <StatCard
           label="Current Value"
           value={formatSGD(goal.currentValue)}
@@ -84,7 +85,7 @@ export function GoalProgressAnalysisPanel({ data }: GoalProgressAnalysisPanelPro
           change="At current CAGR + contributions"
           changeType="neutral"
         />
-      </div>
+      </MetricCardsGrid>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <StatCard

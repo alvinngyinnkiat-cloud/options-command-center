@@ -18,7 +18,7 @@ import {
   withSupabaseQuery,
 } from "@/lib/supabase/resolve-user";
 
-async function loadPersistedStatuses(): Promise<Map<string, AlertStatus>> {
+async function loadPersistedAlertStatuses(): Promise<Map<string, import("@/lib/alerts/types").AlertStatus>> {
   if (!isSupabaseConfigured()) {
     return getMockAlertStatuses();
   }
@@ -92,6 +92,8 @@ export async function persistAlertStatus(
   );
 }
 
+export { loadPersistedAlertStatuses };
+
 export async function getAlertsCenterData(): Promise<AlertsCenterData> {
   const [watchlist, tradesData, riskData] = await Promise.all([
     getWatchlistScannerData(),
@@ -111,7 +113,7 @@ export async function getAlertsCenterData(): Promise<AlertsCenterData> {
     reviewStatus,
   });
 
-  const statuses = await loadPersistedStatuses();
+  const statuses = await loadPersistedAlertStatuses();
   const alerts = applyAlertStatuses(raw, statuses);
 
   return buildAlertsCenterData(alerts, watchlist.dataSource);

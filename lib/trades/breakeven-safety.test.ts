@@ -23,7 +23,7 @@ describe("breakeven safety", () => {
     });
     expect(result.breakevenPrice).toBe(497.5);
     expect(result.distance).toBeCloseTo(54.8, 1);
-    expect(result.distancePct).toBeCloseTo(11.02, 1);
+    expect(result.distancePct).toBeCloseTo(9.92, 1);
     expect(result.status).toBe("Safe");
   });
 
@@ -43,7 +43,7 @@ describe("breakeven safety", () => {
     });
     expect(result.breakevenPrice).toBe(521.8);
     expect(result.distance).toBeCloseTo(6.8, 1);
-    expect(result.distancePct).toBeCloseTo(1.3, 1);
+    expect(result.distancePct).toBeCloseTo(1.32, 1);
     expect(result.status).toBe("Danger");
   });
 
@@ -65,6 +65,8 @@ describe("breakeven safety", () => {
     expect(result.breakevenCallPrice).toBe(513);
     expect(result.nearestSide).toBe("Put Side");
     expect(result.distance).toBe(13);
+    expect(result.putDistancePct).toBeCloseTo(2.6, 1);
+    expect(result.callDistancePct).toBeCloseTo(2.6, 1);
     expect(result.distancePct).toBeCloseTo(2.6, 1);
     expect(result.status).toBe("Caution");
   });

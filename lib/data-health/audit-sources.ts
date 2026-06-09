@@ -1,25 +1,36 @@
-import { CATEGORY_LIMITS } from "@/lib/auto-watchlist/constants";
+import { formatRelativeAge, isStaleCalendarDays, needsWeekendReview } from "@/lib/data-health/freshness";
 import { getActiveDividendProvider } from "@/lib/dividends/dividend-data-service";
 import {
-  formatRelativeAge,
-  isStaleCalendarDays,
-  needsWeekendReview,
-} from "@/lib/data-health/freshness";
+  SG_STOCK_PRICE_LOG_SOURCE,
+  US_STOCK_ETF_PRICE_LOG_SOURCE,
+} from "@/lib/stocks-etfs/sync-holding-market-prices";
+import { formatSgtDateTime } from "@/lib/time/singapore-time";
 import type {
   DataSourceHealthReport,
   DataSourceHealthStatus,
 } from "@/lib/data-health/types";
+import { lastCompletedTradingDate } from "@/lib/market-calendar/nyse-calendar";
+import {
+  EXCLUDED_SNAPSHOT_DATE,
+  filterRealPortfolioSnapshots,
+  selectLatestSnapshot,
+} from "@/lib/portfolio/snapshot-history";
+import { getSingaporeSnapshotDate } from "@/lib/portfolio/snapshot-date";
+import { getActiveMarketDataProvider } from "@/lib/watchlist/market-data-provider";
+import {
+  countActiveWatchlistItems,
+  fetchActiveWatchlistItems,
+} from "@/lib/watchlist/active-watchlist";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
-import { getAutoWatchlistPageData } from "@/lib/supabase/queries/auto-watchlist";
-import { listDividendRecordRows } from "@/lib/supabase/queries/dividend-records";
-import { listDailyPortfolioSnapshots } from "@/lib/supabase/queries/daily-portfolio-snapshots";
+import { getLatestDailySnapshot, listDailyPortfolioSnapshots } from "@/lib/supabase/queries/daily-portfolio-snapshots";
 import { getLastLogForSource } from "@/lib/supabase/queries/data-source-logs";
+import { listDividendRecordRows } from "@/lib/supabase/queries/dividend-records";
 import { getMonthlyContributionTrackerData } from "@/lib/supabase/queries/monthly-contributions";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import { getPortfolioDashboardData } from "@/lib/supabase/queries/portfolio";
 import { getWatchlistScannerData } from "@/lib/supabase/queries/watchlist-scanner";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { createClient } from "@/lib/supabase/server";
+import { withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import type { MarketData } from "@/types/database";
 
 const REF = MOCK_REFERENCE_DATE;
@@ -33,62 +44,62 @@ function worstStatus(
   return "healthy";
 }
 
-async function fetchMarketDataRows(userId: string): Promise<MarketData[]> {
+async function fetchMarketDataRows(_userId: string): Promise<
+  Pick<MarketData, "watchlist_id" | "ticker" | "price_date">[]
+> {
   if (!isSupabaseConfigured()) return [];
 
-  const supabase = await createClient();
-  const { data: watchlist } = await supabase
-    .from("watchlist")
-    .select("id")
-    .eq("user_id", userId);
-
-  const ids = (watchlist ?? []).map((w) => (w as { id: string }).id);
+  const items = await fetchActiveWatchlistItems();
+  const ids = items.map((i) => i.id);
   if (ids.length === 0) return [];
 
-  const { data } = await supabase
-    .from("market_data")
-    .select("*")
-    .in("watchlist_id", ids);
+  const completedTarget = lastCompletedTradingDate();
 
-  return (data ?? []) as MarketData[];
+  return withSupabaseQuery(
+    async ({ supabase }) => {
+      const { data } = await supabase
+        .from("market_data")
+        .select("watchlist_id, ticker, price_date")
+        .in("watchlist_id", ids)
+        .eq("price_date", completedTarget);
+
+      return (data ?? []) as Pick<
+        MarketData,
+        "watchlist_id" | "ticker" | "price_date"
+      >[];
+    },
+    () => []
+  );
 }
 
 export async function auditMarketData(
   userId: string
 ): Promise<DataSourceHealthReport> {
   const logs = await getLastLogForSource(userId, "market_data");
-  const rows = await fetchMarketDataRows(userId);
-  const apiKey = process.env.MARKET_DATA_API_KEY;
-  const fmpKey = process.env.FMP_API_KEY;
-  const providerName = apiKey
-    ? "Market Data API (configured)"
-    : fmpKey
-      ? "FMP (OHLCV sync not wired — Supabase/manual)"
-      : "Mock / Supabase stored quotes";
+  const [rows, activeCount] = await Promise.all([
+    fetchMarketDataRows(userId),
+    countActiveWatchlistItems(),
+  ]);
+  const provider = getActiveMarketDataProvider();
+  const completedTarget = lastCompletedTradingDate();
+  const providerName = provider
+    ? "FMP daily OHLCV (completed candles)"
+    : "FMP_API_KEY not configured";
 
-  const byTicker = new Map<string, MarketData>();
+  const byTicker = new Map<string, Pick<MarketData, "watchlist_id" | "ticker" | "price_date">>();
   for (const row of rows) {
-    const existing = byTicker.get(row.ticker);
-    if (
-      !existing ||
-      row.price_date > existing.price_date
-    ) {
-      byTicker.set(row.ticker, row);
-    }
+    byTicker.set(row.ticker, row);
   }
 
-  const latestDates = [...byTicker.values()].map((r) => r.price_date);
-  const latestDate =
-    latestDates.length > 0
-      ? latestDates.sort().reverse()[0]
-      : null;
+  const activeItems = await fetchActiveWatchlistItems();
+  const staleTickers = activeItems
+    .filter((item) => !byTicker.has(item.ticker.toUpperCase()))
+    .map((item) => item.ticker);
 
-  const staleTickers = [...byTicker.entries()]
-    .filter(([, r]) => isStaleCalendarDays(r.price_date, REF, 1))
-    .map(([t]) => t);
+  const latestDate = byTicker.size > 0 ? completedTarget : null;
 
   let status: DataSourceHealthStatus = "healthy";
-  if (!apiKey && rows.length === 0) {
+  if (!provider) {
     status = "warning";
   }
   if (staleTickers.length > 0 && byTicker.size > 0) {
@@ -104,13 +115,19 @@ export async function auditMarketData(
     status,
     summary:
       byTicker.size > 0
-        ? `${byTicker.size} tickers · latest ${latestDate ?? "—"}`
-        : "No OHLCV rows in Supabase — quotes served from mock fixtures",
+        ? `${activeCount} active · ${byTicker.size} with OHLCV · latest ${latestDate ?? "—"} · target ${completedTarget}`
+        : activeCount > 0
+          ? `${activeCount} active tickers · no OHLCV rows — run Refresh Market Data`
+          : "No active watchlist tickers — add tickers on Watchlist page",
     details: [
       { label: "Provider", value: providerName },
       {
-        label: "API status",
-        value: apiKey ? "Key configured (server-side)" : "No live OHLCV sync",
+        label: "Active watchlist tickers",
+        value: String(activeCount),
+      },
+      {
+        label: "Completed candle target",
+        value: completedTarget,
       },
       { label: "Tickers updated", value: String(byTicker.size) },
       {
@@ -123,11 +140,11 @@ export async function auditMarketData(
       },
       {
         label: "Used for",
-        value: "Open, High, Low, Close, Volume, 52W range, Market Cap",
+        value: "Open, High, Low, Close — Average Price = (High + Low) / 2",
       },
       {
         label: "Fetch path",
-        value: "Server reads Supabase market_data after refresh (no client API calls)",
+        value: "FMP EOD → market_data table → Watchlist Scanner",
       },
     ],
     lastSuccessfulUpdate: logs.success?.completed_at ?? latestDate,
@@ -139,8 +156,13 @@ export async function auditTechnicalIndicators(
   userId: string
 ): Promise<DataSourceHealthReport> {
   const logs = await getLastLogForSource(userId, "technical_indicators");
-  const scanner = await getWatchlistScannerData();
+  const [activeItems, scanner] = await Promise.all([
+    fetchActiveWatchlistItems(),
+    getWatchlistScannerData(),
+  ]);
+  const activeCount = activeItems.length;
   const rows = scanner.rows;
+  const completedTarget = lastCompletedTradingDate();
 
   const missing: string[] = [];
   const invalid: string[] = [];
@@ -148,44 +170,45 @@ export async function auditTechnicalIndicators(
   for (const row of rows) {
     const t = row.technicals;
     if (
-      t.atr14 == null ||
-      t.ema20 == null ||
-      t.sma50 == null ||
-      t.sma200 == null ||
-      t.stochastic == null
+      t.atr14 <= 0 ||
+      t.ema20 <= 0 ||
+      t.sma50 <= 0 ||
+      t.sma200 <= 0 ||
+      t.stochastic < 0 ||
+      t.stochastic > 100
     ) {
-      missing.push(row.ticker);
-    }
-    if (
-      (t.stochastic != null && (t.stochastic < 0 || t.stochastic > 100)) ||
-      (t.atr14 != null && t.atr14 < 0)
-    ) {
-      invalid.push(row.ticker);
+      if (t.atr14 <= 0 || t.ema20 <= 0 || t.sma50 <= 0 || t.sma200 <= 0) {
+        missing.push(row.ticker);
+      }
+      if (t.stochastic < 0 || t.stochastic > 100 || t.atr14 < 0) {
+        invalid.push(row.ticker);
+      }
     }
   }
 
   const indicatorSource =
     scanner.dataSource === "supabase"
-      ? "Mock technical fixtures (live indicator pipeline not wired)"
-      : "Mock technical fixtures";
-
-  const stale = false;
+      ? "Computed from completed daily candles (market_data)"
+      : "Mock fixtures (development mode)";
 
   let status: DataSourceHealthStatus =
     missing.length === 0 && invalid.length === 0 ? "healthy" : "warning";
-  if (indicatorSource.includes("Mock")) status = "warning";
-  if (stale) status = worstStatus(status, "warning");
+  if (scanner.dataSource === "mock") status = "warning";
 
   return {
     id: "technical_indicators",
     title: "Technical Indicator Data",
     status,
-    summary: `${rows.length} watchlist tickers scored · ${indicatorSource}`,
+    summary: `${activeCount} active watchlist tickers · ${indicatorSource}`,
     details: [
       { label: "Source", value: indicatorSource },
       {
-        label: "Last updated",
-        value: "On scanner load (mock indicator fixtures)",
+        label: "Active watchlist tickers",
+        value: String(activeCount),
+      },
+      {
+        label: "Indicator date target",
+        value: completedTarget,
       },
       {
         label: "Missing indicators",
@@ -201,71 +224,10 @@ export async function auditTechnicalIndicators(
       },
       {
         label: "Update path",
-        value: "Refresh Technical Indicators recomputes scanner scores server-side",
+        value: "Refresh → FMP candles → compute → technical_indicators → scanner scores",
       },
     ],
     lastSuccessfulUpdate: logs.success?.completed_at ?? null,
-    lastFailedUpdate: logs.failed?.completed_at ?? null,
-  };
-}
-
-export async function auditAutoWatchlist(
-  userId: string
-): Promise<DataSourceHealthReport> {
-  const logs = await getLastLogForSource(userId, "auto_watchlist");
-  const data = await getAutoWatchlistPageData();
-
-  const categoryStats = data.categories.map((c) => {
-    const requested = CATEGORY_LIMITS[c.id];
-    const returned = c.entries.length;
-    const qualified = returned;
-    const reason =
-      returned < requested
-        ? `Only ${qualified} qualified (requested ${requested})`
-        : "Full quota";
-    return {
-      name: c.title,
-      requested,
-      qualified,
-      returned,
-      reason,
-    };
-  });
-
-  const stale = isStaleCalendarDays(data.generatedAt, REF, 7);
-  let status: DataSourceHealthStatus = stale ? "warning" : "healthy";
-  if (data.marketDataSource === "mock") {
-    status = worstStatus(status, "warning");
-  }
-
-  return {
-    id: "auto_watchlist",
-    title: "Auto Watchlist Data",
-    status,
-    summary: data.generatedAt
-      ? `Generated ${formatRelativeAge(data.generatedAt, REF)}`
-      : "Not generated yet",
-    details: [
-      {
-        label: "Market data source",
-        value: data.marketDataSource === "api" ? "API" : "Mock provider",
-      },
-      {
-        label: "Last generated",
-        value: data.generatedAt ?? "Never",
-      },
-      ...categoryStats.flatMap((s) => [
-        {
-          label: `${s.name} requested`,
-          value: String(s.requested),
-        },
-        {
-          label: `${s.name} returned`,
-          value: `${s.returned} — ${s.reason}`,
-        },
-      ]),
-    ],
-    lastSuccessfulUpdate: logs.success?.completed_at ?? data.generatedAt,
     lastFailedUpdate: logs.failed?.completed_at ?? null,
   };
 }
@@ -330,7 +292,12 @@ export async function auditManualData(
 ): Promise<DataSourceHealthReport> {
   const scanner = await getWatchlistScannerData();
   const portfolio = await getPortfolioDashboardData();
-  const snapshots = await listDailyPortfolioSnapshots(userId);
+  const asOfDate = getSingaporeSnapshotDate();
+  const rawSnapshots = await listDailyPortfolioSnapshots(userId);
+  const snapshots = filterRealPortfolioSnapshots(rawSnapshots);
+  const latestSnapshot =
+    (await getLatestDailySnapshot(userId)) ??
+    selectLatestSnapshot(snapshots, asOfDate);
   const contributions = await getMonthlyContributionTrackerData();
 
   const srRows = scanner.rows.map((r) => r.supportResistance);
@@ -348,9 +315,19 @@ export async function auditManualData(
     )
     .map((r) => r.ticker);
 
-  const latestSnapshot = snapshots[snapshots.length - 1];
   const noRecordToday =
-    !latestSnapshot || latestSnapshot.snapshotDate !== REF;
+    !latestSnapshot || latestSnapshot.snapshotDate !== asOfDate;
+
+  const overrideRaw = portfolio.override?.overrideUpdatedAt?.slice(0, 10) ?? null;
+  const safeOverrideDate =
+    overrideRaw && overrideRaw !== EXCLUDED_SNAPSHOT_DATE
+      ? overrideRaw
+      : null;
+
+  const lastManualSuccess =
+    latestSnapshot?.snapshotDate ??
+    safeOverrideDate ??
+    null;
 
   const openTrades = (await getOptionsTradesData()).trades.filter(
     (t) =>
@@ -403,7 +380,7 @@ export async function auditManualData(
       {
         label: "Daily portfolio record",
         value: noRecordToday
-          ? `No record for ${REF}`
+          ? `No record for ${asOfDate}`
           : `Recorded ${latestSnapshot!.snapshotDate}`,
       },
       {
@@ -417,8 +394,7 @@ export async function auditManualData(
           : "None",
       },
     ],
-    lastSuccessfulUpdate:
-      latestSnapshot?.snapshotDate ?? portfolio.override?.overrideUpdatedAt ?? null,
+    lastSuccessfulUpdate: lastManualSuccess,
     lastFailedUpdate: null,
   };
 }
@@ -500,13 +476,150 @@ export async function auditOptionsTrades(
   };
 }
 
+export async function auditCryptoManual(
+  userId: string
+): Promise<DataSourceHealthReport> {
+  void userId;
+  return {
+    id: "crypto_manual",
+    title: "Crypto Tracker",
+    status: "healthy",
+    summary: "Manual update — no live price feed",
+    details: [
+      { label: "Update mode", value: "Manual Update" },
+      {
+        label: "Price feed",
+        value: "Disabled — user-entered SGD values only",
+      },
+      {
+        label: "Stale price check",
+        value: "Not applicable — crypto prices are not auto-fetched",
+      },
+      {
+        label: "P/L formula",
+        value: "Current Crypto Value SGD − Total Contributions / Cost SGD",
+      },
+      {
+        label: "Trading Capital",
+        value: "Crypto value and crypto cash excluded",
+      },
+    ],
+    lastSuccessfulUpdate: null,
+    lastFailedUpdate: null,
+  };
+}
+
+export async function auditUsStockEtfPrices(
+  userId: string
+): Promise<DataSourceHealthReport> {
+  const logs = await getLastLogForSource(userId, US_STOCK_ETF_PRICE_LOG_SOURCE);
+  const last = logs.success ?? logs.failed;
+  const failedMatch = last?.error_message?.match(/Failed: (.+)/);
+  const failedTickers = failedMatch
+    ? failedMatch[1]!.split(", ").filter(Boolean)
+    : [];
+
+  let status: DataSourceHealthStatus = "healthy";
+  if (!last) status = "warning";
+  else if (last.status === "failed") status = "failed";
+  else if (last.status === "partial") status = "warning";
+
+  return {
+    id: "us_stock_etf_prices",
+    title: "US Stock/ETF Price Refresh",
+    status,
+    summary: last
+      ? `Last refresh ${formatRelativeAge(last.completed_at?.slice(0, 10) ?? null, REF)} · ${last.records_updated} updated`
+      : "No US price refresh logs yet — scheduled 06:00 SGT daily",
+    details: [
+      {
+        label: "Schedule",
+        value: "06:00 SGT daily (completed US daily candle)",
+      },
+      {
+        label: "Last refresh",
+        value: last?.completed_at
+          ? formatSgtDateTime(last.completed_at)
+          : "Never",
+      },
+      {
+        label: "Rows updated",
+        value: last ? String(last.records_updated) : "—",
+      },
+      {
+        label: "Failed tickers",
+        value: failedTickers.length ? failedTickers.join(", ") : "None",
+      },
+      {
+        label: "Formula",
+        value: "Current Value = Shares × latest completed US close",
+      },
+    ],
+    lastSuccessfulUpdate: logs.success?.completed_at ?? null,
+    lastFailedUpdate: logs.failed?.completed_at ?? null,
+  };
+}
+
+export async function auditSgStockPrices(
+  userId: string
+): Promise<DataSourceHealthReport> {
+  const logs = await getLastLogForSource(userId, SG_STOCK_PRICE_LOG_SOURCE);
+  const last = logs.success ?? logs.failed;
+  const failedMatch = last?.error_message?.match(/Failed: (.+)/);
+  const failedTickers = failedMatch
+    ? failedMatch[1]!.split(", ").filter(Boolean)
+    : [];
+
+  let status: DataSourceHealthStatus = "healthy";
+  if (!last) status = "warning";
+  else if (last.status === "failed") status = "failed";
+  else if (last.status === "partial") status = "warning";
+
+  return {
+    id: "sg_stock_prices",
+    title: "SG Stock Price Refresh",
+    status,
+    summary: last
+      ? `Last refresh ${formatRelativeAge(last.completed_at?.slice(0, 10) ?? null, REF)} · ${last.records_updated} updated`
+      : "No SG price refresh logs yet — scheduled 17:30 SGT daily",
+    details: [
+      {
+        label: "Schedule",
+        value: "17:30 SGT daily (completed SGX daily candle)",
+      },
+      {
+        label: "Last refresh",
+        value: last?.completed_at
+          ? formatSgtDateTime(last.completed_at)
+          : "Never",
+      },
+      {
+        label: "Rows updated",
+        value: last ? String(last.records_updated) : "—",
+      },
+      {
+        label: "Failed tickers",
+        value: failedTickers.length ? failedTickers.join(", ") : "None",
+      },
+      {
+        label: "Yahoo symbol format",
+        value: "DBS→D05.SI, C38U→C38U.SI, ES3→ES3.SI",
+      },
+    ],
+    lastSuccessfulUpdate: logs.success?.completed_at ?? null,
+    lastFailedUpdate: logs.failed?.completed_at ?? null,
+  };
+}
+
 export async function runAllAudits(userId: string): Promise<DataSourceHealthReport[]> {
   return Promise.all([
     auditMarketData(userId),
     auditTechnicalIndicators(userId),
-    auditAutoWatchlist(userId),
+    auditUsStockEtfPrices(userId),
+    auditSgStockPrices(userId),
     auditDividendData(userId),
     auditManualData(userId),
     auditOptionsTrades(userId),
+    auditCryptoManual(userId),
   ]);
 }

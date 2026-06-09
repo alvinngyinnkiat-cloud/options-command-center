@@ -14,7 +14,14 @@ import type {
   SupportResistanceInput,
   WatchlistScannerRow,
 } from "@/lib/watchlist/types";
-import type { WatchlistCategory } from "@/lib/watchlist/categories";
+import {
+  resolveDefaultPriorityRank,
+  resolveWatchlistCategory,
+  type WatchlistCategory,
+} from "@/lib/watchlist/categories";
+import { coerceWatchlistCategory } from "@/lib/watchlist/normalize-watchlist-categories";
+import { ensureDefaultWatchlistItems } from "@/lib/watchlist/ensure-default-watchlist";
+import { refreshWatchlistScannerForUser } from "@/lib/watchlist/refresh-watchlist-scanner";
 import { getWatchlistScannerData } from "@/lib/supabase/queries/watchlist-scanner";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import { requireUserId } from "@/lib/supabase/resolve-user";
@@ -27,15 +34,61 @@ export type WatchlistActionResult =
   | { success: false; error: string };
 
 async function refreshRows(): Promise<WatchlistScannerRow[]> {
-  const data = await getWatchlistScannerData();
+  const data = await getWatchlistScannerData({ persistScores: true });
   return data.rows;
+}
+
+export type RefreshWatchlistScannerResult =
+  | {
+      success: true;
+      rows: WatchlistScannerRow[];
+      dataSource: "supabase" | "mock";
+      tickersProcessed: number;
+      tickersFailed: number;
+    }
+  | { success: false; error: string };
+
+/** Manual refresh — syncs market data, indicators, and scores from Yahoo/FMP. */
+export async function refreshWatchlistScannerAction(): Promise<RefreshWatchlistScannerResult> {
+  try {
+    if (!isSupabaseConfigured()) {
+      const data = await getWatchlistScannerData({ persistScores: false });
+      return {
+        success: true,
+        rows: data.rows,
+        dataSource: data.dataSource,
+        tickersProcessed: data.rows.length,
+        tickersFailed: 0,
+      };
+    }
+
+    const userId = await requireUserId();
+    await ensureDefaultWatchlistItems();
+    const { sync, scanner } = await refreshWatchlistScannerForUser(userId);
+    revalidatePath("/watchlist");
+    revalidatePath("/data-health");
+
+    return {
+      success: true,
+      rows: scanner.rows,
+      dataSource: scanner.dataSource,
+      tickersProcessed: sync.tickersProcessed,
+      tickersFailed: sync.tickersFailed,
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Watchlist refresh failed.",
+    };
+  }
 }
 
 export async function addWatchlistTicker(
   ticker: string,
-  category: WatchlistCategory = "Pullbacks"
+  category: WatchlistCategory | string = "PULLBACK"
 ): Promise<WatchlistActionResult> {
   const normalized = normalizeTicker(ticker);
+  const categoryCode = coerceWatchlistCategory(category);
 
   if (!isValidTicker(normalized)) {
     return { success: false, error: "Invalid ticker symbol." };
@@ -49,7 +102,7 @@ export async function addWatchlistTicker(
     const next = attachScoresToRows(
       sortScannerRows([
         ...current,
-        buildMockScannerRow(normalized, current.length, undefined, category),
+        buildMockScannerRow(normalized, current.length, undefined, categoryCode),
       ])
     );
     return { success: true, rows: next, dataSource: "mock" };
@@ -79,6 +132,7 @@ export async function addWatchlistTicker(
       .maybeSingle();
 
     const sortOrder = maxOrder ? (maxOrder as { sort_order: number }).sort_order + 1 : 0;
+    const priorityRank = resolveDefaultPriorityRank(normalized, categoryCode);
 
     const insertPayload: WatchlistItem = {
       id: crypto.randomUUID(),
@@ -86,8 +140,9 @@ export async function addWatchlistTicker(
       ticker: normalized,
       display_name: null,
       sort_order: sortOrder,
+      priority_rank: priorityRank === 999 ? sortOrder + 1 : priorityRank,
       is_active: true,
-      watchlist_category: category,
+      watchlist_category: categoryCode,
       notes: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -236,6 +291,65 @@ export async function saveSupportResistance(
     return {
       success: false,
       error: e instanceof Error ? e.message : "Failed to save support/resistance.",
+    };
+  }
+}
+
+export async function updateWatchlistItem(input: {
+  watchlistId: string;
+  category?: WatchlistCategory;
+  priorityRank?: number;
+  notes?: string | null;
+  isActive?: boolean;
+}): Promise<WatchlistActionResult> {
+  if (!isSupabaseConfigured()) {
+    const current = buildMockScannerRows();
+    const next = attachScoresToRows(
+      current.map((row) => {
+        if (row.watchlistId !== input.watchlistId) return row;
+        return {
+          ...row,
+          category: input.category ?? row.category,
+          priorityRank: input.priorityRank ?? row.priorityRank,
+          notes: input.notes !== undefined ? input.notes : row.notes,
+          isActive: input.isActive ?? row.isActive,
+        };
+      })
+    );
+    return { success: true, rows: next, dataSource: "mock" };
+  }
+
+  try {
+    const userId = await requireUserId();
+    const supabase = await createClient();
+
+    const patch: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (input.category != null) {
+      patch.watchlist_category = coerceWatchlistCategory(input.category);
+    }
+    if (input.priorityRank != null) patch.priority_rank = input.priorityRank;
+    if (input.notes !== undefined) patch.notes = input.notes;
+    if (input.isActive != null) patch.is_active = input.isActive;
+
+    const { error } = await supabase
+      .from("watchlist")
+      .update(patch as never)
+      .eq("id", input.watchlistId)
+      .eq("user_id", userId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/watchlist");
+    const rows = await refreshRows();
+    return { success: true, rows, dataSource: "supabase" };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Failed to update watchlist item.",
     };
   }
 }

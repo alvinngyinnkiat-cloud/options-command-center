@@ -115,7 +115,7 @@ export function CryptoFormModal({
 
         <form onSubmit={handleSubmit} className="space-y-4 p-4">
           <p className="text-xs text-terminal-muted">
-            Track total SGD invested — no coin quantity or buy price required.
+            Manual SGD values only — no coin quantity or live coin price required.
           </p>
 
           <div className="grid grid-cols-2 gap-3">
@@ -154,7 +154,7 @@ export function CryptoFormModal({
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1">
               <span className="text-[10px] uppercase text-terminal-muted">
-                Total SGD Invested
+                Total Contributions / Cost (SGD)
               </span>
               <input
                 type="number"

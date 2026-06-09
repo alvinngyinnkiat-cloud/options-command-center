@@ -214,7 +214,9 @@ export function buildMockScannerRow(
   ticker: string,
   sortOrder: number,
   watchlistId?: string,
-  category?: WatchlistCategory
+  category?: WatchlistCategory,
+  priorityRank?: number,
+  notes: string | null = null
 ): WatchlistScannerRow {
   const id = watchlistId ?? `mock-${ticker}`;
   const profile = MOCK_PROFILES[ticker] ?? {
@@ -255,7 +257,11 @@ export function buildMockScannerRow(
       previousMarket,
       profile.technicals,
       profile.previousTechnicals,
-      sr
+      sr,
+      category,
+      null,
+      priorityRank ?? sortOrder,
+      notes
     ),
     category: category ?? resolveWatchlistCategory(ticker),
   };
@@ -263,7 +269,13 @@ export function buildMockScannerRow(
 
 export function buildDefaultCategoryScannerRows(): WatchlistScannerRow[] {
   return buildDefaultWatchlistSeeds().map((seed) =>
-    buildMockScannerRow(seed.ticker, seed.sortOrder, undefined, seed.category)
+    buildMockScannerRow(
+      seed.ticker,
+      seed.sortOrder,
+      undefined,
+      seed.category,
+      seed.priorityRank
+    )
   );
 }
 

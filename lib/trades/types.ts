@@ -1,4 +1,5 @@
 import type { DataSource } from "@/lib/portfolio/types";
+import type { UnderlyingPriceSource } from "@/lib/trades/underlying-price-types";
 import type { TradePnlAllocation } from "./pnl-allocation";
 import type { BreakevenNearestSide, BreakevenSafetyStatus } from "./breakeven-safety";
 import type {
@@ -14,6 +15,9 @@ export type TradeTrackerStatus = TradeStatus | "managed" | "rolled";
 export interface TradeMarketContext {
   underlyingAveragePrice?: number | null;
   underlyingCurrentPrice?: number | null;
+  underlyingPriceSource?: UnderlyingPriceSource;
+  underlyingPriceUpdatedAt?: string | null;
+  underlyingPriceUsable?: boolean;
   manualSupport?: number | null;
   manualResistance?: number | null;
   atr14?: number | null;
@@ -41,6 +45,10 @@ export interface TradeFormInput {
   premiumPerContract: number;
   currentValue: number;
   exitDebit: number | null;
+  /** Round-trip fees/commission (USD) for closed trades */
+  feesCommission: number;
+  /** Manual broker realized P/L override (USD) */
+  brokerRealizedPnl: number | null;
   shortStrikePut: number | null;
   longStrikePut: number | null;
   shortStrikeCall: number | null;
@@ -90,6 +98,8 @@ export interface TradeCalculations {
   breakevenCallPrice: number | null;
   breakevenSafetyDistance: number | null;
   breakevenSafetyDistancePct: number | null;
+  breakevenPutDistancePct: number | null;
+  breakevenCallDistancePct: number | null;
   breakevenNearestSide: BreakevenNearestSide | null;
   breakevenSafetyStatus: BreakevenSafetyStatus | null;
   takeProfitPrice: number;
@@ -101,6 +111,9 @@ export interface TradeCalculations {
   currentOptionValuePerContract: number;
   currentCloseCost: number;
   currentPnl: number;
+  /** Premium − closing debit − fees (before broker override) */
+  calculatedRealizedPnl: number | null;
+  /** Final closed P/L — broker override or calculated */
   realizedPnl: number | null;
   takeProfitReached: boolean;
   stopLossWarning: boolean;
@@ -113,8 +126,8 @@ export interface TradeCalculations {
 }
 
 export interface UpdateCurrentValueInput {
-  currentOptionValue: number;
-  source: Extract<CurrentValueSource, "manual" | "broker">;
+  currentOptionValue: number | null;
+  updatedDate?: string | null;
   notes?: string | null;
 }
 
@@ -138,13 +151,18 @@ export interface EnrichedTrade {
   premiumPerContract: number;
   /** Total close cost USD — used by risk dashboard */
   currentValue: number;
-  currentOptionValue: number;
+  currentOptionValue: number | null;
   manualCurrentOptionValue: number | null;
   systemCurrentOptionValue: number;
   currentValueSource: CurrentValueSource;
   currentValueUpdatedAt: string | null;
   valueDifference: number | null;
+  /** Total closing cost USD (exit_debit column) */
   exitDebit: number | null;
+  /** Per-contract closing debit derived from exitDebit total */
+  exitDebitPerContract: number | null;
+  feesCommission: number;
+  brokerRealizedPnl: number | null;
   strikes: TradeStrikeInput;
   strikesDisplay: string;
   takeProfitTargetPct: number;
@@ -157,6 +175,10 @@ export interface EnrichedTrade {
   underlyingAveragePrice: number | null;
   /** Display-only — used for breakeven safety distance, not P/L */
   underlyingCurrentPrice: number | null;
+  underlyingPriceSource: UnderlyingPriceSource;
+  underlyingPriceUpdatedAt: string | null;
+  /** When false, breakeven % / status must not use stale or mock prices */
+  underlyingPriceUsable: boolean;
   manualSupport: number | null;
   manualResistance: number | null;
   atr14: number | null;
@@ -182,22 +204,37 @@ export interface EnrichedTrade {
 export type TradeTrackerViewMode = "summary" | "card" | "detailed";
 
 export interface TradeTrackerSummary {
+  totalPnl: number;
+  totalRealizedPnl: number;
+  totalUnrealizedPnl: number;
+  clientPnl: number;
+  clientRealizedPnl: number;
+  clientUnrealizedPnl: number;
+  myPnl: number;
+  myRealizedPnl: number;
+  myUnrealizedPnl: number;
+  totalTrades: number;
   openTrades: number;
   closedTrades: number;
   totalOpenRisk: number;
-  myOpenRisk: number;
-  clientOpenRisk: number;
   totalPremiumCollected: number;
-  /** @deprecated Use myCurrentPnl — gross open P/L kept for reference */
-  currentPnl: number;
-  /** @deprecated Use myRealizedPnl */
-  realizedPnl: number;
-  myCurrentPnl: number;
-  myRealizedPnl: number;
-  clientUnrealizedPnl: number;
-  clientRealizedPnl: number;
-  clientPnlOwed: number;
+  profitTradesCount: number;
+  averageProfit: number;
+  losingTradesCount: number;
+  averageLoss: number;
   winRate: number;
+  /** @deprecated Use totalUnrealizedPnl */
+  currentPnl: number;
+  /** @deprecated Use totalRealizedPnl */
+  realizedPnl: number;
+  /** @deprecated Use myUnrealizedPnl */
+  myCurrentPnl: number;
+  /** @deprecated Use clientUnrealizedPnl */
+  clientPnlOwed: number;
+  /** @deprecated */
+  myOpenRisk: number;
+  /** @deprecated */
+  clientOpenRisk: number;
 }
 
 export interface TradeTrackerData {
@@ -209,3 +246,7 @@ export interface TradeTrackerData {
 export type TradeActionResult =
   | { success: true; data: TradeTrackerData }
   | { success: false; error: string };
+
+export type UpdateCurrentValueResult =
+  | { ok: true; trade: EnrichedTrade }
+  | { ok: false; error: string };

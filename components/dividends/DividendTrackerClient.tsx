@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import {
   deleteDividend,
@@ -46,7 +47,7 @@ function RecordTable({
       <h3 className="px-4 pt-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
         {title}
       </h3>
-      <table className="w-full min-w-[900px] text-xs mt-2">
+      <table className="w-full min-w-[960px] text-xs mt-2">
         <thead className="bg-terminal-elevated/40 border-y border-terminal-border">
           <tr className="text-terminal-muted">
             {[
@@ -177,7 +178,7 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <MetricCardsGrid>
         <StatCard
           label="YTD Net Dividends"
           value={formatSGD(data.summary.totalNetDividendsYtd)}
@@ -202,7 +203,7 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
           change="Estimated payments"
           changeType="neutral"
         />
-      </div>
+      </MetricCardsGrid>
 
       <RecordTable
         title="Upcoming Dividends"

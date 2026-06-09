@@ -75,8 +75,10 @@ export interface SgStockRow {
 
 export interface SgStockTabSummary {
   totalMarketValue: number;
-  totalPnl: number;
+  totalCapital: number;
   totalDividendIncome: number;
+  totalPnl: number;
+  totalReturnPct: number;
 }
 
 export interface StockEtfTabData {

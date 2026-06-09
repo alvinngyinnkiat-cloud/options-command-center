@@ -4,7 +4,6 @@ import {
   Briefcase,
   LineChart,
   Radar,
-  ScanSearch,
   Shield,
   TrendingUp,
   type LucideIcon,
@@ -25,13 +24,6 @@ export const QUICK_NAV_ITEMS: QuickNavItem[] = [
     icon: Radar,
     description: "Manual watchlist",
     metric: "24 symbols",
-  },
-  {
-    label: "Auto Watchlist",
-    href: "/auto-watchlist",
-    icon: ScanSearch,
-    description: "Cap & perf screener",
-    metric: "4 screens",
   },
   {
     label: "Open Trades",

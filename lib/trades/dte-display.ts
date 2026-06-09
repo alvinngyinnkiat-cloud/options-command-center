@@ -1,3 +1,4 @@
+import { calculateDte } from "./calculations";
 import {
   DTE_COMFORT_THRESHOLD,
   DTE_URGENT_THRESHOLD,
@@ -20,6 +21,20 @@ export function getDteReviewLabel(dte: number): string | null {
 
 export function formatDteLabel(dte: number): string {
   return `DTE ${dte}`;
+}
+
+export const MISSING_DTE_LABEL = "Missing DTE";
+
+export function resolveTradeDte(
+  expirationDate: string | null | undefined
+): number | null {
+  if (!expirationDate?.trim()) return null;
+  try {
+    const dte = calculateDte(expirationDate);
+    return Number.isFinite(dte) ? dte : null;
+  } catch {
+    return null;
+  }
 }
 
 export function formatBreakevenDistance(pct: number | null): string {

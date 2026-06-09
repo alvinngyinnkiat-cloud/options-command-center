@@ -1,0 +1,3 @@
+ticker,asset_type,currency,sector,market,total_invested_native,current_value_native,fx_rate_to_sgd,total_invested_sgd,current_value_sgd,shares_held,average_cost,notes
+VOO,etf,USD,Technology,US,12000.00,13500.00,1.350000,16200.00,18225.00,25.0000,480.0000,Core US ETF
+AAPL,stock,USD,Technology,US,8000.00,9200.00,1.350000,10800.00,12420.00,50.0000,160.0000,

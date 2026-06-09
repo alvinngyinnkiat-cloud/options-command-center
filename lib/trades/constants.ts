@@ -37,6 +37,13 @@ export const DEFAULT_STOP_LOSS_PCT = 175;
 export const TP_REMAINING_PCT = 0.25;
 /** Estimated per-contract transaction fee when closing at take profit */
 export const TP_CLOSE_FEE = 0.01;
+
+/** Fixed profit-sharing split for SHARED (client) trades on the trade tracker. */
+export const SHARED_MY_SHARE_PCT = 55;
+export const SHARED_CLIENT_SHARE_PCT = 45;
+
+/** P/L display precision on the Options Trade Tracker dashboard. */
+export const TRADE_TRACKER_PNL_DECIMALS = 2;
 export const DTE_WARNING_THRESHOLD = 14;
 export const DTE_COMFORT_THRESHOLD = 21;
 export const DTE_URGENT_THRESHOLD = 7;

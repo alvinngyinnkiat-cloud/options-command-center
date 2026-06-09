@@ -1,6 +1,5 @@
 "use server";
 
-import { getPortfolioDashboardData } from "@/lib/supabase/queries/portfolio";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
   getPortfolioHistoryData,
@@ -9,6 +8,7 @@ import {
   type DailyPortfolioRecordFormInput,
 } from "@/lib/supabase/queries/daily-portfolio-snapshots";
 import type { PortfolioHistoryData } from "@/lib/portfolio/daily-snapshot-types";
+import { getEnrichedPortfolioMetrics } from "@/lib/portfolio/enrich-capital-pools";
 import { requireUserId } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
@@ -17,14 +17,15 @@ export type DailyPortfolioRecordActionResult =
   | { success: false; error: string };
 
 async function reloadHistory(userId: string): Promise<PortfolioHistoryData> {
-  const [metrics, tradesData] = await Promise.all([
-    getPortfolioDashboardData(),
+  const [{ metrics, capitalPools }, tradesData] = await Promise.all([
+    getEnrichedPortfolioMetrics(),
     getOptionsTradesData(),
   ]);
   return getPortfolioHistoryData({
     userId,
     metrics,
     trades: tradesData.trades,
+    capitalPools,
   });
 }
 
@@ -38,8 +39,8 @@ export async function createDailyPortfolioRecord(
 ): Promise<DailyPortfolioRecordActionResult> {
   try {
     const userId = await requireUserId();
-    const [metrics, tradesData] = await Promise.all([
-      getPortfolioDashboardData(),
+    const [{ metrics }, tradesData] = await Promise.all([
+      getEnrichedPortfolioMetrics(),
       getOptionsTradesData(),
     ]);
 
@@ -67,8 +68,8 @@ export async function updateDailyPortfolioRecord(
 ): Promise<DailyPortfolioRecordActionResult> {
   try {
     const userId = await requireUserId();
-    const [metrics, tradesData] = await Promise.all([
-      getPortfolioDashboardData(),
+    const [{ metrics }, tradesData] = await Promise.all([
+      getEnrichedPortfolioMetrics(),
       getOptionsTradesData(),
     ]);
 

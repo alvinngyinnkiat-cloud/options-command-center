@@ -4,6 +4,10 @@ import {
   resolveWatchlistCategory,
   type WatchlistCategory,
 } from "./categories";
+import {
+  compareWatchlistRank,
+  resolveCategoryDisplayRank,
+} from "@/lib/watchlist/watchlist-rank";
 import { buildTechnicalComparisons } from "./technical-comparison";
 import type {
   CalculatedDistanceFields,
@@ -83,13 +87,20 @@ export function enrichScannerRow(
   technicals: TechnicalIndicatorFields,
   previousTechnicals: PreviousTechnicalIndicatorFields,
   supportResistance: WatchlistScannerRow["supportResistance"],
-  category?: WatchlistCategory
+  category?: WatchlistCategory,
+  weeklySupportResistance: WatchlistScannerRow["weeklySupportResistance"] = null,
+  priorityRank = sortOrder,
+  notes: string | null = null,
+  isActive = true
 ): WatchlistScannerRow {
   return {
     watchlistId,
     ticker,
     category: category ?? resolveWatchlistCategory(ticker),
     sortOrder,
+    priorityRank,
+    notes,
+    isActive,
     market,
     previousMarket,
     averagePriceComparison: buildAveragePriceComparison(
@@ -111,6 +122,7 @@ export function enrichScannerRow(
       supportResistance.resistance1
     ),
     supportResistance,
+    weeklySupportResistance,
   };
 }
 
@@ -130,7 +142,10 @@ export function refreshRowDerivedFields(
 }
 
 export function sortScannerRows(rows: WatchlistScannerRow[]): WatchlistScannerRow[] {
-  return [...rows].sort((a, b) => a.sortOrder - b.sortOrder || a.ticker.localeCompare(b.ticker));
+  return [...rows].sort(
+    (a, b) =>
+      a.category.localeCompare(b.category) || compareWatchlistRank(a, b)
+  );
 }
 
 export function normalizeTicker(ticker: string): string {

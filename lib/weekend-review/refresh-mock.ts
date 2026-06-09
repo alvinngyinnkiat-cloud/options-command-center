@@ -58,7 +58,9 @@ export function refreshMockScannerRows(
       previousMarket,
       technicals,
       previousTechnicals,
-      row.supportResistance
+      row.supportResistance,
+      row.category,
+      row.weeklySupportResistance
     );
   });
 }

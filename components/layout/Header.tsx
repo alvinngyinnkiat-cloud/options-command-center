@@ -3,8 +3,8 @@
 import { Bell, Menu, Search } from "lucide-react";
 import { MOCK_MARKET_STATUS } from "@/lib/mock/dashboard";
 import { cn, formatPercent } from "@/lib/utils";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { LiveMarketClock } from "@/components/layout/LiveMarketClock";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -14,7 +14,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const spyPositive = MOCK_MARKET_STATUS.spyChange >= 0;
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-terminal-border bg-terminal-bg/95 backdrop-blur-sm px-4">
+    <header className="sticky top-0 z-30 flex min-h-14 items-center gap-4 border-b border-terminal-border bg-terminal-bg/95 backdrop-blur-sm px-4 py-2">
       <Button
         variant="ghost"
         size="sm"
@@ -25,10 +25,9 @@ export function Header({ onMenuClick }: HeaderProps) {
         <Menu className="h-5 w-5" />
       </Button>
 
-      <div className="hidden sm:flex items-center gap-3 text-xs font-mono">
-        <Badge variant="success">{MOCK_MARKET_STATUS.session}</Badge>
-        <span className="text-terminal-muted">{MOCK_MARKET_STATUS.time}</span>
-        <span className="text-terminal-border">|</span>
+      <LiveMarketClock />
+
+      <div className="hidden md:flex items-center gap-3 text-xs font-mono ml-1 pl-3 border-l border-terminal-border">
         <span className="text-terminal-muted">
           VIX{" "}
           <span className="text-terminal-text">{MOCK_MARKET_STATUS.vix}</span>

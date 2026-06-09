@@ -1,29 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   closeOptionsTrade,
   deleteOptionsTrade,
   markTradeManaged,
   markTradeRolled,
+  refreshUnderlyingPrices,
 } from "@/app/actions/trades";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
   formatBreakevenDistanceDollars,
+  formatBreakevenDistancePctDisplay,
   formatBreakevenSafetyPct,
+  formatUnderlyingPriceDisplay,
   getBreakevenSafetyTone,
+  UNDERLYING_PRICE_UNAVAILABLE,
 } from "@/lib/trades/breakeven-safety";
 import {
+  formatUnderlyingPriceSourceLabel,
+} from "@/lib/trades/underlying-price-types";
+import {
   formatCurrency,
+  formatCurrentOptionValueDisplay,
   formatOptionValuePerContract,
   formatPercent,
   formatSignedCurrency,
-  formatValueSourceLabel,
+  OPTION_PRICE_INPUT_STEP,
+  CURRENT_OPTION_VALUE_NOT_UPDATED,
 } from "@/lib/trades/format";
+import { getPnLColor } from "@/lib/format/pnl";
 import type { EnrichedTrade } from "@/lib/trades/types";
+import { buildCloseTradePreviewWithFees } from "@/lib/trades/realized-pnl";
 import { cn } from "@/lib/utils";
-import { BookOpen, X } from "lucide-react";
+import { BookOpen, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { TakeProfitClosePriceCard } from "./TakeProfitClosePriceCard";
 
@@ -33,6 +44,7 @@ interface TradeDetailDrawerProps {
   onEdit: () => void;
   onEditValue: () => void;
   onRefresh: () => void;
+  showRefreshPrice?: boolean;
 }
 
 function statusVariant(status: string) {
@@ -61,23 +73,63 @@ function actionVariant(action: string) {
   }
 }
 
+function initialExitDebitPerContract(trade: EnrichedTrade): string {
+  if (trade.manualCurrentOptionValue != null) {
+    return String(trade.manualCurrentOptionValue);
+  }
+  if (trade.exitDebitPerContract != null) {
+    return String(trade.exitDebitPerContract);
+  }
+  if (trade.calculations.currentOptionValuePerContract > 0) {
+    return String(trade.calculations.currentOptionValuePerContract);
+  }
+  return "";
+}
+
 export function TradeDetailDrawer({
   trade,
   onClose,
   onEdit,
   onEditValue,
   onRefresh,
+  showRefreshPrice = false,
 }: TradeDetailDrawerProps) {
-  const [exitDebit, setExitDebit] = useState(
-    String(trade.calculations.currentCloseCost)
+  const [exitDebitPerContract, setExitDebitPerContract] = useState(() =>
+    initialExitDebitPerContract(trade)
   );
+  const [feesCommission, setFeesCommission] = useState("0");
   const [busy, setBusy] = useState(false);
+  const [refreshBusy, setRefreshBusy] = useState(false);
   const calc = trade.calculations;
+
+  const closePreview = useMemo(() => {
+    const perContract = parseFloat(exitDebitPerContract);
+    const fees = parseFloat(feesCommission);
+    if (!Number.isFinite(perContract) || perContract < 0) return null;
+    return buildCloseTradePreviewWithFees({
+      premiumPerContract: trade.premiumPerContract,
+      contracts: trade.contracts,
+      exitDebitPerContract: perContract,
+      feesCommission: Number.isFinite(fees) ? fees : 0,
+    });
+  }, [
+    exitDebitPerContract,
+    feesCommission,
+    trade.premiumPerContract,
+    trade.contracts,
+  ]);
 
   async function runAction(fn: () => Promise<unknown>) {
     setBusy(true);
     await fn();
     setBusy(false);
+    onRefresh();
+  }
+
+  async function handleRefreshPrice() {
+    setRefreshBusy(true);
+    await refreshUnderlyingPrices();
+    setRefreshBusy(false);
     onRefresh();
   }
 
@@ -142,48 +194,15 @@ export function TradeDetailDrawer({
             </p>
             <dl className="grid grid-cols-2 gap-2 text-xs">
               <div>
-                <dt className="text-terminal-muted">Active Value</dt>
-                <dd className="font-mono text-terminal-text">
-                  {formatOptionValuePerContract(trade.currentOptionValue)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-terminal-muted">Source</dt>
-                <dd className="text-terminal-text">
-                  {formatValueSourceLabel(trade.currentValueSource)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-terminal-muted">Manual Broker Value</dt>
-                <dd className="font-mono text-terminal-text">
-                  {trade.manualCurrentOptionValue != null
-                    ? formatOptionValuePerContract(
-                        trade.manualCurrentOptionValue
-                      )
-                    : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-terminal-muted">System Value</dt>
-                <dd className="font-mono text-terminal-muted">
-                  {formatOptionValuePerContract(trade.systemCurrentOptionValue)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-terminal-muted">Difference</dt>
+                <dt className="text-terminal-muted">Current Value</dt>
                 <dd
                   className={cn(
                     "font-mono",
-                    trade.valueDifference != null
-                      ? trade.valueDifference >= 0
-                        ? "text-warning"
-                        : "text-profit"
-                      : "text-terminal-muted"
+                    trade.manualCurrentOptionValue == null &&
+                      "text-[10px] text-terminal-muted"
                   )}
                 >
-                  {trade.valueDifference != null
-                    ? formatOptionValuePerContract(trade.valueDifference)
-                    : "—"}
+                  {formatCurrentOptionValueDisplay(trade.manualCurrentOptionValue)}
                 </dd>
               </div>
               <div>
@@ -238,11 +257,49 @@ export function TradeDetailDrawer({
             </p>
             <dl className="grid grid-cols-2 gap-2 text-xs">
               {[
-                ["Premium / Contract", `$${trade.premiumPerContract.toFixed(2)}`],
+                ["Premium / Contract", formatOptionValuePerContract(trade.premiumPerContract)],
                 ["Premium Received", formatCurrency(calc.totalPremiumReceived)],
-                ["Current Close Cost", formatCurrency(calc.currentCloseCost)],
+                ...(trade.status === "closed"
+                  ? [
+                      [
+                        "Closing Debit / Contract",
+                        trade.exitDebitPerContract != null
+                          ? formatOptionValuePerContract(
+                              trade.exitDebitPerContract
+                            )
+                          : "—",
+                      ] as const,
+                      [
+                        "Total Closing Debit",
+                        trade.exitDebit != null
+                          ? formatCurrency(trade.exitDebit)
+                          : "—",
+                      ] as const,
+                      [
+                        "Fees / Commission",
+                        formatCurrency(trade.feesCommission),
+                      ] as const,
+                      [
+                        "Calculated Realized P/L",
+                        calc.calculatedRealizedPnl != null
+                          ? formatSignedCurrency(calc.calculatedRealizedPnl)
+                          : "—",
+                      ] as const,
+                      [
+                        "Broker Realized P/L Override",
+                        trade.brokerRealizedPnl != null
+                          ? formatSignedCurrency(trade.brokerRealizedPnl)
+                          : "—",
+                      ] as const,
+                    ]
+                  : [
+                      [
+                        "Current Close Cost",
+                        formatCurrency(calc.currentCloseCost),
+                      ] as const,
+                    ]),
                 [
-                  "Total Trade P/L",
+                  trade.status === "closed" ? "Realized P/L" : "Total Trade P/L",
                   formatSignedCurrency(trade.pnlAllocation.totalTradePnl),
                 ],
                 ["My P/L", formatSignedCurrency(trade.pnlAllocation.myPnl)],
@@ -250,13 +307,17 @@ export function TradeDetailDrawer({
                   "Client P/L",
                   formatSignedCurrency(trade.pnlAllocation.clientPnl),
                 ],
-                ["Current P/L %", formatPercent(calc.currentPnlPct)],
-                [
-                  "Realized P/L",
-                  calc.realizedPnl != null
-                    ? formatSignedCurrency(calc.realizedPnl)
-                    : "—",
-                ],
+                ...(trade.status !== "closed"
+                  ? [
+                      ["Current P/L %", formatPercent(calc.currentPnlPct)] as const,
+                      [
+                        "Realized P/L",
+                        calc.realizedPnl != null
+                          ? formatSignedCurrency(calc.realizedPnl)
+                          : "—",
+                      ] as const,
+                    ]
+                  : []),
                 ["Max Risk", formatCurrency(calc.maxRisk)],
                 ["Profit Target", formatCurrency(calc.profitTargetAmount)],
                 ["Stop Loss Amount", formatCurrency(calc.stopLossAmount)],
@@ -275,11 +336,51 @@ export function TradeDetailDrawer({
             </p>
             <dl className="grid grid-cols-2 gap-2 text-xs">
               <div>
-                <dt className="text-terminal-muted">Current Stock Price</dt>
-                <dd className="font-mono text-terminal-text">
-                  {trade.underlyingCurrentPrice != null
-                    ? `$${trade.underlyingCurrentPrice.toFixed(2)}`
-                    : "—"}
+                <dt className="text-terminal-muted">Current Underlying Price</dt>
+                <dd className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "font-mono",
+                      !trade.underlyingPriceUsable
+                        ? "text-[10px] text-terminal-muted"
+                        : "text-terminal-text"
+                    )}
+                  >
+                    {formatUnderlyingPriceDisplay(
+                      trade.underlyingPriceUsable
+                        ? trade.underlyingCurrentPrice
+                        : null
+                    )}
+                  </span>
+                  {showRefreshPrice && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2"
+                      disabled={refreshBusy}
+                      onClick={handleRefreshPrice}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "h-3 w-3 mr-1",
+                          refreshBusy && "animate-spin"
+                        )}
+                      />
+                      Refresh
+                    </Button>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-terminal-muted">Price Source</dt>
+                <dd className="text-terminal-text">
+                  {formatUnderlyingPriceSourceLabel(trade.underlyingPriceSource)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-terminal-muted">Last Updated</dt>
+                <dd className="font-mono text-terminal-muted">
+                  {trade.underlyingPriceUpdatedAt?.slice(0, 10) ?? "—"}
                 </dd>
               </div>
               <div>
@@ -338,22 +439,59 @@ export function TradeDetailDrawer({
                 <dd
                   className={cn(
                     "font-mono",
-                    getBreakevenSafetyTone(calc.breakevenSafetyStatus) ===
-                      "safe" && "text-profit",
-                    getBreakevenSafetyTone(calc.breakevenSafetyStatus) ===
-                      "caution" && "text-warning",
-                    getBreakevenSafetyTone(calc.breakevenSafetyStatus) ===
-                      "danger" && "text-loss",
-                    calc.breakevenSafetyStatus == null && "text-terminal-muted"
+                    !trade.underlyingPriceUsable &&
+                      "text-[10px] text-terminal-muted",
+                    trade.underlyingPriceUsable &&
+                      getBreakevenSafetyTone(calc.breakevenSafetyStatus) ===
+                        "safe" &&
+                      "text-profit",
+                    trade.underlyingPriceUsable &&
+                      getBreakevenSafetyTone(calc.breakevenSafetyStatus) ===
+                        "caution" &&
+                      "text-warning",
+                    trade.underlyingPriceUsable &&
+                      getBreakevenSafetyTone(calc.breakevenSafetyStatus) ===
+                        "danger" &&
+                      "text-loss"
                   )}
                 >
-                  {formatBreakevenSafetyPct(calc.breakevenSafetyDistancePct)}
+                  {formatBreakevenDistancePctDisplay({
+                    underlyingPrice: trade.underlyingPriceUsable
+                      ? trade.underlyingCurrentPrice
+                      : null,
+                    distancePct: calc.breakevenSafetyDistancePct,
+                    putDistancePct: calc.breakevenPutDistancePct,
+                    callDistancePct: calc.breakevenCallDistancePct,
+                    isIronCondor: trade.strategy === "iron_condor",
+                  })}
                 </dd>
               </div>
+              {trade.strategy === "iron_condor" && trade.underlyingPriceUsable && (
+                  <>
+                    <div>
+                      <dt className="text-terminal-muted">Put BE Distance %</dt>
+                      <dd className="font-mono text-terminal-text">
+                        {formatBreakevenSafetyPct(calc.breakevenPutDistancePct)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-terminal-muted">Call BE Distance %</dt>
+                      <dd className="font-mono text-terminal-text">
+                        {formatBreakevenSafetyPct(
+                          calc.breakevenCallDistancePct
+                        )}
+                      </dd>
+                    </div>
+                  </>
+                )}
               <div>
                 <dt className="text-terminal-muted">Breakeven Status</dt>
                 <dd>
-                  {calc.breakevenSafetyStatus ? (
+                  {!trade.underlyingPriceUsable ? (
+                    <span className="text-[10px] text-terminal-muted">
+                      {UNDERLYING_PRICE_UNAVAILABLE}
+                    </span>
+                  ) : calc.breakevenSafetyStatus ? (
                     <Badge
                       variant={
                         getBreakevenSafetyTone(calc.breakevenSafetyStatus) ===
@@ -421,26 +559,113 @@ export function TradeDetailDrawer({
 
           <div className="space-y-2 border-t border-terminal-border pt-4">
             {trade.status !== "closed" && (
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  step="0.01"
-                  className="flex-1 rounded border border-terminal-border bg-terminal-elevated px-2 py-1.5 text-sm font-mono"
-                  placeholder="Exit debit to close"
-                  value={exitDebit}
-                  onChange={(e) => setExitDebit(e.target.value)}
-                />
+              <div className="space-y-3 rounded-lg border border-terminal-border bg-terminal-elevated/30 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-terminal-muted">
+                  Close Trade
+                </p>
+                <label className="block space-y-1">
+                  <span className="text-[10px] uppercase text-terminal-muted">
+                    Closing Debit Per Contract
+                  </span>
+                  <input
+                    type="number"
+                    step={OPTION_PRICE_INPUT_STEP}
+                    min="0"
+                    className="w-full rounded border border-terminal-border bg-terminal-elevated px-2 py-1.5 text-sm font-mono"
+                    placeholder="e.g. 0.514"
+                    value={exitDebitPerContract}
+                    onChange={(e) => setExitDebitPerContract(e.target.value)}
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[10px] uppercase text-terminal-muted">
+                    Fees / Commission (USD)
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="w-full rounded border border-terminal-border bg-terminal-elevated px-2 py-1.5 text-sm font-mono"
+                    placeholder="e.g. 0.49"
+                    value={feesCommission}
+                    onChange={(e) => setFeesCommission(e.target.value)}
+                  />
+                </label>
+                <dl className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <dt className="text-terminal-muted">Contracts</dt>
+                    <dd className="font-mono">{trade.contracts}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-terminal-muted">Premium Received</dt>
+                    <dd className="font-mono">
+                      {formatCurrency(calc.totalPremiumReceived)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-terminal-muted">Total Closing Debit</dt>
+                    <dd className="font-mono">
+                      {closePreview
+                        ? formatCurrency(closePreview.exitDebitTotal)
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-terminal-muted">Fees / Commission</dt>
+                    <dd className="font-mono">
+                      {closePreview
+                        ? formatCurrency(closePreview.feesCommission)
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-terminal-muted">Calculated Realized P/L</dt>
+                    <dd
+                      className={cn(
+                        "font-mono",
+                        closePreview
+                          ? getPnLColor(closePreview.calculatedRealizedPnl)
+                          : "text-terminal-muted"
+                      )}
+                    >
+                      {closePreview
+                        ? formatSignedCurrency(closePreview.calculatedRealizedPnl)
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-terminal-muted">Estimated Net P/L</dt>
+                    <dd
+                      className={cn(
+                        "font-mono",
+                        closePreview
+                          ? getPnLColor(closePreview.estimatedRealizedPnl)
+                          : "text-terminal-muted"
+                      )}
+                    >
+                      {closePreview
+                        ? formatSignedCurrency(
+                            closePreview.estimatedRealizedPnl
+                          )
+                        : "—"}
+                    </dd>
+                  </div>
+                </dl>
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={busy}
+                  disabled={busy || !closePreview}
                   onClick={() =>
                     runAction(() =>
-                      closeOptionsTrade(trade.id, parseFloat(exitDebit) || 0)
+                      closeOptionsTrade(
+                        trade.id,
+                        parseFloat(exitDebitPerContract) || 0,
+                        parseFloat(feesCommission) || 0
+                      )
                     )
                   }
                 >
-                  Close
+                  Close Trade
                 </Button>
               </div>
             )}

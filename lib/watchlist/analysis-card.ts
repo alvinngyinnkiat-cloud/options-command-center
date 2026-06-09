@@ -5,6 +5,7 @@ import {
   isBullPutCandidate,
 } from "@/lib/watchlist/scoring/candidate";
 import type { Direction, WatchlistScannerRow } from "@/lib/watchlist/types";
+import { resolveDisplayRank } from "@/lib/watchlist/watchlist-rank";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
 import type { DecisionLabel } from "./scoring/types";
 
@@ -19,6 +20,7 @@ export interface TickerWeekendReviewFlags {
 export interface TradingAnalysisViewModel {
   ticker: string;
   watchlistId: string;
+  priorityRank: number;
   soValue: number;
   previousSo: number | null;
   soDirection: Direction | null;
@@ -173,6 +175,7 @@ export function buildTradingAnalysisViewModel(
   return {
     ticker: row.ticker,
     watchlistId: row.watchlistId,
+    priorityRank: resolveDisplayRank(row),
     soValue: row.technicals.stochastic,
     previousSo: row.previousTechnicals.stochastic,
     soDirection: soComp.direction,

@@ -8,6 +8,10 @@ import type {
   PortfolioValueComparison,
 } from "./types";
 import { calculateHealthScore } from "./health-score";
+import {
+  resolveManualSgComponents,
+  sumManualOverallPortfolioValueSgd,
+} from "./manual-breakdown";
 
 const ALLOCATION_COLORS = {
   stocks: "#3b82f6",
@@ -221,13 +225,18 @@ function resolveManualOverallSgd(
   override: PortfolioOverrideInput,
   calculated: CalculatedPortfolioValues
 ): number {
-  const usSgd =
-    override.manualUsStocksOptionsSgdEquivalent ??
-    calculated.usStocksOptionsSgdEquivalent;
-  const crypto = override.manualCryptoValueSgd ?? calculated.cryptoValue;
-  const sg =
-    override.manualSgStocksCashValueSgd ?? calculated.sgStocksCashValueSgd;
-  return usSgd + crypto + sg;
+  const sg = resolveManualSgComponents(override);
+  const manual =
+    sumManualOverallPortfolioValueSgd({
+      usStocksOptionsSgdEquivalent:
+        override.manualUsStocksOptionsSgdEquivalent ??
+        calculated.usStocksOptionsSgdEquivalent,
+      cryptoValueSgd: override.manualCryptoValueSgd ?? calculated.cryptoValue,
+      sgStocksValueSgd: sg.sgStocksValueSgd,
+      sgCashValueSgd: sg.sgCashValueSgd,
+      tradingCashSgd: override.manualTradingCashSgd ?? 0,
+    }) ?? calculated.portfolioValue;
+  return manual;
 }
 
 function buildDraftComparison(
@@ -270,7 +279,10 @@ export function applyManualOverride(
     override?.manualUsStocksOptionsValueUsd != null ||
     override?.manualUsStocksOptionsSgdEquivalent != null ||
     override?.manualCryptoValueSgd != null ||
-    override?.manualSgStocksCashValueSgd != null;
+    override?.manualSgStocksCashValueSgd != null ||
+    override?.manualSgStocksValueSgd != null ||
+    override?.manualSgCashValueSgd != null ||
+    override?.manualTradingCashSgd != null;
 
   if (!override?.useManualOverride || !hasManualInputs) {
     return {
@@ -291,21 +303,37 @@ export function applyManualOverride(
     calculated.usStocksOptionsSgdEquivalent;
   const manualCrypto =
     override.manualCryptoValueSgd ?? calculated.cryptoValue;
-  const manualSg =
-    override.manualSgStocksCashValueSgd ?? calculated.sgStocksCashValueSgd;
-  const portfolioValue = usSgd + manualCrypto + manualSg;
+  const sg = resolveManualSgComponents(override);
+  const hasManualSg =
+    override.manualSgStocksValueSgd != null ||
+    override.manualSgCashValueSgd != null ||
+    override.manualSgStocksCashValueSgd != null;
+  const sgStocksValueSgd = hasManualSg
+    ? sg.sgStocksValueSgd
+    : calculated.sgStocksCashValueSgd;
+  const sgCashValueSgd = hasManualSg ? sg.sgCashValueSgd : 0;
+  const manualSgCombined = sgStocksValueSgd + sgCashValueSgd;
+  const tradingCashSgd = override.manualTradingCashSgd ?? 0;
+  const portfolioValue =
+    sumManualOverallPortfolioValueSgd({
+      usStocksOptionsSgdEquivalent: usSgd,
+      cryptoValueSgd: manualCrypto,
+      sgStocksValueSgd,
+      sgCashValueSgd,
+      tradingCashSgd,
+    }) ?? usSgd + manualCrypto + manualSgCombined + tradingCashSgd;
 
   return {
     display: {
       portfolioValue,
-      stocksValue: usSgd + manualSg,
+      stocksValue: usSgd + manualSgCombined,
       etfsValue: 0,
-      stocksOptionsValue: usSgd + manualSg,
+      stocksOptionsValue: usSgd + manualSgCombined,
       cryptoValue: manualCrypto,
       cashValue: 0,
       usStocksOptionsValueUsd: usUsd,
       usStocksOptionsSgdEquivalent: usSgd,
-      sgStocksCashValueSgd: manualSg,
+      sgStocksCashValueSgd: manualSgCombined,
     },
     comparison: {
       overallPortfolioValueSgd: portfolioValue,
@@ -401,6 +429,7 @@ export function buildPortfolioMetrics(
     portfolioValue,
     myPortfolioValue: portfolioValue,
     tradingCapital: portfolioValue,
+    cryptoPortfolioValueSgd: display.cryptoValue,
     cryptoCapital: display.cryptoValue,
     tradingCashSgd: display.cashValue,
     cryptoCashSgd: 0,

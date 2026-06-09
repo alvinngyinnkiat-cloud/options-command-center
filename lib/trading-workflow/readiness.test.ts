@@ -104,7 +104,7 @@ describe("trade queue", () => {
       portfolioValue: 400000,
       stocksEtfValue: 200000,
       cryptoValue: 50000,
-      cash: { cashSgd: 50000, cashUsdNative: 10000, cashUsdSgd: 13500, cashAvailable: 63500 },
+      cash: { cashSgd: 50000, cashUsdNative: 10000, cashUsdSgd: 13500, cashAvailable: 10000, tradingCashSgd: 50000, cryptoCashSgd: 0 },
       currentOpenRisk: 5000,
       currentPositionMarketValue: 3000,
       currentPositionCloseRequirement: 3000,

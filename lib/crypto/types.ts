@@ -1,5 +1,11 @@
 import type { DataSource } from "@/lib/portfolio/types";
 
+import type {
+  CryptoAllocationSlice,
+  CryptoDeploymentBucket,
+  CryptoRankedHolding,
+} from "./allocation";
+
 export type CryptoAssetLabel = "BTC" | "ETH" | "SOL" | "Other";
 
 export interface CryptoHoldingFormInput {
@@ -40,9 +46,22 @@ export interface CryptoTrackerSummary {
   bestPerforming: { ticker: string; returnPct: number } | null;
 }
 
+export interface CryptoPortfolioManualState {
+  cryptoHoldingsValueSgd: number;
+  cryptoCashSgd: number;
+  totalCryptoPortfolioValueSgd: number;
+  totalContributionsSgd: number;
+  profitLossSgd: number;
+  returnPct: number;
+}
+
 export interface CryptoTrackerData {
   holdings: EnrichedCryptoHolding[];
   summary: CryptoTrackerSummary;
+  portfolioManual: CryptoPortfolioManualState;
+  allocationSlices: CryptoAllocationSlice[];
+  rankings: CryptoRankedHolding[];
+  deploymentPlan: CryptoDeploymentBucket[];
   dataSource: DataSource;
 }
 

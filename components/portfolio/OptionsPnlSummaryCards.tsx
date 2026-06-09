@@ -1,5 +1,6 @@
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
-import { formatSignedCurrency } from "@/lib/trades/format";
+import { pnlStatProps } from "@/lib/format/pnl";
 import type { OpenPositionSummary } from "@/lib/portfolio/types";
 
 interface OptionsPnlSummaryCardsProps {
@@ -11,21 +12,25 @@ export function OptionsPnlSummaryCards({
 }: OptionsPnlSummaryCardsProps) {
   const myOpenPnl = positions.reduce((s, p) => s + p.pnl, 0);
   const clientPnlOwed = positions.reduce((s, p) => s + p.clientPnl, 0);
+  const myOpen = pnlStatProps(myOpenPnl);
+  const clientOwed = pnlStatProps(clientPnlOwed);
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <MetricCardsGrid>
       <StatCard
         label="My Open Options P/L"
-        value={formatSignedCurrency(myOpenPnl)}
+        value={myOpen.value}
         change="Personal share only"
-        changeType={myOpenPnl >= 0 ? "positive" : "negative"}
+        valueClassName={myOpen.valueClassName}
+        changeType={myOpen.changeType}
       />
       <StatCard
         label="Client P/L Owed"
-        value={formatSignedCurrency(clientPnlOwed)}
+        value={clientOwed.value}
         change="Open client profit share"
-        changeType={clientPnlOwed >= 0 ? "positive" : "negative"}
+        valueClassName={clientOwed.valueClassName}
+        changeType={clientOwed.changeType}
       />
-    </div>
+    </MetricCardsGrid>
   );
 }

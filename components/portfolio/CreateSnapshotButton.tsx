@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { createDailyPortfolioSnapshot } from "@/app/actions/portfolio-snapshots";
 import type { PortfolioHistoryData } from "@/lib/portfolio/daily-snapshot-types";
 import { Camera } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 interface CreateSnapshotButtonProps {
@@ -12,6 +13,7 @@ interface CreateSnapshotButtonProps {
 
 export function CreateSnapshotButton({ onUpdated }: CreateSnapshotButtonProps) {
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
 
   async function handleClick() {
     setBusy(true);
@@ -22,6 +24,7 @@ export function CreateSnapshotButton({ onUpdated }: CreateSnapshotButtonProps) {
       return;
     }
     onUpdated?.(result.history);
+    router.refresh();
   }
 
   return (

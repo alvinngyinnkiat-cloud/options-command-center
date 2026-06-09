@@ -115,7 +115,12 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <CardTitle className="font-mono text-lg">{model.ticker}</CardTitle>
+            <CardTitle className="font-mono text-lg">
+              {model.ticker}
+              <span className="ml-2 text-sm font-normal text-terminal-muted">
+                #{model.priorityRank}
+              </span>
+            </CardTitle>
             <p className="text-[10px] text-terminal-muted">
               Trading Analysis · Average Price scoring
             </p>

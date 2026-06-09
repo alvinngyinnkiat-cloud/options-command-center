@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import {
   formatCagr,
@@ -131,7 +132,7 @@ export function PassiveIncomeGoalPanel({
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <MetricCardsGrid gap="lg">
         <StatCard
           label="Required Portfolio"
           value={formatSGD(passiveMetrics.requiredPortfolioSize)}
@@ -167,7 +168,7 @@ export function PassiveIncomeGoalPanel({
           change="Portfolio reaches required size"
           changeType="neutral"
         />
-      </div>
+      </MetricCardsGrid>
 
       <Card variant="default">
         <CardHeader>

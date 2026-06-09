@@ -5,8 +5,11 @@ import {
   buildHistoryComparisons,
   buildMilestones,
   buildPerformanceMetrics,
+  filterRealPortfolioSnapshots,
   generateMockSnapshotHistory,
+  selectLatestSnapshot,
 } from "@/lib/portfolio/snapshot-history";
+import { getSingaporeSnapshotDate } from "@/lib/portfolio/snapshot-date";
 import type { PortfolioHistoryData } from "@/lib/portfolio/daily-snapshot-types";
 import {
   applyMockGeneratedSnapshotColumns,
@@ -51,18 +54,26 @@ export interface DailyPortfolioRecordFormInput {
   notes: string | null;
 }
 
+function resolveHistoryAsOfDate(explicit?: string): string {
+  if (explicit) return explicit;
+  return isSupabaseConfigured()
+    ? getSingaporeSnapshotDate()
+    : MOCK_REFERENCE_DATE;
+}
+
 function buildHistoryData(
   snapshots: ReturnType<typeof mapDailySnapshotRow>[],
   dataSource: "supabase" | "mock",
   asOfDate: string
 ): PortfolioHistoryData {
-  const latest = snapshots[snapshots.length - 1] ?? null;
+  const realSnapshots = filterRealPortfolioSnapshots(snapshots);
+  const latest = selectLatestSnapshot(realSnapshots, asOfDate);
   return {
-    snapshots,
+    snapshots: realSnapshots,
     latest,
-    comparisons: buildHistoryComparisons(snapshots, asOfDate),
-    performance: buildPerformanceMetrics(snapshots, asOfDate),
-    milestones: buildMilestones(snapshots, asOfDate),
+    comparisons: buildHistoryComparisons(realSnapshots, asOfDate),
+    performance: buildPerformanceMetrics(realSnapshots, asOfDate),
+    milestones: buildMilestones(realSnapshots, asOfDate),
     dataSource,
   };
 }
@@ -89,6 +100,8 @@ export async function upsertDailyPortfolioSnapshot(input: {
   trades: EnrichedTrade[];
   snapshotDate?: string;
   capitalPools?: CapitalPoolsBreakdown;
+  /** When true, overwrite an existing manual snapshot for the same date. */
+  allowManualOverwrite?: boolean;
 }): Promise<DailyPortfolioSnapshotRow> {
   const summary = buildTradeTrackerSummary(input.trades);
   const pnl = buildPortfolioPnlBreakdown(input.trades);
@@ -101,6 +114,13 @@ export async function upsertDailyPortfolioSnapshot(input: {
     snapshotDate: input.snapshotDate,
     capitalPools,
   });
+
+  const today = getSingaporeSnapshotDate();
+  if (payload.snapshot_date !== today) {
+    throw new Error(
+      "Snapshots can only be created or updated for today (Singapore date)."
+    );
+  }
 
   if (!isSupabaseConfigured()) {
     return upsertMockDailyPortfolioSnapshot({
@@ -137,7 +157,7 @@ export async function upsertDailyPortfolioSnapshot(input: {
     is_manual_entry: boolean;
   } | null;
 
-  if (existingRow?.is_manual_entry) {
+  if (existingRow?.is_manual_entry && !input.allowManualOverwrite) {
     const { data: manualRow, error: fetchError } = await supabase
       .from("daily_portfolio_snapshots")
       .select("*")
@@ -217,8 +237,9 @@ export async function getLatestDailySnapshotValue(
 ): Promise<number | null> {
   if (!isSupabaseConfigured() || !userId || !isValidSupabaseUserId(userId)) {
     const rows = getMockDailyPortfolioSnapshots();
-    const latest = rows[rows.length - 1];
-    return latest ? Number(latest.portfolio_value_sgd) : null;
+    const asOfDate = MOCK_REFERENCE_DATE;
+    const latest = selectLatestSnapshot(rows.map(mapDailySnapshotRow), asOfDate);
+    return latest ? latest.portfolioValueSgd : null;
   }
 
   const access = await resolveSupabaseServerAccess();
@@ -227,10 +248,12 @@ export async function getLatestDailySnapshotValue(
   }
 
   const supabase = await getServerSupabaseClient(access);
+  const today = getSingaporeSnapshotDate();
   const { data } = await supabase
     .from("daily_portfolio_snapshots")
     .select("portfolio_value_sgd")
     .eq("user_id", userId)
+    .lte("snapshot_date", today)
     .order("snapshot_date", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -245,7 +268,11 @@ export async function ensureDailyPortfolioSnapshot(input: {
   capitalPools?: CapitalPoolsBreakdown;
   asOfDate?: string;
 }): Promise<void> {
-  const date = input.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const date =
+    input.asOfDate ??
+    (isSupabaseConfigured()
+      ? getSingaporeSnapshotDate()
+      : MOCK_REFERENCE_DATE);
   await upsertDailyPortfolioSnapshot({
     userId: input.userId,
     metrics: input.metrics,
@@ -262,7 +289,7 @@ export async function getPortfolioHistoryData(input: {
   capitalPools?: CapitalPoolsBreakdown;
   asOfDate?: string;
 }): Promise<PortfolioHistoryData> {
-  const asOfDate = input.asOfDate ?? MOCK_REFERENCE_DATE;
+  const asOfDate = resolveHistoryAsOfDate(input.asOfDate);
   const capitalPools =
     input.capitalPools ?? (await buildPortfolioCapitalPools(input.metrics));
 
@@ -307,30 +334,10 @@ export async function getPortfolioHistoryData(input: {
       setMockDailyPortfolioSnapshots(rows);
     }
 
-    await ensureDailyPortfolioSnapshot({
-      userId: input.userId,
-      metrics: input.metrics,
-      trades: input.trades,
-      capitalPools,
-      asOfDate,
-    });
     rows = getMockDailyPortfolioSnapshots();
 
     const snapshots = rows.map(mapDailySnapshotRow);
     return buildHistoryData(snapshots, "mock", asOfDate);
-  }
-
-  const effectiveUserId = await resolveSupabaseWriteUserId(input.userId);
-  if (effectiveUserId) {
-    await ensureDailyPortfolioSnapshot({
-      userId: effectiveUserId,
-      metrics: input.metrics,
-      trades: input.trades,
-      capitalPools,
-      asOfDate,
-    });
-  } else {
-    warnMissingDevUserIdForWrite();
   }
 
   const readUserId = await resolveSupabaseReadUserId(input.userId);
@@ -359,7 +366,8 @@ export async function getLatestDailySnapshot(
   userId: string
 ): Promise<ReturnType<typeof mapDailySnapshotRow> | null> {
   const snapshots = await listDailyPortfolioSnapshots(userId);
-  return snapshots[snapshots.length - 1] ?? null;
+  const asOfDate = resolveHistoryAsOfDate();
+  return selectLatestSnapshot(snapshots, asOfDate);
 }
 
 export async function getSnapshotIdByDate(
@@ -442,6 +450,13 @@ export async function persistDailyPortfolioRecord(input: {
   recordId?: string;
 }): Promise<DailyPortfolioSnapshotRow> {
   const { userId, form, metrics, trades, recordId } = input;
+  const today = getSingaporeSnapshotDate();
+
+  if (form.snapshotDate !== today) {
+    throw new Error(
+      "Only today's snapshot can be created or updated. Use Create Snapshot on the Portfolio Dashboard."
+    );
+  }
 
   let resolvedRecordId = recordId;
 

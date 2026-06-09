@@ -1,3 +1,4 @@
+import type { TickerSyncDiagnostic } from "@/lib/watchlist/sync-watchlist-data";
 import { runAllAudits } from "@/lib/data-health/audit-sources";
 import { formatRelativeAge } from "@/lib/data-health/freshness";
 import type {
@@ -7,6 +8,9 @@ import type {
   DataSourceLogView,
 } from "@/lib/data-health/types";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
+import { getFmpHealthDiagnostics } from "@/lib/data-health/fmp-status";
+import { getWatchlistScannerHealthStatus } from "@/lib/watchlist/scanner-status";
+import { ensureDefaultWatchlistItems } from "@/lib/watchlist/ensure-default-watchlist";
 import { listDataSourceLogs } from "@/lib/supabase/queries/data-source-logs";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 
@@ -34,6 +38,9 @@ function widgetMessage(
     if (sr?.value && sr.value !== "Up to date") return "Needs Review";
     const record = report.details.find((d) => d.label === "Daily portfolio record");
     if (record?.value?.includes("No record")) return "Needs Update";
+  }
+  if (report.id === "crypto_manual") {
+    return "Manual Update";
   }
   if (report.lastSuccessfulUpdate) {
     return formatRelativeAge(report.lastSuccessfulUpdate.slice(0, 10), MOCK_REFERENCE_DATE);
@@ -71,6 +78,7 @@ function buildWidgetLines(
     pick("market_data", "Market Data"),
     pick("technical_indicators", "Indicators"),
     pick("dividend_data", "Dividends"),
+    pick("crypto_manual", "Crypto"),
     {
       label: "Manual Inputs",
       message: widgetMessage(manual, hasLogs),
@@ -81,11 +89,16 @@ function buildWidgetLines(
 }
 
 export async function getDataHealthPageData(
-  userId: string
+  userId: string,
+  marketDataTickerDiagnostics: TickerSyncDiagnostic[] = []
 ): Promise<DataHealthPageData> {
-  const [reports, logs] = await Promise.all([
+  await ensureDefaultWatchlistItems();
+
+  const [reports, logs, scannerStatus, fmpDiagnostics] = await Promise.all([
     runAllAudits(userId),
     listDataSourceLogs(userId),
+    getWatchlistScannerHealthStatus(userId),
+    getFmpHealthDiagnostics(userId, marketDataTickerDiagnostics),
   ]);
 
   const hasLogs = logs.length > 0;
@@ -94,6 +107,9 @@ export async function getDataHealthPageData(
     reports,
     logs: logs.map(mapLog),
     widgetLines: buildWidgetLines(reports, hasLogs),
+    scannerStatus,
+    fmpDiagnostics,
+    marketDataTickerDiagnostics,
     checkedAt: new Date().toISOString(),
     supabaseConfigured: isSupabaseConfigured(),
   };
@@ -104,6 +120,7 @@ function fallbackWidgetLines(): DataHealthWidgetLine[] {
     { label: "Market Data", message: NO_LOGS_MESSAGE, status: "warning" },
     { label: "Indicators", message: NO_LOGS_MESSAGE, status: "warning" },
     { label: "Dividends", message: NO_LOGS_MESSAGE, status: "warning" },
+    { label: "Crypto", message: "Manual Update", status: "healthy" },
     { label: "Manual Inputs", message: "Manual review required", status: "manual_required" },
     { label: "Portfolio Record", message: NO_LOGS_MESSAGE, status: "warning" },
   ];

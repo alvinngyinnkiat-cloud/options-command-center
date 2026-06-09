@@ -1,5 +1,10 @@
 import { StatCard } from "@/components/ui/StatCard";
-import { formatSGD, formatSignedSGD } from "@/lib/utils";
+import {
+  getPnLChangeType,
+  pnlPercentStatProps,
+  pnlStatProps,
+} from "@/lib/format/pnl";
+import { formatSGD } from "@/lib/utils";
 import type { StockEtfTrackerSummary } from "@/lib/stocks-etfs/types";
 
 interface StockEtfSummaryCardsProps {
@@ -7,6 +12,15 @@ interface StockEtfSummaryCardsProps {
 }
 
 export function StockEtfSummaryCards({ summary }: StockEtfSummaryCardsProps) {
+  const totalPnl = pnlStatProps(summary.totalProfitLossSgd, { currency: "SGD" });
+  const totalReturn = pnlPercentStatProps(summary.totalReturnPct, 1);
+  const bestReturn = summary.bestPerforming
+    ? pnlPercentStatProps(summary.bestPerforming.returnPct, 1)
+    : null;
+  const worstReturn = summary.worstPerforming
+    ? pnlPercentStatProps(summary.worstPerforming.returnPct, 1)
+    : null;
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
       <StatCard
@@ -19,15 +33,15 @@ export function StockEtfSummaryCards({ summary }: StockEtfSummaryCardsProps) {
       />
       <StatCard
         label="Total P/L"
-        value={formatSignedSGD(summary.totalProfitLossSgd)}
-        changeType={
-          summary.totalProfitLossSgd >= 0 ? "positive" : "negative"
-        }
+        value={totalPnl.value}
+        valueClassName={totalPnl.valueClassName}
+        changeType={totalPnl.changeType}
       />
       <StatCard
         label="Total Return %"
-        value={`${summary.totalReturnPct.toFixed(1)}%`}
-        changeType={summary.totalReturnPct >= 0 ? "positive" : "negative"}
+        value={totalReturn.value}
+        valueClassName={totalReturn.valueClassName}
+        changeType={totalReturn.changeType}
       />
       <StatCard
         label="Largest Holding"
@@ -41,22 +55,16 @@ export function StockEtfSummaryCards({ summary }: StockEtfSummaryCardsProps) {
       <StatCard
         label="Best Performer"
         value={summary.bestPerforming?.ticker ?? "—"}
-        change={
-          summary.bestPerforming
-            ? `${summary.bestPerforming.returnPct.toFixed(1)}%`
-            : undefined
-        }
-        changeType="positive"
+        change={bestReturn?.value}
+        valueClassName={bestReturn?.valueClassName}
+        changeType={bestReturn?.changeType ?? getPnLChangeType(0)}
       />
       <StatCard
         label="Worst Performer"
         value={summary.worstPerforming?.ticker ?? "—"}
-        change={
-          summary.worstPerforming
-            ? `${summary.worstPerforming.returnPct.toFixed(1)}%`
-            : undefined
-        }
-        changeType="negative"
+        change={worstReturn?.value}
+        valueClassName={worstReturn?.valueClassName}
+        changeType={worstReturn?.changeType ?? getPnLChangeType(0)}
       />
     </div>
   );

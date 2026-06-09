@@ -62,3 +62,19 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--terminal-muted);
 }
+
+@layer components {
+  /* Container for auto-scaling metric values within card width */
+  .metric-stat-card {
+    container-type: inline-size;
+    overflow: visible;
+  }
+
+  /* Full currency values — no truncation; scales down in narrow cards */
+  .metric-stat-value {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-size: clamp(0.9375rem, 7.5cqi, 1.5rem);
+    line-height: 1.3;
+  }
+}

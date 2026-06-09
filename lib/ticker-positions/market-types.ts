@@ -108,3 +108,67 @@ export interface PortfolioIncomeSummary {
   usMarketValueSgd: number;
   sgMarketValueSgd: number;
 }
+
+export interface AllMarketSummary {
+  totalMarketValue: number;
+  totalPremiumCollected: number;
+  totalDividendIncome: number;
+  totalPassiveIncome: number;
+  averageIncomeYieldPct: number;
+  totalPnl: number;
+  bestTicker: { ticker: string; totalPnl: number; market: "US" | "SG" } | null;
+  worstTicker: { ticker: string; totalPnl: number; market: "US" | "SG" } | null;
+}
+
+export interface IncomeTabSummary {
+  totalPassiveIncome: number;
+  annualPremiumIncome: number;
+  annualDividendIncome: number;
+  averageIncomeYieldPct: number;
+  bestIncomeGenerator: { ticker: string; totalPassiveIncome: number; market: "US" | "SG" } | null;
+  highestYieldPosition: { ticker: string; incomeYieldPct: number; market: "US" | "SG" } | null;
+  monthlyPassiveIncomeEstimate: number;
+  annualPassiveIncomeEstimate: number;
+}
+
+export interface PassiveIncomeGoalProgress {
+  currentMonthlySgd: number;
+  targetMonthlySgd: number;
+  progressPercent: number;
+  remainingMonthlySgd: number;
+}
+
+export interface UnifiedMarketTickerRow {
+  ticker: string;
+  market: "US" | "SG";
+  category: string;
+  currency: "USD" | "SGD";
+  currentValue: number;
+  capitalDeployed: number;
+  premiumCollected: number;
+  dividendIncome: number;
+  annualPremiumIncome: number;
+  annualDividendIncome: number;
+  totalPassiveIncome: number;
+  incomeYieldPct: number;
+  adjustedCostBasis: number;
+  capitalGainLoss: number;
+  totalReturn: number;
+  roiPct: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  openTradesCount?: number;
+  closedTradesCount?: number;
+  dividendYield?: number | null;
+}
+
+export type MarketTab = "all" | "us" | "sg" | "income";
+
+export type IncomeFilter =
+  | "all"
+  | "dividends"
+  | "premium"
+  | "highest_yield"
+  | "highest_income"
+  | "us_only"
+  | "sg_only";

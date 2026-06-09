@@ -35,6 +35,8 @@ export interface SupportResistanceScoreInput {
   averagePrice: number;
   support: number | null;
   resistance: number | null;
+  weeklySupport: number | null;
+  weeklyResistance: number | null;
   atr14: number;
   strategy: StrategyType;
 }
@@ -75,5 +77,7 @@ export interface ScannerScoringInput {
   distanceEma20Pct: number;
   support: number | null;
   resistance: number | null;
+  weeklySupport?: number | null;
+  weeklyResistance?: number | null;
   scoreDate?: string;
 }

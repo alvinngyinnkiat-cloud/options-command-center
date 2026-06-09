@@ -1,19 +1,17 @@
+import { formatUsd } from "@/lib/format/currency";
+import { formatPnL, formatPnLPercent } from "@/lib/format/pnl";
+
+/** US-market income and premium figures (USD, 2 decimal places). */
 export function formatTickerCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+  return formatUsd(value);
 }
 
 export function formatSignedTickerCurrency(value: number): string {
-  const abs = formatTickerCurrency(Math.abs(value));
-  return value >= 0 ? `+${abs}` : `-${abs}`;
+  return formatPnL(value, { currency: "USD" });
 }
 
 export function formatRoiPct(value: number): string {
-  return `${value.toFixed(1)}%`;
+  return formatPnLPercent(value, 1);
 }
 
 export function formatIncomeYieldPct(value: number): string {

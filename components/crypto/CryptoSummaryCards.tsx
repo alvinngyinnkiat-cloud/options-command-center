@@ -1,56 +1,45 @@
 import { StatCard } from "@/components/ui/StatCard";
-import { formatSGD, formatSignedSGD } from "@/lib/utils";
-import type { CryptoTrackerSummary } from "@/lib/crypto/types";
+import { pnlPercentStatProps, pnlStatProps } from "@/lib/format/pnl";
+import { formatSGD } from "@/lib/utils";
+import type { CryptoPortfolioManualState } from "@/lib/crypto/types";
 
 interface CryptoSummaryCardsProps {
-  summary: CryptoTrackerSummary;
+  portfolioManual: CryptoPortfolioManualState;
 }
 
-export function CryptoSummaryCards({ summary }: CryptoSummaryCardsProps) {
+export function CryptoSummaryCards({ portfolioManual }: CryptoSummaryCardsProps) {
+  const pnl = pnlStatProps(portfolioManual.profitLossSgd, { currency: "SGD" });
+  const returnPct = pnlPercentStatProps(portfolioManual.returnPct, 1);
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       <StatCard
-        label="Total Invested SGD"
-        value={formatSGD(summary.totalInvestedSgd)}
+        label="Coin Holdings Total"
+        value={formatSGD(portfolioManual.cryptoHoldingsValueSgd)}
       />
       <StatCard
-        label="Current Value SGD"
-        value={formatSGD(summary.totalCurrentValueSgd)}
+        label="Available Exchange Cash"
+        value={formatSGD(portfolioManual.cryptoCashSgd)}
       />
       <StatCard
-        label="Total P/L SGD"
-        value={formatSignedSGD(summary.totalProfitLossSgd)}
-        changeType={
-          summary.totalProfitLossSgd >= 0 ? "positive" : "negative"
-        }
+        label="Current Crypto Portfolio Value"
+        value={formatSGD(portfolioManual.totalCryptoPortfolioValueSgd)}
+      />
+      <StatCard
+        label="Total Contributions / Cost SGD"
+        value={formatSGD(portfolioManual.totalContributionsSgd)}
+      />
+      <StatCard
+        label="Crypto P/L SGD"
+        value={pnl.value}
+        valueClassName={pnl.valueClassName}
+        changeType={pnl.changeType}
       />
       <StatCard
         label="Total Return %"
-        value={`${summary.totalReturnPct.toFixed(1)}%`}
-        changeType={summary.totalReturnPct >= 0 ? "positive" : "negative"}
-      />
-      <StatCard
-        label="Largest Holding"
-        value={summary.largestHolding?.ticker ?? "—"}
-        change={
-          summary.largestHolding
-            ? formatSGD(summary.largestHolding.valueSgd)
-            : undefined
-        }
-      />
-      <StatCard
-        label="Best Performer"
-        value={summary.bestPerforming?.ticker ?? "—"}
-        change={
-          summary.bestPerforming
-            ? `${summary.bestPerforming.returnPct.toFixed(1)}%`
-            : undefined
-        }
-        changeType={
-          (summary.bestPerforming?.returnPct ?? 0) >= 0
-            ? "positive"
-            : "negative"
-        }
+        value={returnPct.value}
+        valueClassName={returnPct.valueClassName}
+        changeType={returnPct.changeType}
       />
     </div>
   );

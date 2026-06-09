@@ -1,8 +1,9 @@
-import { formatNativeCurrencyValue } from "@/lib/format/numbers";
+import { formatCurrencyAmount, MONEY_DECIMALS } from "@/lib/format/currency";
 import type { CurrencyCode } from "@/types/database";
 
 export function formatNativeValue(value: number, currency: CurrencyCode): string {
-  return formatNativeCurrencyValue(value, currency, 0);
+  const normalized = currency === "SGD" ? "SGD" : "USD";
+  return formatCurrencyAmount(value, normalized, MONEY_DECIMALS);
 }
 
 export function formatAllocationPct(pct: number): string {

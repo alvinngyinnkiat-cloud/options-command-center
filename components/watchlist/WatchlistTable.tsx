@@ -11,6 +11,7 @@ import {
   formatSignedPrice,
   formatStochastic,
 } from "@/lib/watchlist/format";
+import { resolveDisplayRank } from "@/lib/watchlist/watchlist-rank";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import { cn, formatPercent } from "@/lib/utils";
 import { Pencil, Trash2 } from "lucide-react";
@@ -56,6 +57,9 @@ export function WatchlistTable({
               <th className="sticky left-0 z-10 bg-terminal-elevated px-3 py-2.5 font-medium min-w-[72px]">
                 Ticker
               </th>
+              <th className="sticky left-[72px] z-10 bg-terminal-elevated px-2 py-2.5 font-medium min-w-[48px]">
+                Rank
+              </th>
               <th
                 colSpan={8}
                 className="px-3 py-2 font-medium text-center border-l border-terminal-border text-accent/80"
@@ -98,6 +102,7 @@ export function WatchlistTable({
             </tr>
             <tr className="border-b border-terminal-border bg-terminal-surface text-left uppercase tracking-wider text-terminal-muted">
               <th className="sticky left-0 z-10 bg-terminal-surface px-3 py-2 font-medium" />
+              <th className="sticky left-[72px] z-10 bg-terminal-surface px-2 py-2 font-medium" />
               <th className="px-2 py-2 font-medium border-l border-terminal-border">Current</th>
               <th className="px-2 py-2 font-medium">Open</th>
               <th className="px-2 py-2 font-medium">High</th>
@@ -158,6 +163,9 @@ export function WatchlistTable({
                 >
                   <td className="sticky left-0 z-10 bg-terminal-bg px-3 py-2.5 font-mono font-semibold text-terminal-text">
                     {row.ticker}
+                  </td>
+                  <td className="sticky left-[72px] z-10 bg-terminal-bg px-2 py-2.5 font-mono text-terminal-muted">
+                    #{resolveDisplayRank(row)}
                   </td>
 
                   <td className="px-2 py-2.5 font-mono border-l border-terminal-border/50 text-terminal-text">

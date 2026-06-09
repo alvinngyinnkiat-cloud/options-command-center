@@ -13,7 +13,6 @@ import {
   ListOrdered,
   Activity,
   Radar,
-  ScanSearch,
   Settings,
   Shield,
   Target,
@@ -62,12 +61,6 @@ export const NAV_SECTIONS: NavSection[] = [
         description: "Manual options watchlist & scanner",
       },
       {
-        label: "Auto Watchlist",
-        href: "/auto-watchlist",
-        icon: ScanSearch,
-        description: "Market cap & performance screener",
-      },
-      {
         label: "Market Intelligence Center",
         href: "/market-intelligence",
         icon: Brain,
@@ -103,10 +96,10 @@ export const NAV_SECTIONS: NavSection[] = [
         description: "Active and closed spreads",
       },
       {
-        label: "Ticker Position Manager",
+        label: "Portfolio Income & Position Manager",
         href: "/ticker-positions",
         icon: Layers,
-        description: "Combined P/L by ticker",
+        description: "Capital gains, premium, dividends & positions",
       },
       {
         label: "Client Profit Sharing Tracker",

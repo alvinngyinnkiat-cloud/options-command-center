@@ -1,9 +1,13 @@
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import { formatRiskCurrency } from "@/lib/risk/format";
 import type { ClientCapitalMetrics } from "@/lib/portfolio/client-capital";
 import type { ClientProfitSharingSummary } from "@/lib/client-profit-sharing/types";
 import { buildClientCapitalMetrics } from "@/lib/portfolio/client-capital";
-import { formatReturnPercent } from "@/lib/utils";
+import {
+  pnlPercentStatProps,
+  pnlStatProps,
+} from "@/lib/format/pnl";
 
 interface ClientProfitSummaryCardsProps {
   summary: ClientProfitSharingSummary;
@@ -13,9 +17,13 @@ export function ClientProfitSummaryCards({
   summary,
 }: ClientProfitSummaryCardsProps) {
   const capital: ClientCapitalMetrics = buildClientCapitalMetrics(summary);
+  const clientPnl = pnlStatProps(capital.clientPnl);
+  const clientReturn = pnlPercentStatProps(capital.clientReturnPct, 2);
+  const myShare = pnlStatProps(summary.totalMySharePl);
+  const outstanding = pnlStatProps(summary.outstandingAmountOwed);
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
+    <MetricCardsGrid>
       <StatCard
         label="Client Initial Capital"
         value={formatRiskCurrency(capital.clientInitialCapital)}
@@ -26,13 +34,15 @@ export function ClientProfitSummaryCards({
       />
       <StatCard
         label="Client P/L"
-        value={formatRiskCurrency(capital.clientPnl)}
-        changeType={capital.clientPnl >= 0 ? "positive" : "negative"}
+        value={clientPnl.value}
+        valueClassName={clientPnl.valueClassName}
+        changeType={clientPnl.changeType}
       />
       <StatCard
         label="Client Return %"
-        value={formatReturnPercent(capital.clientReturnPct)}
-        changeType={capital.clientReturnPct >= 0 ? "positive" : "negative"}
+        value={clientReturn.value}
+        valueClassName={clientReturn.valueClassName}
+        changeType={clientReturn.changeType}
       />
       <StatCard
         label="Allocated Trades"
@@ -40,8 +50,9 @@ export function ClientProfitSummaryCards({
       />
       <StatCard
         label="My Share Earned"
-        value={formatRiskCurrency(summary.totalMySharePl)}
-        changeType={summary.totalMySharePl >= 0 ? "positive" : "negative"}
+        value={myShare.value}
+        valueClassName={myShare.valueClassName}
+        changeType={myShare.changeType}
       />
       <StatCard
         label="Client Share Paid"
@@ -49,11 +60,10 @@ export function ClientProfitSummaryCards({
       />
       <StatCard
         label="Outstanding Balance"
-        value={formatRiskCurrency(summary.outstandingAmountOwed)}
-        changeType={
-          summary.outstandingAmountOwed > 0 ? "negative" : "positive"
-        }
+        value={outstanding.value}
+        valueClassName={outstanding.valueClassName}
+        changeType={outstanding.changeType}
       />
-    </div>
+    </MetricCardsGrid>
   );
 }

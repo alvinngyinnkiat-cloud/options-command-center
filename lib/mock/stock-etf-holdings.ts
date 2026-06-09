@@ -7,9 +7,31 @@ const today = now.split("T")[0];
 const FX = 1.352;
 
 function row(
-  partial: Omit<StockEtfHolding, "user_id" | "created_at" | "updated_at">
+  partial: Omit<
+    StockEtfHolding,
+    | "user_id"
+    | "created_at"
+    | "updated_at"
+    | "last_market_price_native"
+    | "last_price_date"
+    | "price_source"
+    | "manual_value_override"
+  > &
+    Partial<
+      Pick<
+        StockEtfHolding,
+        | "last_market_price_native"
+        | "last_price_date"
+        | "price_source"
+        | "manual_value_override"
+      >
+    >
 ): StockEtfHolding {
   return {
+    last_market_price_native: null,
+    last_price_date: null,
+    price_source: null,
+    manual_value_override: false,
     ...partial,
     user_id: MOCK_USER,
     created_at: now,

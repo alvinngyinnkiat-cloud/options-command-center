@@ -4,13 +4,14 @@ import { useMemo, useState } from "react";
 import { updateTradeCurrentValue } from "@/app/actions/trades";
 import { Button } from "@/components/ui/Button";
 import { calculateTotalPremiumReceived } from "@/lib/trades/calculations";
-import { calculateCurrentCloseCost } from "@/lib/trades/valuation";
 import {
+  CURRENT_OPTION_VALUE_NOT_UPDATED,
   formatCurrency,
-  formatOptionValuePerContract,
-  formatSignedCurrency,
-  formatValueSourceLabel,
+  formatCurrentOptionValueDisplay,
+  OPTION_PRICE_INPUT_STEP,
 } from "@/lib/trades/format";
+import { formatPnL, getPnLColor } from "@/lib/format/pnl";
+import { calculateCurrentCloseCost } from "@/lib/trades/valuation";
 import type { EnrichedTrade } from "@/lib/trades/types";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
@@ -21,29 +22,53 @@ interface EditCurrentValueModalProps {
   onSaved: () => void;
 }
 
+function defaultUpdatedDate(trade: EnrichedTrade): string {
+  if (trade.currentValueUpdatedAt) {
+    return trade.currentValueUpdatedAt.slice(0, 10);
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
+function parseManualValueInput(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const parsed = parseFloat(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
 export function EditCurrentValueModal({
   trade,
   onClose,
   onSaved,
 }: EditCurrentValueModalProps) {
-  const [value, setValue] = useState(String(trade.currentOptionValue));
-  const [source, setSource] = useState<"manual" | "broker">(
-    trade.currentValueSource === "broker" ? "broker" : "manual"
+  const [value, setValue] = useState(
+    trade.manualCurrentOptionValue != null
+      ? String(trade.manualCurrentOptionValue)
+      : ""
   );
+  const [updatedDate, setUpdatedDate] = useState(defaultUpdatedDate(trade));
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const previewPerContract = parseManualValueInput(value);
+
   const preview = useMemo(() => {
-    const perContract = parseFloat(value) || 0;
-    const closeCost = calculateCurrentCloseCost(perContract, trade.contracts);
+    if (previewPerContract == null) {
+      return { closeCost: null, pnl: null };
+    }
+    const closeCost = calculateCurrentCloseCost(
+      previewPerContract,
+      trade.contracts
+    );
     const premium = calculateTotalPremiumReceived(
       trade.premiumPerContract,
       trade.contracts
     );
     const pnl = premium - closeCost;
-    return { perContract, closeCost, pnl };
-  }, [value, trade.contracts, trade.premiumPerContract]);
+    return { closeCost, pnl };
+  }, [previewPerContract, trade.contracts, trade.premiumPerContract]);
 
   const inputClass =
     "w-full h-9 rounded-md border border-terminal-border bg-terminal-surface px-3 font-mono text-sm text-terminal-text focus:outline-none focus:ring-1 focus:ring-accent/50";
@@ -52,21 +77,44 @@ export function EditCurrentValueModal({
     setSaving(true);
     setError(null);
 
-    const result = await updateTradeCurrentValue(trade.id, {
-      currentOptionValue: parseFloat(value) || 0,
-      source,
-      notes: notes.trim() || null,
-    });
-
-    setSaving(false);
-
-    if (!result.success) {
-      setError(result.error);
-      return;
+    const trimmed = value.trim();
+    if (trimmed) {
+      const parsed = parseManualValueInput(trimmed);
+      if (parsed == null) {
+        setSaving(false);
+        setError("Enter a valid option value of zero or greater.");
+        return;
+      }
     }
 
-    onSaved();
-    onClose();
+    try {
+      const result = await updateTradeCurrentValue(trade.id, {
+        currentOptionValue: trimmed ? parseManualValueInput(trimmed) : null,
+        updatedDate: updatedDate || null,
+        notes: notes.trim() || null,
+      });
+
+      if (!result || typeof result !== "object" || !("ok" in result)) {
+        setError("Unexpected server response. Please refresh and try again.");
+        return;
+      }
+
+      if (!result.ok) {
+        setError(result.error || "Failed to save current option value.");
+        return;
+      }
+
+      onSaved();
+      onClose();
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message || "Failed to save current option value."
+          : "Failed to save current option value."
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -92,40 +140,10 @@ export function EditCurrentValueModal({
         </div>
 
         <div className="space-y-4 p-4">
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="rounded-md border border-terminal-border bg-terminal-elevated px-3 py-2">
-              <p className="text-[10px] uppercase text-terminal-muted">
-                System Value
-              </p>
-              <p className="font-mono text-terminal-text">
-                {formatOptionValuePerContract(trade.systemCurrentOptionValue)}
-              </p>
-            </div>
-            <div className="rounded-md border border-terminal-border bg-terminal-elevated px-3 py-2">
-              <p className="text-[10px] uppercase text-terminal-muted">
-                Manual Broker Value
-              </p>
-              <p className="font-mono text-terminal-text">
-                {trade.manualCurrentOptionValue != null
-                  ? formatOptionValuePerContract(trade.manualCurrentOptionValue)
-                  : "—"}
-              </p>
-            </div>
-          </div>
-
-          {trade.valueDifference != null && (
-            <p className="text-xs text-terminal-muted">
-              Difference (manual − system):{" "}
-              <span
-                className={cn(
-                  "font-mono",
-                  trade.valueDifference >= 0 ? "text-warning" : "text-profit"
-                )}
-              >
-                {formatOptionValuePerContract(trade.valueDifference)}
-              </span>
-            </p>
-          )}
+          <p className="text-xs text-terminal-muted">
+            Manual entry only — used for Current P/L (Premium Received − Current
+            Option Value).
+          </p>
 
           <div>
             <label className="text-[10px] uppercase tracking-wider text-terminal-muted">
@@ -133,51 +151,51 @@ export function EditCurrentValueModal({
             </label>
             <input
               type="number"
-              step="0.01"
+              step={OPTION_PRICE_INPUT_STEP}
               min="0"
               value={value}
               onChange={(e) => setValue(e.target.value)}
+              placeholder={CURRENT_OPTION_VALUE_NOT_UPDATED}
               className={inputClass}
             />
             <p className="mt-1 text-[10px] text-terminal-muted">
-              Broker-reported current market value or close price per contract
+              Leave blank to clear the value ({CURRENT_OPTION_VALUE_NOT_UPDATED})
             </p>
           </div>
 
           <div>
             <label className="text-[10px] uppercase tracking-wider text-terminal-muted">
-              Current Value Source
+              Updated Date
             </label>
-            <select
-              value={source}
-              onChange={(e) =>
-                setSource(e.target.value as "manual" | "broker")
-              }
+            <input
+              type="date"
+              value={updatedDate}
+              onChange={(e) => setUpdatedDate(e.target.value)}
               className={inputClass}
-            >
-              <option value="manual">Manual</option>
-              <option value="broker">Broker</option>
-            </select>
+            />
           </div>
 
           <div className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-xs">
-            <p className="text-terminal-muted">
-              Preview close cost:{" "}
-              <span className="font-mono text-terminal-text">
-                {formatCurrency(preview.closeCost)}
-              </span>
-            </p>
-            <p className="text-terminal-muted">
-              Preview P/L:{" "}
-              <span
-                className={cn(
-                  "font-mono",
-                  preview.pnl >= 0 ? "text-profit" : "text-loss"
-                )}
-              >
-                {formatSignedCurrency(preview.pnl)}
-              </span>
-            </p>
+            {previewPerContract == null ? (
+              <p className="text-terminal-muted">
+                Preview: {CURRENT_OPTION_VALUE_NOT_UPDATED}
+              </p>
+            ) : (
+              <>
+                <p className="text-terminal-muted">
+                  Preview close cost:{" "}
+                  <span className="font-mono text-terminal-text">
+                    {formatCurrency(preview.closeCost ?? 0)}
+                  </span>
+                </p>
+                <p className="text-terminal-muted">
+                  Preview P/L (Premium − Current Value):{" "}
+                  <span className={cn("font-mono", getPnLColor(preview.pnl ?? 0))}>
+                    {formatPnL(preview.pnl ?? 0, { currency: "USD" })}
+                  </span>
+                </p>
+              </>
+            )}
           </div>
 
           <div>
@@ -188,7 +206,7 @@ export function EditCurrentValueModal({
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Updated from broker mark at close"
+              placeholder="e.g. Mark from broker statement at close"
               className={inputClass}
             />
           </div>
@@ -211,7 +229,8 @@ export function EditCurrentValueModal({
         </div>
 
         <p className="border-t border-terminal-border px-4 py-2 text-[10px] text-terminal-muted">
-          Active: {formatValueSourceLabel(trade.currentValueSource)}
+          Current:{" "}
+          {formatCurrentOptionValueDisplay(trade.manualCurrentOptionValue)}
           {trade.currentValueUpdatedAt &&
             ` · Updated ${trade.currentValueUpdatedAt.slice(0, 10)}`}
         </p>

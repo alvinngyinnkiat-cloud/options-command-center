@@ -4,6 +4,7 @@ import type {
   EnrichedCryptoHolding,
 } from "./types";
 import type { CryptoHolding } from "@/types/database";
+import { isCryptoCashAsset } from "@/lib/portfolio/capital-pools";
 
 export function enrichCryptoHolding(
   row: CryptoHolding,
@@ -34,13 +35,18 @@ export function enrichCryptoHolding(
 }
 
 export function enrichAllCryptoHoldings(
-  rows: CryptoHolding[]
+  rows: CryptoHolding[],
+  totalCryptoPortfolioValue?: number
 ): EnrichedCryptoHolding[] {
-  const totalValue = rows.reduce(
+  const coinRows = rows.filter(
+    (r) => !isCryptoCashAsset(r.ticker, r.asset_label)
+  );
+  const holdingsTotal = coinRows.reduce(
     (s, r) => s + Number(r.current_value_sgd),
     0
   );
-  return rows
+  const totalValue = totalCryptoPortfolioValue ?? holdingsTotal;
+  return coinRows
     .map((r) => enrichCryptoHolding(r, totalValue))
     .sort((a, b) => b.currentValueSgd - a.currentValueSgd);
 }

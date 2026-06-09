@@ -1,3 +1,4 @@
+import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
 import type { PortfolioGoalMetrics } from "@/lib/goals/types";
 import { formatCagr, formatGoalDateDisplay } from "@/lib/goals/format";
@@ -16,7 +17,7 @@ export function CAGRProjectionCards({ portfolioGoal }: CAGRProjectionCardsProps)
     portfolioGoal.actualCagr >= 0 ? "positive" : "negative";
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <MetricCardsGrid gap="lg">
       <StatCard
         label="Required CAGR"
         value={formatCagr(portfolioGoal.requiredCagr)}
@@ -59,6 +60,6 @@ export function CAGRProjectionCards({ portfolioGoal }: CAGRProjectionCardsProps)
             : "positive"
         }
       />
-    </div>
+    </MetricCardsGrid>
   );
 }

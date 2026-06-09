@@ -7,6 +7,7 @@ import {
   startOfYear,
   subDays,
 } from "date-fns";
+import { formatNumber } from "@/lib/format/currency";
 import type {
   AchievementMilestone,
   DailyPortfolioSnapshot,
@@ -19,6 +20,25 @@ import type {
   ThresholdMilestone,
 } from "./daily-snapshot-types";
 import type { PortfolioHistoryFilterId } from "./history-preferences";
+import { getSingaporeSnapshotDate } from "./snapshot-date";
+
+/** Smoke-test and demo rows that must not affect goals or milestones. */
+export const EXCLUDED_SNAPSHOT_DATE = "2099-01-15";
+
+export function isRealPortfolioSnapshot(
+  snapshot: DailyPortfolioSnapshot
+): boolean {
+  if (snapshot.snapshotDate === EXCLUDED_SNAPSHOT_DATE) return false;
+  if (snapshot.id.startsWith("mock-daily-")) return false;
+  if (snapshot.snapshotDate > getSingaporeSnapshotDate()) return false;
+  return true;
+}
+
+export function filterRealPortfolioSnapshots(
+  snapshots: DailyPortfolioSnapshot[]
+): DailyPortfolioSnapshot[] {
+  return snapshots.filter(isRealPortfolioSnapshot);
+}
 
 export function snapshotOnOrBefore(
   snapshots: DailyPortfolioSnapshot[],
@@ -33,6 +53,30 @@ export function snapshotOnOrBefore(
     sorted.find(
       (s) => startOfDay(parseISO(s.snapshotDate)).getTime() <= targetMs
     ) ?? null
+  );
+}
+
+/** Prefer today's snapshot; otherwise the newest snapshot on or before asOfDate. */
+export function selectLatestSnapshot(
+  snapshots: DailyPortfolioSnapshot[],
+  asOfDate: string
+): DailyPortfolioSnapshot | null {
+  if (snapshots.length === 0) return null;
+
+  const asOfMs = startOfDay(parseISO(asOfDate)).getTime();
+  const onOrBefore = snapshots.filter(
+    (s) => startOfDay(parseISO(s.snapshotDate)).getTime() <= asOfMs
+  );
+  if (onOrBefore.length === 0) return null;
+
+  const todayMatch = onOrBefore.find((s) => s.snapshotDate === asOfDate);
+  if (todayMatch) return todayMatch;
+
+  return onOrBefore.reduce((latest, snap) =>
+    parseISO(snap.snapshotDate).getTime() >
+    parseISO(latest.snapshotDate).getTime()
+      ? snap
+      : latest
   );
 }
 
@@ -133,20 +177,23 @@ export function buildMilestones(
   snapshots: DailyPortfolioSnapshot[],
   asOfDate: string
 ): PortfolioMilestones {
-  if (snapshots.length === 0) {
+  const real = filterRealPortfolioSnapshots(snapshots);
+  if (real.length === 0) {
     return { highest: null, lowest: null, current: null, average: null };
   }
 
-  const latest = snapshotOnOrBefore(snapshots, parseISO(asOfDate));
-  let highest = snapshots[0];
-  let lowest = snapshots[0];
+  const latest = selectLatestSnapshot(real, asOfDate);
+  let highest = real[0];
+  let lowest = real[0];
   let sum = 0;
 
-  for (const snap of snapshots) {
+  for (const snap of real) {
     sum += snap.portfolioValueSgd;
     if (snap.portfolioValueSgd > highest.portfolioValueSgd) highest = snap;
     if (snap.portfolioValueSgd < lowest.portfolioValueSgd) lowest = snap;
   }
+
+  const current = latest?.portfolioValueSgd ?? null;
 
   return {
     highest: {
@@ -157,8 +204,8 @@ export function buildMilestones(
       value: lowest.portfolioValueSgd,
       date: lowest.snapshotDate,
     },
-    current: latest?.portfolioValueSgd ?? null,
-    average: sum / snapshots.length,
+    current,
+    average: sum / real.length,
   };
 }
 
@@ -290,7 +337,7 @@ export function formatSgdMilestoneAmount(thresholdSgd: number): string {
   if (thresholdSgd >= 1_000 && thresholdSgd % 1_000 === 0) {
     return `${thresholdSgd / 1_000}K`;
   }
-  return thresholdSgd.toLocaleString("en-SG");
+  return formatNumber(thresholdSgd, 0);
 }
 
 export function formatAchievementMilestoneLabel(thresholdSgd: number): string {
@@ -340,13 +387,14 @@ export function buildAchievementMilestones(
   snapshots: DailyPortfolioSnapshot[],
   thresholds: number[] = ACHIEVEMENT_MILESTONE_THRESHOLDS
 ): AchievementMilestone[] {
+  const real = filterRealPortfolioSnapshots(snapshots);
   const unique = [...new Set(thresholds.filter((t) => t > 0))].sort(
     (a, b) => a - b
   );
 
   return unique.map((thresholdSgd) => {
     const { reachedDate, insufficientData } = findFirstThresholdAchievement(
-      snapshots,
+      real,
       thresholdSgd
     );
     return {

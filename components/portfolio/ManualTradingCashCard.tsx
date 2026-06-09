@@ -88,9 +88,9 @@ export function ManualTradingCashCard({
           <Badge variant="info">Manual Input</Badge>
         </div>
         <CardDescription>
-          Enter broker-reported cash separately. SGD cash drives dashboard and
-          risk calculations. USD cash is reference only — never auto-converted or
-          added to SGD.
+          Enter broker-reported cash. Trading Cash SGD is in Portfolio Value and
+          Trading Capital. Trading Cash USD is reference only. Use Manual Crypto
+          Cash below for stablecoin / exchange cash.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -112,7 +112,7 @@ export function ManualTradingCashCard({
               onChange={(e) => setTradingCashUsd(e.target.value)}
             />
             <p className="mt-1 text-[10px] text-terminal-muted">
-              US stocks, options, buying power reference
+              US stocks, options, buying power reference — not in SGD totals
             </p>
           </div>
           <div>
@@ -132,7 +132,7 @@ export function ManualTradingCashCard({
               onChange={(e) => setTradingCashSgd(e.target.value)}
             />
             <p className="mt-1 text-[10px] text-terminal-muted">
-              Used for Trading Capital, risk capacity, dashboard summary
+              Included in Portfolio Value and Trading Capital
             </p>
           </div>
         </div>

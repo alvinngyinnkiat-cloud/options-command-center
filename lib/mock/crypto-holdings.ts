@@ -44,7 +44,7 @@ export const MOCK_CRYPTO_HOLDINGS: CryptoHolding[] = [
     ticker: "USDT",
     total_invested_sgd: 3_200,
     current_value_sgd: 3_200,
-    notes: "Exchange stablecoin — crypto cash only",
+    notes: "Stablecoin holding — counted in Coin Holdings Total",
     last_updated: today,
   }),
   row({

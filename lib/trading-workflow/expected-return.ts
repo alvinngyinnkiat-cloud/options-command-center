@@ -1,3 +1,4 @@
+import { calculateTotalPremiumCollected } from "@/lib/trades/premium-collected";
 import type { EnrichedTrade, TradeTrackerSummary } from "@/lib/trades/types";
 import type { ExpectedReturnDashboard } from "./types";
 
@@ -13,11 +14,12 @@ export function buildExpectedReturnDashboard(
   );
   const closed = trades.filter((t) => t.status === "closed");
 
-  const totalPremiumCollected = open.reduce(
+  const totalPremiumCollected = calculateTotalPremiumCollected(trades);
+  const openPremiumCollected = open.reduce(
     (s, t) => s + t.calculations.totalPremiumReceived,
     0
   );
-  const profitTarget75Pct = totalPremiumCollected * 0.75;
+  const profitTarget75Pct = openPremiumCollected * 0.75;
   const currentUnrealizedPnl = open.reduce(
     (s, t) => s + t.calculations.currentPnl,
     0

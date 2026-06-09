@@ -8,7 +8,11 @@ import type { CryptoTrackerData, EnrichedCryptoHolding } from "@/lib/crypto/type
 import { Plus } from "lucide-react";
 import { CryptoFormModal } from "./CryptoFormModal";
 import { CryptoHoldingsTable } from "./CryptoHoldingsTable";
+import { CryptoManualPortfolioCard } from "./CryptoManualPortfolioCard";
 import { CryptoSummaryCards } from "./CryptoSummaryCards";
+import { CryptoAllocationChart } from "./CryptoAllocationChart";
+import { CryptoRankingsPanel } from "./CryptoRankingsPanel";
+import { CryptoDeploymentPlanner } from "./CryptoDeploymentPlanner";
 
 interface CryptoTrackerClientProps {
   initialData: CryptoTrackerData;
@@ -27,13 +31,14 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
     <div className="space-y-6">
       <PageHeader
         title="Crypto Trade Tracker"
-        description="Track crypto by total SGD invested — no buy price or coin quantity required"
+        description="Manual-only crypto tracking — enter SGD values directly. No live price feed."
         actions={
           <>
+            <Badge variant="outline">Manual Update</Badge>
             <Badge
               variant={initialData.dataSource === "supabase" ? "success" : "outline"}
             >
-              {initialData.dataSource === "supabase" ? "Live data" : "Mock data"}
+              {initialData.dataSource === "supabase" ? "Saved" : "Mock data"}
             </Badge>
             <Button
               variant="primary"
@@ -47,11 +52,26 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
         }
       />
 
-      <CryptoSummaryCards summary={initialData.summary} />
+      <CryptoSummaryCards portfolioManual={initialData.portfolioManual} />
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <CryptoAllocationChart slices={initialData.allocationSlices} />
+        <CryptoDeploymentPlanner
+          cryptoCashSgd={initialData.portfolioManual.cryptoCashSgd}
+          plan={initialData.deploymentPlan}
+        />
+      </div>
+
+      <CryptoRankingsPanel rankings={initialData.rankings} />
+
+      <CryptoManualPortfolioCard
+        portfolioManual={initialData.portfolioManual}
+        onSaved={handleRefresh}
+      />
 
       <div>
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
-          Holdings
+          Optional Per-Asset Breakdown
         </h2>
         <CryptoHoldingsTable
           holdings={initialData.holdings}
@@ -69,8 +89,10 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
       )}
 
       <p className="text-[11px] text-terminal-muted">
-        Values in SGD · P/L = Current Value − Total Invested · Portfolio Dashboard
-        crypto value syncs from this tracker
+        Coin Holdings Total includes all tokens and stablecoins. Available
+        Exchange Cash is uninvested fiat only. Current Crypto Portfolio Value =
+        Coin Holdings Total + Available Exchange Cash. Deployment Planner uses
+        exchange cash only.
       </p>
     </div>
   );

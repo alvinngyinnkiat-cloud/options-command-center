@@ -78,7 +78,7 @@ export function buildMockScannerRowsWithStore(
         e.ticker,
         base.length + index,
         undefined,
-        "Pullbacks"
+        "PULLBACK"
       );
       return {
         ...row,

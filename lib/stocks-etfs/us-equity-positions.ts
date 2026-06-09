@@ -17,7 +17,10 @@ import { subYears, parseISO } from "date-fns";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
 import type { TickerDividendTotals } from "@/lib/dividends/types";
 import { resolveTickerDividendIncome } from "@/lib/dividends/calculations";
-import { calculateIncomeYieldPct } from "@/lib/ticker-positions/income-yield";
+import {
+  calculateIncomeYieldPct,
+  calculateRoiPct,
+} from "@/lib/ticker-positions/income-yield";
 
 export interface UsEquityPositionRow {
   ticker: string;
@@ -54,11 +57,14 @@ export interface UsEquityPositionRow {
 
 export interface UsEquityTabSummary {
   totalMarketValue: number;
+  totalCapital: number;
+  totalDividendIncome: number;
   totalPnl: number;
+  totalReturnPct: number;
+  /** Internal — premium metrics live in Options / Position Manager. */
   totalPremiumCollected: number;
   adjustedCostBasis: number;
   netPositionPnl: number;
-  totalReturnPct: number;
 }
 
 function isOpenTrade(trade: EnrichedTrade): boolean {
@@ -213,6 +219,11 @@ export function buildUsEquityPositionRow(
   };
 }
 
+function stockOnlyPnl(row: Pick<UsEquityPositionRow, "marketValue" | "dividendIncome" | "holding">): number {
+  const capital = row.holding?.totalInvestedNative ?? 0;
+  return row.marketValue - capital + row.dividendIncome;
+}
+
 export function buildUsEquityTabData(
   category: UsEquityCategory,
   holdings: EnrichedStockEtfHolding[],
@@ -227,19 +238,16 @@ export function buildUsEquityTabData(
 
   const tickerSet = new Set<string>();
   for (const h of categoryHoldings) tickerSet.add(h.ticker.toUpperCase());
-  for (const t of allTrades) {
-    if (t.ticker) tickerSet.add(t.ticker.toUpperCase());
-  }
 
   const rows: UsEquityPositionRow[] = [...tickerSet]
     .map((ticker) => {
       const holding =
         categoryHoldings.find((h) => h.ticker.toUpperCase() === ticker) ??
         null;
+      if (!holding) return null;
       const trades = allTrades.filter(
         (t) => t.ticker.toUpperCase() === ticker
       );
-      if (!holding && trades.length === 0) return null;
       return buildUsEquityPositionRow(
         ticker,
         category,
@@ -249,23 +257,31 @@ export function buildUsEquityTabData(
       );
     })
     .filter((r): r is UsEquityPositionRow => r != null)
-    .sort((a, b) => b.totalPnl - a.totalPnl);
+    .sort((a, b) => stockOnlyPnl(b) - stockOnlyPnl(a));
 
   const summary: UsEquityTabSummary = {
-    totalMarketValue: rows.reduce((s, r) => s + r.currentAssetValue, 0),
-    totalPnl: rows.reduce((s, r) => s + r.totalPnl, 0),
+    totalMarketValue: rows.reduce((s, r) => s + r.marketValue, 0),
+    totalCapital: rows.reduce(
+      (s, r) => s + (r.holding?.totalInvestedNative ?? 0),
+      0
+    ),
+    totalDividendIncome: rows.reduce((s, r) => s + r.dividendIncome, 0),
+    totalPnl: rows.reduce((s, r) => s + stockOnlyPnl(r), 0),
+    totalReturnPct: 0,
     totalPremiumCollected: rows.reduce(
       (s, r) => s + r.totalPremiumCollected,
       0
     ),
-    adjustedCostBasis: rows.reduce((s, r) => s + r.adjustedCostBasis, 0),
-    netPositionPnl: rows.reduce((s, r) => s + r.netPositionPnl, 0),
-    totalReturnPct: 0,
+    adjustedCostBasis: rows.reduce((s, r) => s + r.holding!.totalInvestedNative, 0),
+    netPositionPnl: rows.reduce(
+      (s, r) => s + (r.marketValue - (r.holding?.totalInvestedNative ?? 0)),
+      0
+    ),
   };
-  summary.totalReturnPct =
-    summary.adjustedCostBasis > 0
-      ? (summary.netPositionPnl / summary.adjustedCostBasis) * 100
-      : 0;
+  summary.totalReturnPct = calculateRoiPct(
+    summary.totalPnl,
+    summary.totalCapital
+  );
 
   return { rows, summary };
 }

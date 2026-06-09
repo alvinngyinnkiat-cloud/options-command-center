@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -11,14 +11,51 @@ import {
 } from "@/lib/ticker-positions/format";
 import type { TickerPositionManagerData } from "@/lib/supabase/queries/ticker-positions";
 import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/dividends/use-dividend-sync";
+import type { IncomeFilter, MarketTab } from "@/lib/ticker-positions/market-types";
 import {
+  buildTabLeaderboards,
+  filterIncomeRows,
+  filterUnifiedRowsByTab,
+  getMarketReportSections,
+  getMarketTabHeader,
+  shouldShowMarketReports,
+} from "@/lib/ticker-positions/tab-views";
+import {
+  AllMarketGroupedTables,
+  SgMarketGroupedTables,
+  UsMarketGroupedTables,
+} from "./PositionGroupTables";
+import {
+  AllMarketSummaryCards,
+  IncomeSummaryCards,
+  IncomeTable,
+  PassiveIncomeGoalCard,
   SgMarketSummaryCards,
-  SgMarketTable,
   UsMarketSummaryCards,
-  UsMarketTable,
 } from "./MarketTables";
 
-type MarketTab = "us" | "sg";
+const TAB_STORAGE_KEY = "portfolio-income-position-manager-tab";
+
+const MARKET_TABS: { id: MarketTab; label: string }[] = [
+  { id: "all", label: "ALL" },
+  { id: "us", label: "US Market" },
+  { id: "sg", label: "SG Market" },
+  { id: "income", label: "Income" },
+];
+
+const INCOME_FILTERS: { id: IncomeFilter; label: string }[] = [
+  { id: "all", label: "All Income" },
+  { id: "dividends", label: "Dividends Only" },
+  { id: "premium", label: "Premium Only" },
+  { id: "highest_yield", label: "Highest Yield" },
+  { id: "highest_income", label: "Highest Income" },
+  { id: "us_only", label: "US Only" },
+  { id: "sg_only", label: "SG Only" },
+];
+
+function isMarketTab(value: string | null): value is MarketTab {
+  return value === "all" || value === "us" || value === "sg" || value === "income";
+}
 
 function LeaderboardTable({
   title,
@@ -72,14 +109,39 @@ export function TickerPositionClient({ data: initialData }: TickerPositionClient
   }, []);
   useDividendDataSync(handleDividendSync);
 
-  const [tab, setTab] = useState<MarketTab>("us");
-  const { usMarket, sgMarket, report, dataSource } = data;
+  const [tab, setTabState] = useState<MarketTab>("all");
+  const [incomeFilter, setIncomeFilter] = useState<IncomeFilter>("all");
+
+  useEffect(() => {
+    const saved = localStorage.getItem(TAB_STORAGE_KEY);
+    if (isMarketTab(saved)) setTabState(saved);
+  }, []);
+
+  const setTab = useCallback((next: MarketTab) => {
+    setTabState(next);
+    localStorage.setItem(TAB_STORAGE_KEY, next);
+  }, []);
+
+  const { usMarket, sgMarket, allMarketSummary, incomeTab, passiveIncomeGoal, report, dataSource } =
+    data;
+
+  const incomeRows = useMemo(
+    () => filterIncomeRows(filterUnifiedRowsByTab("income", usMarket.rows, sgMarket.rows), incomeFilter),
+    [usMarket.rows, sgMarket.rows, incomeFilter]
+  );
+
+  const leaderboards = useMemo(
+    () => buildTabLeaderboards(tab, report, usMarket.rows, sgMarket.rows),
+    [tab, report, usMarket.rows, sgMarket.rows]
+  );
+
+  const marketReports = useMemo(() => getMarketReportSections(tab, report), [tab, report]);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Ticker Position Manager"
-        description="US and SG market performance — capital gains, premium & dividend income (My P/L only)"
+        title="Portfolio Income & Position Manager"
+        description="Capital gains, premium & dividend income, passive income yield, and position performance (My P/L only)"
         actions={
           <Badge variant={dataSource === "supabase" ? "success" : "outline"}>
             {dataSource === "supabase" ? "Live data" : "Mock data"}
@@ -94,149 +156,150 @@ export function TickerPositionClient({ data: initialData }: TickerPositionClient
         options tracking.
       </div>
 
-      <div className="flex gap-2">
-        <Button
-          variant={tab === "us" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setTab("us")}
-        >
-          US Market
-        </Button>
-        <Button
-          variant={tab === "sg" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setTab("sg")}
-        >
-          SG Market
-        </Button>
+      <div className="flex flex-wrap gap-2">
+        {MARKET_TABS.map(({ id, label }) => (
+          <Button
+            key={id}
+            variant={tab === id ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setTab(id)}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
 
-      {tab === "us" ? (
+      <section className="space-y-4">
+        <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
+          {getMarketTabHeader(tab)}
+        </h2>
+
+        {tab === "income" ? (
+          <>
+            <IncomeSummaryCards summary={incomeTab} />
+            <PassiveIncomeGoalCard goal={passiveIncomeGoal} />
+            <div className="flex flex-wrap gap-2">
+              {INCOME_FILTERS.map(({ id, label }) => (
+                <Button
+                  key={id}
+                  variant={incomeFilter === id ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setIncomeFilter(id)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <IncomeTable rows={incomeRows} />
+          </>
+        ) : (
+          <>
+            {tab === "all" && <AllMarketSummaryCards summary={allMarketSummary} />}
+            {tab === "us" && <UsMarketSummaryCards summary={usMarket.summary} />}
+            {tab === "sg" && <SgMarketSummaryCards summary={sgMarket.summary} />}
+
+            {tab === "all" && (
+              <AllMarketGroupedTables usRows={usMarket.rows} sgRows={sgMarket.rows} />
+            )}
+            {tab === "us" && <UsMarketGroupedTables rows={usMarket.rows} />}
+            {tab === "sg" && <SgMarketGroupedTables rows={sgMarket.rows} />}
+          </>
+        )}
+      </section>
+
+      {(tab === "all" || tab === "us" || tab === "sg" || tab === "income") && (
         <section className="space-y-4">
           <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
-            US Market
+            Leaderboards
           </h2>
-          <UsMarketSummaryCards summary={usMarket.summary} />
-          <UsMarketTable rows={usMarket.rows} />
-        </section>
-      ) : (
-        <section className="space-y-4">
-          <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
-            SG Market
-          </h2>
-          <SgMarketSummaryCards summary={sgMarket.summary} />
-          <SgMarketTable rows={sgMarket.rows} />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {leaderboards.showPremiumGenerators && (
+              <LeaderboardTable
+                title="Top Premium Generators"
+                headers={["Ticker", "Premium Collected", "Premium Yield %"]}
+                rows={leaderboards.topPremiumGenerators.map((r) => [
+                  r.ticker,
+                  formatTickerCurrency(r.premiumCollected),
+                  formatIncomeYieldPct(r.premiumYieldPct),
+                ])}
+              />
+            )}
+            {leaderboards.showDividendGenerators && (
+              <LeaderboardTable
+                title="Top Dividend Generators"
+                headers={["Ticker", "Annual Dividend", "Dividend Yield %"]}
+                rows={leaderboards.topDividendGenerators.map((r) => [
+                  r.ticker,
+                  formatTickerCurrency(r.annualDividendIncome),
+                  r.dividendYield != null
+                    ? formatIncomeYieldPct(r.dividendYield)
+                    : "—",
+                ])}
+              />
+            )}
+            {leaderboards.showPassiveIncomeGenerators && (
+              <LeaderboardTable
+                title="Top Passive Income Generators"
+                headers={[
+                  "Ticker",
+                  "Premium Income",
+                  "Dividend Income",
+                  "Total Passive Income",
+                  "Income Yield %",
+                ]}
+                rows={leaderboards.topPassiveIncomeGenerators.map((r) => [
+                  r.ticker,
+                  formatTickerCurrency(r.premiumIncome),
+                  formatTickerCurrency(r.dividendIncome),
+                  formatTickerCurrency(r.totalPassiveIncome),
+                  formatIncomeYieldPct(r.incomeYieldPct),
+                ])}
+              />
+            )}
+          </div>
         </section>
       )}
 
-      <section className="space-y-4">
-        <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
-          Leaderboards
-        </h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <LeaderboardTable
-            title="Top Premium Generators"
-            headers={["Ticker", "Premium Collected", "Premium Yield %"]}
-            rows={report.topPremiumGenerators.map((r) => [
-              r.ticker,
-              formatTickerCurrency(r.premiumCollected),
-              formatIncomeYieldPct(r.premiumYieldPct),
-            ])}
-          />
-          <LeaderboardTable
-            title="Top Dividend Generators"
-            headers={["Ticker", "Annual Dividend", "Dividend Yield %"]}
-            rows={report.topDividendGenerators.map((r) => [
-              r.ticker,
-              formatTickerCurrency(r.annualDividendIncome),
-              r.dividendYield != null
-                ? formatIncomeYieldPct(r.dividendYield)
-                : "—",
-            ])}
-          />
-          <LeaderboardTable
-            title="Top Passive Income Generators"
-            headers={[
-              "Ticker",
-              "Premium",
-              "Dividend",
-              "Total Passive",
-              "Income Yield %",
-            ]}
-            rows={report.topPassiveIncomeGenerators.map((r) => [
-              r.ticker,
-              formatTickerCurrency(r.premiumIncome),
-              formatTickerCurrency(r.dividendIncome),
-              formatTickerCurrency(r.totalPassiveIncome),
-              formatIncomeYieldPct(r.incomeYieldPct),
-            ])}
-          />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
-          Market Reports
-        </h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <LeaderboardTable
-            title="Best Performing US Tickers"
-            headers={["Ticker", "Total P/L", "Income Yield %"]}
-            rows={report.usTopPerformers.map((r) => [
-              r.ticker,
-              formatSignedTickerCurrency(r.totalPnl),
-              formatIncomeYieldPct(r.incomeYieldPct),
-            ])}
-          />
-          <LeaderboardTable
-            title="Worst Performing US Tickers"
-            headers={["Ticker", "Total P/L", "Income Yield %"]}
-            rows={report.usWorstPerformers.map((r) => [
-              r.ticker,
-              formatSignedTickerCurrency(r.totalPnl),
-              formatIncomeYieldPct(r.incomeYieldPct),
-            ])}
-          />
-          <LeaderboardTable
-            title="Best Performing SG Tickers"
-            headers={["Ticker", "Total P/L", "Income Yield %"]}
-            rows={report.sgTopPerformers.map((r) => [
-              r.ticker,
-              formatSignedTickerCurrency(r.totalPnl),
-              formatIncomeYieldPct(r.incomeYieldPct),
-            ])}
-          />
-          <LeaderboardTable
-            title="Worst Performing SG Tickers"
-            headers={["Ticker", "Total P/L", "Income Yield %"]}
-            rows={report.sgWorstPerformers.map((r) => [
-              r.ticker,
-              formatSignedTickerCurrency(r.totalPnl),
-              formatIncomeYieldPct(r.incomeYieldPct),
-            ])}
-          />
-          <LeaderboardTable
-            title="Highest US Income Yield"
-            headers={["Ticker", "Income Yield %", "Annual Passive"]}
-            rows={report.usHighestIncomeYield.map((r) => [
-              r.ticker,
-              formatIncomeYieldPct(r.incomeYieldPct),
-              formatTickerCurrency(
-                r.annualPremiumIncome + r.annualDividendIncome
-              ),
-            ])}
-          />
-          <LeaderboardTable
-            title="Highest SG Income Yield"
-            headers={["Ticker", "Income Yield %", "Annual Dividend"]}
-            rows={report.sgHighestIncomeYield.map((r) => [
-              r.ticker,
-              formatIncomeYieldPct(r.incomeYieldPct),
-              formatTickerCurrency(r.annualDividendIncome),
-            ])}
-          />
-        </div>
-      </section>
+      {shouldShowMarketReports(tab) && (
+        <section className="space-y-4">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
+            Market Reports
+          </h2>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <LeaderboardTable
+              title={marketReports.bestLabel}
+              headers={["Ticker", "Total P/L", "Income Yield %"]}
+              rows={marketReports.bestPerformers.map((r) => [
+                r.ticker,
+                formatSignedTickerCurrency(r.totalPnl),
+                formatIncomeYieldPct(r.incomeYieldPct),
+              ])}
+            />
+            <LeaderboardTable
+              title={marketReports.worstLabel}
+              headers={["Ticker", "Total P/L", "Income Yield %"]}
+              rows={marketReports.worstPerformers.map((r) => [
+                r.ticker,
+                formatSignedTickerCurrency(r.totalPnl),
+                formatIncomeYieldPct(r.incomeYieldPct),
+              ])}
+            />
+            <LeaderboardTable
+              title={marketReports.yieldLabel}
+              headers={["Ticker", "Income Yield %", "Annual Passive"]}
+              rows={marketReports.highestIncomeYield.map((r) => [
+                r.ticker,
+                formatIncomeYieldPct(r.incomeYieldPct),
+                formatTickerCurrency(
+                  "annualPremiumIncome" in r
+                    ? r.annualPremiumIncome + r.annualDividendIncome
+                    : r.annualDividendIncome
+                ),
+              ])}
+            />
+          </div>
+        </section>
+      )}
     </div>
   );
 }
