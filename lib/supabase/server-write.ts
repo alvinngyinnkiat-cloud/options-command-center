@@ -20,12 +20,20 @@ export interface SupabaseServerAccess {
 
 export type ServerSupabaseClient = SupabaseClient<Database>;
 
-export function isDevServerWriteModeEnabled(): boolean {
+/**
+ * True when SUPABASE_DEV_USER_ID + SUPABASE_SERVICE_ROLE_KEY allow server-side
+ * access without a Supabase Auth session (local dev or single-user production).
+ */
+export function isServiceRoleUserFallbackEnabled(): boolean {
   return (
-    process.env.NODE_ENV === "development" &&
     !!getDevUserId() &&
     !!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
   );
+}
+
+/** @alias isServiceRoleUserFallbackEnabled */
+export function isDevServerWriteModeEnabled(): boolean {
+  return isServiceRoleUserFallbackEnabled();
 }
 
 export async function resolveSupabaseServerAccess(): Promise<SupabaseServerAccess | null> {
@@ -36,7 +44,7 @@ export async function resolveSupabaseServerAccess(): Promise<SupabaseServerAcces
     return { mode: "production-session", userId: sessionUser };
   }
 
-  if (isDevServerWriteModeEnabled()) {
+  if (isServiceRoleUserFallbackEnabled()) {
     return { mode: "dev-service-role", userId: getDevUserId()! };
   }
 

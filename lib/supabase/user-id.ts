@@ -7,7 +7,7 @@ export const MISSING_DEV_USER_ID_MESSAGE =
   "Missing SUPABASE_DEV_USER_ID for live writes.";
 
 export const SUPABASE_AUTH_SESSION_REQUIRED_MESSAGE =
-  "Supabase Auth session required for live database access. For local dev without sign-in, set SUPABASE_DEV_USER_ID and SUPABASE_SERVICE_ROLE_KEY (server-only).";
+  "Supabase Auth session required for live database access. Set SUPABASE_DEV_USER_ID and SUPABASE_SERVICE_ROLE_KEY (server-only) to run without sign-in.";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

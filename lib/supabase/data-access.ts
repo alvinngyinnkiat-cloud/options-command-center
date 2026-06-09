@@ -1,6 +1,6 @@
 import type { DataSource } from "@/lib/portfolio/types";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { resolveAuthenticatedUserId } from "@/lib/supabase/resolve-user";
+import { resolveSupabaseReadUserId } from "@/lib/supabase/resolve-user";
 
 export type ReadResult<T> = { value: T; dataSource: DataSource };
 
@@ -18,7 +18,7 @@ export async function readSupabasePrimary<T>(options: {
   }
 
   try {
-    const userId = await resolveAuthenticatedUserId();
+    const userId = await resolveSupabaseReadUserId();
     if (!userId) {
       return { value: await options.empty("unauthenticated"), dataSource: "supabase" };
     }

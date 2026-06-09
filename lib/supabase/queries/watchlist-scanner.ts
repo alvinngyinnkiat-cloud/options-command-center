@@ -30,7 +30,10 @@ import {
   getMockTechnicalSnapshot,
 } from "@/lib/mock/watchlist-scanner";
 import { readSupabasePrimary } from "@/lib/supabase/data-access";
-import { resolveAuthenticatedUserId, withSupabaseQuery } from "@/lib/supabase/resolve-user";
+import {
+  resolveSupabaseReadUserId,
+  withSupabaseQuery,
+} from "@/lib/supabase/resolve-user";
 import type {
   MarketData,
   SupportResistance,
@@ -419,8 +422,8 @@ export async function getWatchlistScannerData(
   });
 
   const userId =
-    dataSource === "supabase" ? await resolveAuthenticatedUserId() : undefined;
-  return finalizeScannerRows(rows, dataSource, userId, options);
+    dataSource === "supabase" ? await resolveSupabaseReadUserId() : undefined;
+  return finalizeScannerRows(rows, dataSource, userId ?? undefined, options);
 }
 
 export async function getWatchlistScannerDataForUser(

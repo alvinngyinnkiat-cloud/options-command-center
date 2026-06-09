@@ -1,6 +1,7 @@
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import {
   isDevServerWriteModeEnabled,
+  isServiceRoleUserFallbackEnabled,
   resolveSupabaseServerAccess,
 } from "@/lib/supabase/server-write";
 import {
@@ -24,6 +25,7 @@ export {
 
 export {
   isDevServerWriteModeEnabled,
+  isServiceRoleUserFallbackEnabled,
   resolveSupabaseServerAccess,
   getServerSupabaseClient,
   withSupabaseQuery,
@@ -51,7 +53,7 @@ export function warnMissingDevUserIdForWrite(): void {
 export async function resolveAuthenticatedUserId(): Promise<string | undefined> {
   const sessionUser = await resolveSessionUserId();
   if (sessionUser) return sessionUser;
-  if (isDevServerWriteModeEnabled()) return getDevUserId();
+  if (isServiceRoleUserFallbackEnabled()) return getDevUserId();
   return undefined;
 }
 

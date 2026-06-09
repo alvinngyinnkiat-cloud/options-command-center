@@ -5,7 +5,7 @@ import { buildRiskDashboardData } from "@/lib/risk/summary";
 import type { RiskDashboardData, RiskSettingsSnapshot } from "@/lib/risk/types";
 import { TRADING_RULES } from "@/lib/constants/trading-rules";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { resolveAuthenticatedUserId, withSupabaseQuery } from "@/lib/supabase/resolve-user";
+import { resolveSupabaseReadUserId, withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import type { RiskSettings } from "@/types/database";
 
 function mapRiskSettings(row: RiskSettings | null): RiskSettingsSnapshot {
@@ -42,7 +42,7 @@ export async function getRiskDashboardData(): Promise<RiskDashboardData> {
   const dataSource = metrics.dataSource;
 
   if (isSupabaseConfigured()) {
-    const userId = await resolveAuthenticatedUserId();
+    const userId = await resolveSupabaseReadUserId();
     if (userId) {
       settings = await getRiskSettings(userId);
     }

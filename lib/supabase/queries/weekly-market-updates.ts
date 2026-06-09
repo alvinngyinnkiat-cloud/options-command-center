@@ -18,7 +18,7 @@ import {
 } from "@/lib/mock/weekend-review-state";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { resolveAuthenticatedUserId, withSupabaseQuery } from "@/lib/supabase/resolve-user";
+import { resolveSupabaseReadUserId, withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import type { WeeklyMarketUpdate } from "@/types/database";
 
 function mapDbRow(row: WeeklyMarketUpdate): WeeklyMarketUpdateRecord {
@@ -58,7 +58,7 @@ export async function getWeekendReviewStatus(
   }
 
   try {
-    const userId = await resolveAuthenticatedUserId();
+    const userId = await resolveSupabaseReadUserId();
     if (!userId) {
       return {
         lastReviewDate: null,
@@ -199,7 +199,7 @@ export async function getWeeklyMarketUpdateHistory(
   }
 
   try {
-    const userId = await resolveAuthenticatedUserId();
+    const userId = await resolveSupabaseReadUserId();
     if (!userId) return [];
 
     return withSupabaseQuery(

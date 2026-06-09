@@ -25,7 +25,7 @@ import {
   persistWeeklyMarketReviewSnapshots,
 } from "@/lib/supabase/queries/weekly-market-updates";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
-import { resolveAuthenticatedUserId } from "@/lib/supabase/resolve-user";
+import { resolveSupabaseReadUserId, MOCK_USER_ID } from "@/lib/supabase/resolve-user";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -37,16 +37,19 @@ export async function runWeekendMarketReview(): Promise<WeekendMarketReviewActio
     let dataSource: "supabase" | "mock" = isSupabaseConfigured()
       ? "supabase"
       : "mock";
-    const userId = await resolveAuthenticatedUserId();
+    const resolvedUserId = await resolveSupabaseReadUserId();
 
     if (!isSupabaseConfigured()) {
       dataSource = "mock";
-    } else if (!userId) {
+    } else if (!resolvedUserId) {
       return {
         success: false,
-        error: "Sign in or set SUPABASE_DEV_USER_ID for local development.",
+        error:
+          "Live database access unavailable. Set SUPABASE_DEV_USER_ID and SUPABASE_SERVICE_ROLE_KEY, or sign in.",
       };
     }
+
+    const userId = resolvedUserId ?? MOCK_USER_ID;
 
     const history = await getWeeklyMarketUpdateHistory(200);
     let rows: WatchlistScannerRow[];
