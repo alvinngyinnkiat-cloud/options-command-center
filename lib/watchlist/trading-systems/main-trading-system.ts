@@ -1,20 +1,24 @@
 import type {
   MainTradingSystemResult,
   StrategyFitTier,
+  TradingSystemRecommendation,
   TradingSystemsInput,
 } from "./types";
 import {
   classifyStochasticMomentum,
-  mainSystemStochasticScore,
+  mainSystemMomentumScore,
 } from "@/lib/watchlist/stochastic-momentum";
 import {
   clampScore,
   IRON_CONDOR_TREND_CAP,
+  isAveragePriceFalling,
+  isAveragePriceRising,
   isBetweenSupportAndResistance,
-  isBullishTrend,
-  isNearResistanceZone,
-  isNearSupportZone,
-  isNeutralTrend,
+  isMainBearishTrend,
+  isMainBullishTrend,
+  isMainNeutralTrend,
+  isNearAdjustedResistance,
+  isNearAdjustedSupport,
   isStronglyBearishTrend,
   isStronglyBullishTrend,
   positionPct,
@@ -32,228 +36,228 @@ function strategyFitTier(score: number): StrategyFitTier {
   return "No Trade";
 }
 
-function computeIronCondorScore(
-  systems: TradingSystemsInput,
+function scoreSellPut(
+  input: TradingSystemsInput,
   support: number | null,
   resistance: number | null
 ): number {
   const momentum = classifyStochasticMomentum(
-    systems.stochastic,
-    systems.previousStochastic
+    input.stochastic,
+    input.previousStochastic
   );
-  const soScore = mainSystemStochasticScore(
-    "Iron Condor",
-    momentum,
-    systems.stochastic
+  let score = 0;
+  if (isMainBullishTrend(input)) score += 35;
+  if (input.stochastic < 25) score += 25;
+  score += srZoneScore(
+    input.averagePrice,
+    support,
+    resistance,
+    input.atr14,
+    "put"
   );
-  const neutral = isNeutralTrend(systems);
+  score += mainSystemMomentumScore("Sell Put", momentum);
+  return clampScore(score);
+}
 
-  if (!neutral) {
-    let capped = 35;
-    if (isBetweenSupportAndResistance(systems.averagePrice, support, resistance)) {
-      capped += 15;
-    }
-    capped += soScore;
-    if (isStronglyBullishTrend(systems) || isStronglyBearishTrend(systems)) {
-      capped += 5;
-    }
-    return clampScore(Math.min(capped, IRON_CONDOR_TREND_CAP));
+function scoreSellCall(
+  input: TradingSystemsInput,
+  support: number | null,
+  resistance: number | null
+): number {
+  const momentum = classifyStochasticMomentum(
+    input.stochastic,
+    input.previousStochastic
+  );
+  let score = 0;
+  if (isMainBearishTrend(input)) score += 35;
+  if (input.stochastic > 75) score += 25;
+  score += srZoneScore(
+    input.averagePrice,
+    support,
+    resistance,
+    input.atr14,
+    "call"
+  );
+  score += mainSystemMomentumScore("Sell Call", momentum);
+  return clampScore(score);
+}
+
+function scoreIronCondor(
+  input: TradingSystemsInput,
+  support: number | null,
+  resistance: number | null
+): number {
+  let score = 0;
+
+  if (isMainNeutralTrend(input)) {
+    score += 25;
   }
 
-  let score = 10;
-
-  // Major factor — neutral / mixed trend
-  score += 25;
-
-  score += soScore;
-
-  if (isBetweenSupportAndResistance(systems.averagePrice, support, resistance)) {
-    score += 10;
+  if (input.stochastic >= 40 && input.stochastic <= 60) {
+    score += 15;
   }
 
-  const pct = positionPct(systems.averagePrice, support, resistance);
+  if (isBetweenSupportAndResistance(input.averagePrice, support, resistance)) {
+    score += 20;
+  }
+
+  const pct = positionPct(input.averagePrice, support, resistance);
   if (pct != null) {
     const centerDistance = Math.abs(pct - 50);
     score += Math.max(0, 15 - centerDistance * 0.3);
   }
 
-  if (support != null && resistance != null && systems.atr14 > 0) {
+  if (support != null && resistance != null && input.atr14 > 0) {
     const distSupport =
-      Math.abs(systems.averagePrice - support) / systems.atr14;
+      Math.abs(input.averagePrice - support) / input.atr14;
     const distResistance =
-      Math.abs(resistance - systems.averagePrice) / systems.atr14;
-    const minDist = Math.min(distSupport, distResistance);
-    score += Math.min(15, minDist * 5);
+      Math.abs(resistance - input.averagePrice) / input.atr14;
+    score += Math.min(15, Math.min(distSupport, distResistance) * 5);
 
-    const rangeAtr = (resistance - support) / systems.atr14;
+    const rangeAtr = (resistance - support) / input.atr14;
     score += Math.min(10, rangeAtr * 2);
   }
 
-  score += srZoneScore(
-    systems.averagePrice,
-    support,
-    resistance,
-    systems.atr14,
-    "condor"
-  );
-
-  return clampScore(score);
-}
-
-function computeStrategyFitScore(input: {
-  systems: TradingSystemsInput;
-  recommendation: MainTradingSystemResult["recommendation"];
-}): number {
-  const { systems, recommendation } = input;
-  const { support, resistance } = resolveSupportResistance(systems);
-  const momentum = classifyStochasticMomentum(
-    systems.stochastic,
-    systems.previousStochastic
-  );
-
-  if (recommendation === "No Trade") {
-    let partial = 0;
-    if (isNearSupportZone(systems.averagePrice, support, resistance)) partial += 10;
-    if (isNearResistanceZone(systems.averagePrice, support, resistance)) partial += 10;
-    partial += mainSystemStochasticScore(
-      "Iron Condor",
-      momentum,
-      systems.stochastic
-    );
-
-    const icLike =
-      isBetweenSupportAndResistance(systems.averagePrice, support, resistance) &&
-      systems.stochastic >= 35 &&
-      systems.stochastic <= 65;
-
-    if (icLike && !isNeutralTrend(systems)) {
-      return computeIronCondorScore(systems, support, resistance);
-    }
-
-    return clampScore(partial);
-  }
-
-  let score = 45;
-
-  if (recommendation === "Sell Put") {
-    if (isBullishTrend(systems)) score += 20;
-    score += mainSystemStochasticScore("Sell Put", momentum, systems.stochastic);
-    score += srZoneScore(
-      systems.averagePrice,
-      support,
-      resistance,
-      systems.atr14,
-      "put"
-    );
-    if (systems.atr14 > 0) {
-      const atrPct = (systems.atr14 / systems.averagePrice) * 100;
-      score += Math.max(0, 10 - atrPct);
-    }
-  } else if (recommendation === "Sell Call") {
-    score += mainSystemStochasticScore("Sell Call", momentum, systems.stochastic);
-    score += srZoneScore(
-      systems.averagePrice,
-      support,
-      resistance,
-      systems.atr14,
-      "call"
-    );
-    if (systems.atr14 > 0) {
-      const atrPct = (systems.atr14 / systems.averagePrice) * 100;
-      score += Math.max(0, 10 - atrPct);
-    }
-    if (!isBullishTrend(systems)) score += 8;
-  } else if (recommendation === "Iron Condor") {
-    return computeIronCondorScore(systems, support, resistance);
+  if (
+    isStronglyBullishTrend(input) ||
+    isStronglyBearishTrend(input)
+  ) {
+    return clampScore(Math.min(score, IRON_CONDOR_TREND_CAP));
   }
 
   return clampScore(score);
 }
 
-/** System 2 — Main premium-selling system. Can output Iron Condor. */
+function sellPutRulesMet(
+  input: TradingSystemsInput,
+  support: number | null,
+  resistance: number | null
+): boolean {
+  return (
+    isMainBullishTrend(input) &&
+    input.stochastic < 25 &&
+    isAveragePriceRising(input.averagePrice, input.previousAveragePrice) &&
+    isNearAdjustedSupport(
+      input.averagePrice,
+      support,
+      resistance,
+      input.atr14
+    )
+  );
+}
+
+function sellCallRulesMet(
+  input: TradingSystemsInput,
+  support: number | null,
+  resistance: number | null
+): boolean {
+  return (
+    isMainBearishTrend(input) &&
+    input.stochastic > 75 &&
+    isAveragePriceFalling(input.averagePrice, input.previousAveragePrice) &&
+    isNearAdjustedResistance(
+      input.averagePrice,
+      support,
+      resistance,
+      input.atr14
+    )
+  );
+}
+
+function ironCondorRulesMet(
+  input: TradingSystemsInput,
+  support: number | null,
+  resistance: number | null
+): boolean {
+  return (
+    isMainNeutralTrend(input) &&
+    input.stochastic >= 40 &&
+    input.stochastic <= 60 &&
+    isBetweenSupportAndResistance(input.averagePrice, support, resistance)
+  );
+}
+
+function buildRuleReason(
+  rec: TradingSystemRecommendation,
+  input: TradingSystemsInput,
+  support: number | null,
+  resistance: number | null
+): string {
+  if (rec === "Sell Put") {
+    return "Bullish trend, SO < 25, avg price rising, near ATR-adjusted support";
+  }
+  if (rec === "Sell Call") {
+    return "Bearish trend, SO > 75, avg price falling, near ATR-adjusted resistance";
+  }
+  if (rec === "Iron Condor") {
+    if (
+      isStronglyBullishTrend(input) ||
+      isStronglyBearishTrend(input)
+    ) {
+      return "Strong directional trend — Iron Condor not suitable";
+    }
+    return "Neutral trend, SO 40–60, price between support and resistance";
+  }
+  return "Main system rules not met";
+}
+
+/** System 2 — Main premium-selling system (30–45 DTE workflow). */
 export function computeMainTradingSystem(
   input: TradingSystemsInput
 ): MainTradingSystemResult {
   const { support, resistance } = resolveSupportResistance(input);
 
-  const bullish = isBullishTrend(input);
-  const nearSupport = isNearSupportZone(
-    input.averagePrice,
-    support,
-    resistance
-  );
-  const nearResistance = isNearResistanceZone(
-    input.averagePrice,
-    support,
-    resistance
-  );
-  const betweenSr = isBetweenSupportAndResistance(
-    input.averagePrice,
-    support,
-    resistance
-  );
-  const soNeutral =
-    input.stochastic >= 40 && input.stochastic <= 60;
-  const trendNeutral = isNeutralTrend(input);
+  const candidates: {
+    recommendation: TradingSystemRecommendation;
+    score: number;
+    valid: boolean;
+    reason: string;
+  }[] = [
+    {
+      recommendation: "Sell Put",
+      score: scoreSellPut(input, support, resistance),
+      valid: sellPutRulesMet(input, support, resistance),
+      reason: buildRuleReason("Sell Put", input, support, resistance),
+    },
+    {
+      recommendation: "Sell Call",
+      score: scoreSellCall(input, support, resistance),
+      valid: sellCallRulesMet(input, support, resistance),
+      reason: buildRuleReason("Sell Call", input, support, resistance),
+    },
+    {
+      recommendation: "Iron Condor",
+      score: scoreIronCondor(input, support, resistance),
+      valid: ironCondorRulesMet(input, support, resistance),
+      reason: buildRuleReason("Iron Condor", input, support, resistance),
+    },
+  ];
 
-  let ruleRecommendation: MainTradingSystemResult["recommendation"] = "No Trade";
-  let ruleReason = "Main system rules not met";
+  const validCandidates = candidates.filter((c) => c.valid);
+  const best =
+    validCandidates.length > 0
+      ? validCandidates.reduce((a, b) => (b.score > a.score ? b : a))
+      : null;
 
-  if (bullish && input.stochastic < 25 && nearSupport) {
-    ruleRecommendation = "Sell Put";
-    ruleReason = "Bullish trend, SO < 25, near support";
-  } else if (input.stochastic > 75 && nearResistance) {
-    ruleRecommendation = "Sell Call";
-    ruleReason = "SO > 75, near resistance";
-  } else if (betweenSr && soNeutral && trendNeutral) {
-    ruleRecommendation = "Iron Condor";
-    ruleReason = "Between support/resistance, SO 40–60, neutral trend";
-  } else if (betweenSr && soNeutral && !trendNeutral) {
-    ruleReason = isStronglyBullishTrend(input)
-      ? "Strongly bullish trend — Iron Condor not suitable"
-      : isStronglyBearishTrend(input)
-        ? "Strongly bearish trend — Iron Condor not suitable"
-        : "Trend not neutral for Iron Condor";
-  } else {
-    const misses: string[] = [];
-    if (bullish && input.stochastic >= 25) misses.push("SO not oversold");
-    if (!nearSupport && bullish) misses.push("not near support");
-    if (input.stochastic <= 75 && nearResistance) misses.push("SO not overbought");
-    if (!nearResistance && input.stochastic > 75) misses.push("not near resistance");
-    if (!soNeutral && betweenSr) misses.push("SO not neutral");
-    if (betweenSr && soNeutral && !trendNeutral) {
-      misses.push("trend not neutral");
-    }
-    if (!betweenSr && !bullish && input.stochastic <= 75) {
-      misses.push("no clear setup");
-    }
-    ruleReason = misses.length > 0 ? misses.join("; ") : ruleReason;
-  }
-
-  const strategyFitScore = computeStrategyFitScore({
-    systems: input,
-    recommendation: ruleRecommendation,
-  });
-
-  if (strategyFitScore < STRATEGY_FIT_MIN) {
-    const reason =
-      ruleRecommendation === "No Trade" &&
-      ruleReason !== "Main system rules not met"
-        ? ruleReason
-        : "Strategy Fit Score below minimum threshold";
-
+  if (!best || best.score < STRATEGY_FIT_MIN) {
+    const topPartial = candidates.reduce((a, b) =>
+      b.score > a.score ? b : a
+    );
     return {
       recommendation: "No Trade",
-      strategyFitScore,
-      tier: strategyFitTier(strategyFitScore),
-      reason,
+      strategyFitScore: topPartial.score,
+      tier: strategyFitTier(topPartial.score),
+      reason:
+        topPartial.score < STRATEGY_FIT_MIN
+          ? "Strategy Fit Score below minimum threshold"
+          : topPartial.reason,
     };
   }
 
   return {
-    recommendation: ruleRecommendation,
-    strategyFitScore,
-    tier: strategyFitTier(strategyFitScore),
-    reason: ruleReason,
+    recommendation: best.recommendation,
+    strategyFitScore: best.score,
+    tier: strategyFitTier(best.score),
+    reason: best.reason,
   };
 }

@@ -133,8 +133,8 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             {model.emaSystemScore != null && (
               <span className="font-mono text-xs text-terminal-muted">
                 EMA {formatScore(model.emaSystemScore)}
-                {model.confluenceScore != null
-                  ? ` · C ${model.confluenceScore}/10`
+                {model.confluenceStatus !== "—"
+                  ? ` · ${model.confluenceStatus}`
                   : ""}
               </span>
             )}
@@ -237,15 +237,6 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
           <Section title="4. EMA20 Analysis">
             <Field label="EMA20" value={formatIndicator(model.ema20)} />
             <Field
-              label="Previous EMA20"
-              value={
-                model.previousEma20 != null
-                  ? formatIndicator(model.previousEma20)
-                  : "—"
-              }
-            />
-            <Field label="EMA Trend" value={model.emaTrend} />
-            <Field
               label="Avg Price vs EMA20"
               value={model.averagePriceVsEma20Label}
               valueClassName={sentimentTextClass(
@@ -337,14 +328,7 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
           </Section>
 
           <Section title="8. Confluence">
-            <Field
-              label="Score"
-              value={
-                model.confluenceScore != null
-                  ? `${model.confluenceScore}/10`
-                  : "—"
-              }
-            />
+            <Field label="Status" value={model.confluenceStatus} />
             <Field
               label="Reason"
               value={model.confluenceReason}

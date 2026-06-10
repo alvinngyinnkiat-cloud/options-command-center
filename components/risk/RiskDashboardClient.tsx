@@ -6,7 +6,6 @@ import { formatRiskPct } from "@/lib/risk/format";
 import type { RiskDashboardData } from "@/lib/risk/types";
 import type { TradingWorkflowData } from "@/lib/trading-workflow/types";
 import { ExpectedReturnPanel } from "@/components/trading-workflow/ExpectedReturnPanel";
-import { TradeReadinessPanel } from "@/components/trading-workflow/TradeReadinessPanel";
 import { RiskAlertsPanel } from "./RiskAlertsPanel";
 import { RiskSummaryCards } from "./RiskSummaryCards";
 import { RiskTables } from "./RiskTables";
@@ -66,15 +65,6 @@ export function RiskDashboardClient({
         checks={initialData.singleLegChecks}
         usdCashAvailable={initialData.capitalLiquidity.cash.cashUsdNative}
       />
-
-      {workflow.topReadiness[0] && (
-        <section>
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
-            Trade Readiness Score
-          </h2>
-          <TradeReadinessPanel readiness={workflow.topReadiness[0]} />
-        </section>
-      )}
 
       <section>
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">

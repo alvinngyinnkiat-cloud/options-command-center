@@ -14,7 +14,7 @@ interface TradingAnalysisPanelProps {
   reviewStatus: WeekendReviewStatus;
 }
 
-type SortKey = "rank" | "confluence" | "ticker";
+type SortKey = "rank" | "score" | "ticker";
 
 export function TradingAnalysisPanel({
   rows,
@@ -27,7 +27,7 @@ export function TradingAnalysisPanel({
     const built = sortRowsByWatchlistRank(rows).map((row) =>
       buildTradingAnalysisViewModel(row, reviewStatus)
     );
-    if (sortKey === "confluence") {
+    if (sortKey === "score") {
       const ordered = sortRowsByTradingSystems(rows);
       const orderMap = new Map(ordered.map((r, i) => [r.watchlistId, i]));
       return [...built].sort(
@@ -80,11 +80,11 @@ export function TradingAnalysisPanel({
             By Rank
           </Button>
           <Button
-            variant={sortKey === "confluence" ? "secondary" : "ghost"}
+            variant={sortKey === "score" ? "secondary" : "ghost"}
             size="sm"
-            onClick={() => setSortKey("confluence")}
+            onClick={() => setSortKey("score")}
           >
-            By Confluence
+            By Score
           </Button>
           <Button
             variant={sortKey === "ticker" ? "secondary" : "ghost"}

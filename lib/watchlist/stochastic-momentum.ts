@@ -8,8 +8,8 @@ export function classifyStochasticMomentum(
   previousSo: number | null
 ): StochasticMomentum {
   if (previousSo == null) return "STRONG";
-  if (previousSo < 25 && currentSo > 25) return "ROLLING UP";
-  if (previousSo > 75 && currentSo < 75) return "ROLLING DOWN";
+  if (previousSo < 25 && currentSo > previousSo) return "ROLLING UP";
+  if (previousSo > 75 && currentSo < previousSo) return "ROLLING DOWN";
   return "STRONG";
 }
 
@@ -17,27 +17,21 @@ export function formatMomentumStatus(momentum: StochasticMomentum): string {
   return momentum;
 }
 
-/** Main System stochastic contribution by strategy. */
-export function mainSystemStochasticScore(
-  recommendation: TradingSystemRecommendation,
-  momentum: StochasticMomentum,
-  currentSo: number
+export function isPutMomentumConfirmed(momentum: StochasticMomentum): boolean {
+  return momentum === "ROLLING UP" || momentum === "STRONG";
+}
+
+export function isCallMomentumConfirmed(momentum: StochasticMomentum): boolean {
+  return momentum === "ROLLING DOWN" || momentum === "STRONG";
+}
+
+/** Main System momentum confirmation score (0 or 20). */
+export function mainSystemMomentumScore(
+  recommendation: Extract<TradingSystemRecommendation, "Sell Put" | "Sell Call">,
+  momentum: StochasticMomentum
 ): number {
-  if (recommendation === "Sell Put") {
-    if (momentum === "ROLLING UP") return 25;
-    if (momentum === "STRONG") return 15;
-    return 0;
-  }
-  if (recommendation === "Sell Call") {
-    if (momentum === "ROLLING DOWN") return 25;
-    if (momentum === "STRONG") return 15;
-    return 0;
-  }
-  if (recommendation === "Iron Condor") {
-    if (currentSo >= 40 && currentSo <= 60) return 25;
-    if (currentSo >= 35 && currentSo <= 65) return 15;
-    return 0;
-  }
+  if (recommendation === "Sell Put" && momentum === "ROLLING UP") return 20;
+  if (recommendation === "Sell Call" && momentum === "ROLLING DOWN") return 20;
   return 0;
 }
 
@@ -57,12 +51,4 @@ export function emaSystemStochasticScore(
     return 0;
   }
   return 0;
-}
-
-export function isPutMomentumConfirmed(momentum: StochasticMomentum): boolean {
-  return momentum === "ROLLING UP";
-}
-
-export function isCallMomentumConfirmed(momentum: StochasticMomentum): boolean {
-  return momentum === "ROLLING DOWN";
 }

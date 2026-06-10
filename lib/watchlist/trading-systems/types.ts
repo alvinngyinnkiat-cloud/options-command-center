@@ -8,12 +8,9 @@ export type TradingSystemRecommendation =
   | "No Trade";
 
 export type ConfluenceStatus =
-  | "STRONG AGREEMENT"
-  | "GOOD AGREEMENT"
-  | "EARLY SETUP"
-  | "MAIN SYSTEM ONLY"
-  | "SHORTER-DTE ONLY"
-  | "CONFLICTING SIGNALS";
+  | "Both Systems Agree"
+  | "One System Agree"
+  | "No System Agree";
 
 export type EmaScoreTier =
   | "Elite Reversal"
@@ -29,20 +26,15 @@ export type StrategyFitTier =
   | "Tradable Setup"
   | "No Trade";
 
-export type ConfluenceTier =
-  | "Tier 1"
-  | "Tier 2"
-  | "Tier 3"
-  | "Tier 4";
-
 export interface TradingSystemsInput {
   watchlistId: string;
   ticker: string;
   /** Completed candle average: (High + Low) / 2 */
   averagePrice: number;
+  /** Previous completed candle average: (High + Low) / 2 */
+  previousAveragePrice: number | null;
   atr14: number;
   ema20: number;
-  ema20Previous: number | null;
   sma50: number;
   sma200: number;
   sma50Previous: number | null;
@@ -64,7 +56,6 @@ export interface EmaReversalSystemResult {
   baseSrSignal: "Sell Put" | "Sell Call" | "No Trade";
   emaDifference: number;
   emaDifferencePct: number | null;
-  emaTrend: "RISING" | "FALLING" | "FLAT" | "—";
   momentumStatus: StochasticMomentum;
 }
 
@@ -76,9 +67,7 @@ export interface MainTradingSystemResult {
 }
 
 export interface ConfluenceResult {
-  score: number;
   status: ConfluenceStatus;
-  tier: ConfluenceTier;
   reason: string;
 }
 

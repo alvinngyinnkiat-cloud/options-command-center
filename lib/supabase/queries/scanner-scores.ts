@@ -38,7 +38,7 @@ function mapScoreToRow(
         ? JSON.stringify(recommendation.warningNotes)
         : null,
     intelligence_score: score.intelligence.score,
-    combined_score: score.tradingSystems.confluence.score,
+    combined_score: score.tradingSystems.mainSystem.strategyFitScore,
     intelligence_sentiment: score.intelligence.sentiment,
     intelligence_reason: score.intelligence.rationale,
   };

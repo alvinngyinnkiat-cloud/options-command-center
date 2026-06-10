@@ -25,8 +25,8 @@ export interface StrategyRecommendation {
   recommendedStrategy: RecommendedStrategyLabel;
   recommendedStrategyType: StrategyType | null;
   totalScore: number;
-  decisionLabel: DecisionLabel;
-  actionLabel: DecisionLabel;
+  decisionLabel: DecisionLabel | null;
+  actionLabel: string;
   action: ScannerAction;
   passFailExplanation: string;
   scoreBreakdown: ScoreBreakdownItem[];

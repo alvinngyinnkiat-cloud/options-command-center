@@ -71,13 +71,6 @@ export function TradingAnalysisExpandedRow({
                 ["Average Price", formatIndicator(model.currentAveragePrice)],
                 ["ATR", formatIndicator(model.atr14)],
                 ["EMA20", formatIndicator(model.ema20)],
-                [
-                  "Previous EMA20",
-                  model.previousEma20 != null
-                    ? formatIndicator(model.previousEma20)
-                    : "—",
-                ],
-                ["EMA Trend", model.emaTrend],
                 ["SMA50", formatIndicator(model.sma50)],
                 ["SMA200", formatIndicator(model.sma200)],
                 ["SO", formatStochastic(model.soValue)],
@@ -125,11 +118,27 @@ export function TradingAnalysisExpandedRow({
             {score?.tradingSystems ? (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 {[
-                  ["Decision", score.tradingSystems.emaSystem.recommendation],
-                  ["EMA Trend", score.tradingSystems.emaSystem.emaTrend],
+                  ["Base S/R Signal", score.tradingSystems.emaSystem.baseSrSignal],
+                  [
+                    "EMA Difference",
+                    formatIndicator(score.tradingSystems.emaSystem.emaDifference),
+                  ],
+                  [
+                    "EMA Difference %",
+                    score.tradingSystems.emaSystem.emaDifferencePct != null
+                      ? `${score.tradingSystems.emaSystem.emaDifferencePct.toFixed(2)}%`
+                      : "—",
+                  ],
+                  [
+                    "Previous SO",
+                    model.previousSo != null
+                      ? formatStochastic(model.previousSo)
+                      : "—",
+                  ],
+                  ["Current SO", formatStochastic(model.soValue)],
                   ["Momentum", score.tradingSystems.emaSystem.momentumStatus],
                   ["EMA Score", String(score.tradingSystems.emaSystem.emaScore)],
-                  ["Tier", score.tradingSystems.emaSystem.tier],
+                  ["Decision", score.tradingSystems.emaSystem.recommendation],
                   ["Reason", score.tradingSystems.emaSystem.reason],
                 ].map(([label, value]) => (
                   <div
@@ -176,10 +185,7 @@ export function TradingAnalysisExpandedRow({
             {score?.tradingSystems ? (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 {[
-                  [
-                    "Score",
-                    `${score.tradingSystems.confluence.score}/10`,
-                  ],
+                  ["Status", score.tradingSystems.confluence.status],
                   ["Reason", score.tradingSystems.confluence.reason],
                 ].map(([label, value]) => (
                   <div

@@ -3,7 +3,7 @@
 import { pnlPercentStatProps, pnlStatProps } from "@/lib/format/pnl";
 import { mapSgStockRowsToTable } from "@/lib/stocks-etfs/table-rows";
 import type { SgStockRow, SgStockTabSummary } from "@/lib/stocks-etfs/types";
-import { formatSGD, formatSignedSGD } from "@/lib/utils";
+import { cn, formatSGD, formatSignedSGD } from "@/lib/utils";
 import { StockEtfHoldingsTable } from "./StockEtfHoldingsTable";
 
 interface SgStockTabPanelProps {
@@ -15,22 +15,39 @@ interface SgStockTabPanelProps {
 function SummaryCard({
   label,
   value,
+  sub,
   valueClassName,
+  className,
 }: {
   label: string;
   value: string;
+  sub?: string;
   valueClassName?: string;
+  className?: string;
 }) {
   return (
-    <div className="rounded-lg border border-terminal-border bg-terminal-surface p-3 min-w-0">
+    <div
+      className={cn(
+        "rounded-lg border border-terminal-border bg-terminal-surface p-3 min-w-0",
+        className
+      )}
+    >
       <p className="text-[10px] uppercase tracking-wider text-terminal-muted">
         {label}
       </p>
       <p
-        className={`mt-1 font-mono text-lg font-semibold truncate ${valueClassName ?? "text-terminal-text"}`}
+        className={cn(
+          "mt-1 font-mono text-lg font-semibold tabular-nums break-words",
+          valueClassName ?? "text-terminal-text"
+        )}
       >
         {value}
       </p>
+      {sub && (
+        <p className="text-[10px] text-terminal-muted mt-0.5 tabular-nums break-words">
+          {sub}
+        </p>
+      )}
     </div>
   );
 }
@@ -59,14 +76,23 @@ export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelPro
             value={formatSGD(summary.totalDividendIncome)}
           />
           <SummaryCard
+            label="PERFORMANCE"
+            value={formatSignedSGD(summary.totalPnl)}
+            sub={`ROI ${returnPct.value}`}
+            valueClassName={totalPnl.valueClassName}
+            className="col-span-2 sm:hidden"
+          />
+          <SummaryCard
             label="Total P/L"
             value={formatSignedSGD(summary.totalPnl)}
             valueClassName={totalPnl.valueClassName}
+            className="hidden sm:block"
           />
           <SummaryCard
             label="Total ROI"
             value={returnPct.value}
             valueClassName={returnPct.valueClassName}
+            className="hidden sm:block"
           />
         </div>
       </section>

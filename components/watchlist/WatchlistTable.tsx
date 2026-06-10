@@ -136,8 +136,7 @@ export function WatchlistTable({
               <th className="px-2 py-2 font-medium text-right">EMA Score</th>
               <th className="px-2 py-2 font-medium">Main</th>
               <th className="px-2 py-2 font-medium text-right">Strategy Fit</th>
-              <th className="px-2 py-2 font-medium text-right">Confluence</th>
-              <th className="px-2 py-2 font-medium">Status</th>
+              <th className="px-2 py-2 font-medium">Confluence Status</th>
               <th className="px-2 py-2 font-medium">Decision Reason</th>
               <th className="px-2 py-2 font-medium border-l border-terminal-border" />
             </tr>
@@ -317,12 +316,9 @@ export function WatchlistTable({
                         {formatScore(row.score.tradingSystems.mainSystem.strategyFitScore)}
                       </td>
                       <td
-                        className="px-2 py-2.5 font-mono text-right font-semibold text-accent"
+                        className="px-2 py-2.5 text-[10px] text-terminal-muted whitespace-nowrap"
                         title={row.score.tradingSystems.confluence.reason}
                       >
-                        {row.score.tradingSystems.confluence.score}/10
-                      </td>
-                      <td className="px-2 py-2.5 text-[10px] text-terminal-muted whitespace-nowrap">
                         {row.score.tradingSystems.confluence.status}
                       </td>
                       <td

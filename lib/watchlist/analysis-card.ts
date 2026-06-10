@@ -5,11 +5,10 @@ import {
   classifyStochasticMomentum,
   type StochasticMomentum,
 } from "@/lib/watchlist/stochastic-momentum";
-import { classifyEmaTrend } from "@/lib/watchlist/trading-systems/ema-reversal-system";
 import {
-  isBearCallCandidate,
-  isBullPutCandidate,
-} from "@/lib/watchlist/scoring/candidate";
+  isMainBearishTrend,
+  isMainBullishTrend,
+} from "@/lib/watchlist/trading-systems/shared";
 import type { Direction, WatchlistScannerRow } from "@/lib/watchlist/types";
 import { resolveDisplayRank } from "@/lib/watchlist/watchlist-rank";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
@@ -43,8 +42,6 @@ export interface TradingAnalysisViewModel {
   averagePriceDifferencePct: number;
   averagePriceDirection: Direction;
   ema20: number;
-  previousEma20: number | null;
-  emaTrend: string;
   averagePriceVsEma20Label: string;
   ema20DistancePct: number;
   ema20PassFail: "Pass" | "Fail" | "—";
@@ -62,7 +59,7 @@ export interface TradingAnalysisViewModel {
   strategyFitScore: number | null;
   mainTier: string;
   mainReason: string;
-  confluenceScore: number | null;
+  confluenceStatus: string;
   confluenceReason: string;
   strategy: string;
   action: string;
@@ -126,13 +123,12 @@ export function getTrendDirectionLabel(row: WatchlistScannerRow): {
     averagePrice: row.market.averagePrice,
     sma50: row.technicals.sma50,
     sma200: row.technicals.sma200,
-    sma50Previous: row.previousTechnicals.sma50,
   };
 
-  if (isBullPutCandidate(input)) {
+  if (isMainBullishTrend(input)) {
     return { label: "Bullish", sentiment: "bullish" };
   }
-  if (isBearCallCandidate(input)) {
+  if (isMainBearishTrend(input)) {
     return { label: "Bearish", sentiment: "bearish" };
   }
   return { label: "Neutral", sentiment: "neutral" };
@@ -180,10 +176,6 @@ export function buildTradingAnalysisViewModel(
     row.previousTechnicals.stochastic
   );
   const momentumSentiment = getMomentumSentiment(momentumStatus);
-  const emaTrend = classifyEmaTrend(
-    row.technicals.ema20,
-    row.previousTechnicals.ema20
-  );
   const vsEma20 = getPriceVsMaLabel(
     row.market.averagePrice,
     row.technicals.ema20
@@ -227,8 +219,6 @@ export function buildTradingAnalysisViewModel(
     averagePriceDifferencePct: avg.differencePct,
     averagePriceDirection: avg.direction,
     ema20: row.technicals.ema20,
-    previousEma20: row.previousTechnicals.ema20,
-    emaTrend,
     averagePriceVsEma20Label: vsEma20.label,
     ema20DistancePct: row.distances.distanceEma20Pct,
     ema20PassFail: score?.ema20.passed
@@ -250,7 +240,7 @@ export function buildTradingAnalysisViewModel(
     strategyFitScore: score?.tradingSystems?.mainSystem.strategyFitScore ?? null,
     mainTier: score?.tradingSystems?.mainSystem.tier ?? "—",
     mainReason: score?.tradingSystems?.mainSystem.reason ?? "—",
-    confluenceScore: score?.tradingSystems?.confluence.score ?? null,
+    confluenceStatus: score?.tradingSystems?.confluence.status ?? "—",
     confluenceReason: score?.tradingSystems?.confluence.reason ?? "—",
     strategy:
       score?.tradingSystems?.mainSystem.recommendation ??

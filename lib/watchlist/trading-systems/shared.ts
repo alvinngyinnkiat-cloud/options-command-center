@@ -3,6 +3,7 @@ import {
   isBullPutCandidate,
 } from "@/lib/watchlist/scoring/candidate";
 import { calculateAveragePricePositionPct } from "@/lib/watchlist/average-price-position";
+import { buildAdjustedSupportResistanceLevels } from "@/lib/watchlist/support-resistance-atr";
 import { scoreBullPutAdjustedZone } from "@/lib/watchlist/support-resistance-atr";
 import type { TradingSystemRecommendation } from "./types";
 
@@ -60,34 +61,76 @@ export function isBetweenSupportAndResistance(
   return averagePrice > support && averagePrice < resistance;
 }
 
-export function isBelowOrNearEma20(averagePrice: number, ema20: number): boolean {
-  if (ema20 <= 0) return false;
-  const distancePct = ((averagePrice - ema20) / ema20) * 100;
-  return distancePct <= NEAR_EMA20_BAND_PCT;
+function isNearLevel(price: number, level: number, atr14: number): boolean {
+  if (atr14 > 0) return Math.abs(price - level) <= atr14;
+  if (level === 0) return false;
+  return Math.abs((price - level) / level) * 100 <= 2.5;
 }
 
-export function isAboveOrNearEma20(averagePrice: number, ema20: number): boolean {
-  if (ema20 <= 0) return false;
-  const distancePct = ((averagePrice - ema20) / ema20) * 100;
-  return distancePct >= -NEAR_EMA20_BAND_PCT;
-}
-
-export function isStochasticTurningUp(
-  stochastic: number,
-  previousStochastic: number | null
+/** Price within ATR of raw or ATR-adjusted support. */
+export function isNearAdjustedSupport(
+  averagePrice: number,
+  support: number | null,
+  resistance: number | null,
+  atr14: number
 ): boolean {
-  if (previousStochastic == null) return stochastic < 40;
-  return stochastic > previousStochastic;
+  if (support == null) return false;
+  if (isNearLevel(averagePrice, support, atr14)) return true;
+  const adjusted = buildAdjustedSupportResistanceLevels(
+    support,
+    resistance,
+    atr14
+  );
+  if (adjusted == null) return false;
+  return isNearLevel(averagePrice, adjusted.adjustedSupport, atr14);
 }
 
-export function isStochasticTurningDown(
-  stochastic: number,
-  previousStochastic: number | null
+/** Price within ATR of raw or ATR-adjusted resistance. */
+export function isNearAdjustedResistance(
+  averagePrice: number,
+  support: number | null,
+  resistance: number | null,
+  atr14: number
 ): boolean {
-  if (previousStochastic == null) return stochastic > 60;
-  return stochastic < previousStochastic;
+  if (resistance == null) return false;
+  if (isNearLevel(averagePrice, resistance, atr14)) return true;
+  const adjusted = buildAdjustedSupportResistanceLevels(
+    support,
+    resistance,
+    atr14
+  );
+  if (adjusted == null) return false;
+  return isNearLevel(averagePrice, adjusted.adjustedResistance, atr14);
 }
 
+/** Main System — bullish: avg > SMA200 AND SMA50 > SMA200. */
+export function isMainBullishTrend(input: {
+  averagePrice: number;
+  sma50: number;
+  sma200: number;
+}): boolean {
+  return input.averagePrice > input.sma200 && input.sma50 > input.sma200;
+}
+
+/** Main System — bearish: avg < SMA200 AND SMA50 < SMA200. */
+export function isMainBearishTrend(input: {
+  averagePrice: number;
+  sma50: number;
+  sma200: number;
+}): boolean {
+  return input.averagePrice < input.sma200 && input.sma50 < input.sma200;
+}
+
+/** Main System — neutral / mixed trend. */
+export function isMainNeutralTrend(input: {
+  averagePrice: number;
+  sma50: number;
+  sma200: number;
+}): boolean {
+  return !isMainBullishTrend(input) && !isMainBearishTrend(input);
+}
+
+/** Legacy helpers — used outside Main System scoring. */
 export function isBullishTrend(input: {
   averagePrice: number;
   sma50: number;
@@ -106,7 +149,7 @@ export function isBearishTrend(input: {
   return isBearCallCandidate(input);
 }
 
-/** All trend signals aligned bullish — not suitable for Iron Condor neutrality. */
+/** All trend signals aligned bullish — Iron Condor not suitable. */
 export function isStronglyBullishTrend(input: {
   averagePrice: number;
   sma50: number;
@@ -119,7 +162,7 @@ export function isStronglyBullishTrend(input: {
   );
 }
 
-/** All trend signals aligned bearish — not suitable for Iron Condor neutrality. */
+/** All trend signals aligned bearish — Iron Condor not suitable. */
 export function isStronglyBearishTrend(input: {
   averagePrice: number;
   sma50: number;
@@ -138,9 +181,7 @@ export function isNeutralTrend(input: {
   sma50: number;
   sma200: number;
 }): boolean {
-  return (
-    !isStronglyBullishTrend(input) && !isStronglyBearishTrend(input)
-  );
+  return isMainNeutralTrend(input);
 }
 
 export const IRON_CONDOR_TREND_CAP = 70;
@@ -175,4 +216,18 @@ export function recommendationDirection(
 
 export function clampScore(value: number, max = 100): number {
   return Math.min(max, Math.max(0, Math.round(value)));
+}
+
+export function isAveragePriceRising(
+  currentAverage: number,
+  previousAverage: number | null
+): boolean {
+  return previousAverage != null && currentAverage > previousAverage;
+}
+
+export function isAveragePriceFalling(
+  currentAverage: number,
+  previousAverage: number | null
+): boolean {
+  return previousAverage != null && currentAverage < previousAverage;
 }

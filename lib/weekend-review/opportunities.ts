@@ -15,7 +15,7 @@ function toEntry(row: WatchlistScannerRow): WeekendOpportunityEntry | null {
     totalScore: row.score.totalScore,
     recommendedStrategy: rec.recommendedStrategy,
     action: rec.actionLabel,
-    decisionLabel: rec.decisionLabel,
+    decisionLabel: rec.decisionLabel ?? rec.actionLabel,
     primaryReason: rec.primaryReason,
     averagePrice: row.market.averagePrice,
   };

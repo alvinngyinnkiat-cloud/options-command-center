@@ -2,47 +2,24 @@ import type { DataSource } from "@/lib/portfolio/types";
 import type { CapitalLiquidityResult } from "@/lib/risk/capital-liquidity";
 import type { EnrichedTrade } from "@/lib/trades/types";
 
-export type TradeQueueStatus =
-  | "Ready"
-  | "Waiting"
-  | "Near Support"
-  | "Near Resistance"
-  | "No Trade"
-  | "Risk Failed"
-  | "Liquidity Failed";
+export interface TradeQueueItem {
+  priorityRank: number;
+  ticker: string;
+  category: string;
+  mainDecision: string;
+  strategyFitScore: number;
+  emaDecision: string;
+  emaScore: number;
+  confluenceStatus: string;
+  reason: string;
+  lastUpdated: string;
+}
 
 export type MarketConditionType =
   | "Bullish"
   | "Bearish"
   | "Neutral"
   | "Transition";
-
-export type ReadinessLabel =
-  | "Ready To Trade"
-  | "Strong But Review"
-  | "Watch"
-  | "Do Not Trade";
-
-export type FinalRecommendation =
-  | "Ready To Trade"
-  | "Wait"
-  | "Do Not Trade"
-  | "Review Risk First"
-  | "Review Liquidity First"
-  | "Update Support/Resistance First";
-
-export interface TradeQueueItem {
-  priorityRank: number;
-  ticker: string;
-  strategy: string;
-  scannerScore: number;
-  combinedScore: number;
-  action: string;
-  status: TradeQueueStatus;
-  reason: string;
-  warning: string | null;
-  lastUpdated: string;
-}
 
 export interface MarketConditionResult {
   condition: MarketConditionType;
@@ -92,32 +69,14 @@ export interface ExpectedReturnDashboard {
   disclaimer: string;
 }
 
-export interface ReadinessCheckItem {
-  id: string;
-  label: string;
-  passed: boolean;
-  detail: string;
-}
-
-export interface TradeReadinessResult {
-  ticker: string;
-  score: number;
-  label: ReadinessLabel;
-  checks: ReadinessCheckItem[];
-  finalRecommendation: FinalRecommendation;
-}
-
 export interface TradingWorkflowData {
   tradeQueue: TradeQueueItem[];
   marketCondition: MarketConditionResult;
   activeTickerExposure: ActiveTickerExposureRow[];
   expectedReturn: ExpectedReturnDashboard;
-  topReadiness: TradeReadinessResult[];
   liquidityCheck: CapitalLiquidityResult;
   openTrades: EnrichedTrade[];
   dataSource: DataSource;
 }
 
-export interface TradeQueuePageData extends TradingWorkflowData {
-  allReadiness: TradeReadinessResult[];
-}
+export type TradeQueuePageData = TradingWorkflowData;

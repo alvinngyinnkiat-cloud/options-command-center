@@ -99,10 +99,8 @@ export function StrategyRecommendationCard({
                 Confluence
               </p>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
-                <dt className="text-terminal-muted">Score</dt>
-                <dd className="font-mono text-terminal-text">
-                  {ts.confluence.score}/10
-                </dd>
+                <dt className="text-terminal-muted">Status</dt>
+                <dd className="text-terminal-text">{ts.confluence.status}</dd>
               </dl>
               <p className="mt-1 text-terminal-muted leading-relaxed">
                 {ts.confluence.reason}

@@ -8,7 +8,7 @@ function buildDecisionReason(result: Omit<TradingSystemsResult, "decisionReason"
   return [
     `20 EMA: ${emaSystem.recommendation} (${emaSystem.emaScore}) — ${emaSystem.reason}`,
     `Main: ${mainSystem.recommendation} (${mainSystem.strategyFitScore}) — ${mainSystem.reason}`,
-    `Confluence ${confluence.score}/10 — ${confluence.status}`,
+    `Confluence — ${confluence.status}`,
   ].join(" | ");
 }
 
@@ -31,7 +31,6 @@ export type {
   TradingSystemsResult,
   TradingSystemRecommendation,
   ConfluenceStatus,
-  ConfluenceTier,
   StrategyFitTier,
 } from "./types";
 

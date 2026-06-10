@@ -3,6 +3,7 @@
 import { pnlPercentStatProps, pnlStatProps } from "@/lib/format/pnl";
 import { formatTickerCurrency } from "@/lib/ticker-positions/format";
 import type { UsEquityTabSummary } from "@/lib/stocks-etfs/types";
+import { cn } from "@/lib/utils";
 
 interface UsEquitySummaryCardsProps {
   title: string;
@@ -14,23 +15,37 @@ function Card({
   value,
   sub,
   valueClassName,
+  className,
 }: {
   label: string;
   value: string;
   sub?: string;
   valueClassName?: string;
+  className?: string;
 }) {
   return (
-    <div className="rounded-lg border border-terminal-border bg-terminal-surface p-3 min-w-0">
+    <div
+      className={cn(
+        "rounded-lg border border-terminal-border bg-terminal-surface p-3 min-w-0",
+        className
+      )}
+    >
       <p className="text-[10px] uppercase tracking-wider text-terminal-muted">
         {label}
       </p>
       <p
-        className={`mt-1 font-mono text-lg font-semibold truncate ${valueClassName ?? "text-terminal-text"}`}
+        className={cn(
+          "mt-1 font-mono text-lg font-semibold tabular-nums break-words",
+          valueClassName ?? "text-terminal-text"
+        )}
       >
         {value}
       </p>
-      {sub && <p className="text-[10px] text-terminal-muted mt-0.5">{sub}</p>}
+      {sub && (
+        <p className="text-[10px] text-terminal-muted mt-0.5 tabular-nums break-words">
+          {sub}
+        </p>
+      )}
     </div>
   );
 }
@@ -62,14 +77,23 @@ export function UsEquitySummaryCards({
           value={formatTickerCurrency(summary.totalDividendIncome)}
         />
         <Card
+          label="PERFORMANCE"
+          value={totalPnl.value}
+          sub={`ROI ${returnPct.value}`}
+          valueClassName={totalPnl.valueClassName}
+          className="col-span-2 sm:hidden"
+        />
+        <Card
           label="Total P/L"
           value={totalPnl.value}
           valueClassName={totalPnl.valueClassName}
+          className="hidden sm:block"
         />
         <Card
           label="Total ROI"
           value={returnPct.value}
           valueClassName={returnPct.valueClassName}
+          className="hidden sm:block"
         />
       </div>
     </section>

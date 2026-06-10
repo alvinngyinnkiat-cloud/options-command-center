@@ -108,7 +108,7 @@ export function WatchlistCategoryTable({
             <th className="w-10 px-3 py-3" />
             <th className="px-4 py-3 font-medium">Strategy</th>
             <th className="px-4 py-3 font-medium">Action</th>
-            <th className="px-4 py-3 font-medium text-right">Confluence</th>
+            <th className="px-4 py-3 font-medium">Confluence</th>
             <th className="px-4 py-3 font-medium">Review Status</th>
             {allowRemove && <th className="w-12 px-3 py-3" />}
           </tr>
@@ -117,8 +117,8 @@ export function WatchlistCategoryTable({
           {categoryRows.map((row) => {
             const model = buildTradingAnalysisViewModel(row, reviewStatus);
             const expanded = expandedIds.has(row.watchlistId);
-            const confluenceScore =
-              row.score?.tradingSystems?.confluence.score ?? null;
+            const confluenceStatus =
+              row.score?.tradingSystems?.confluence.status ?? "—";
 
             return (
               <Fragment key={row.watchlistId}>
@@ -164,7 +164,7 @@ export function WatchlistCategoryTable({
                     {model.action}
                   </td>
                   <td className="px-4 py-3 font-mono text-right font-semibold text-accent">
-                    {confluenceScore != null ? `${confluenceScore}/10` : "—"}
+                    {confluenceStatus}
                   </td>
                   <td className="px-4 py-3">
                     <ReviewStatusCell

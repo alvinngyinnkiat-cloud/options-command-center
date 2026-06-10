@@ -6,9 +6,7 @@ import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import type { ScannerScoreResult } from "@/lib/watchlist/scanner-result";
 import { calculateEma20DistancePct } from "./ema20";
 import { computeScannerScore } from "./compute";
-import { decisionToAction } from "./decision";
 import {
-  strategyFitScoreToDecisionLabel,
   tradingSystemToLegacyLabel,
   tradingSystemToStrategyType,
 } from "@/lib/watchlist/trading-systems/legacy-bridge";
@@ -45,9 +43,12 @@ export function scoreWatchlistRow(
     watchlistId: row.watchlistId,
     ticker: row.ticker,
     averagePrice,
+    previousAveragePrice:
+      row.averagePriceComparison.previousAverage ??
+      row.previousMarket.averagePrice ??
+      null,
     atr14: row.technicals.atr14,
     ema20: row.technicals.ema20,
-    ema20Previous: row.previousTechnicals.ema20,
     sma50: row.technicals.sma50,
     sma200: row.technicals.sma200,
     sma50Previous: row.previousTechnicals.sma50,
@@ -62,7 +63,8 @@ export function scoreWatchlistRow(
 
   const { emaSystem, mainSystem, confluence } = tradingSystems;
   const mainLabel = tradingSystemToLegacyLabel(mainSystem.recommendation);
-  const mainDecision = strategyFitScoreToDecisionLabel(mainSystem.strategyFitScore);
+  const decisionLabel: import("./types").DecisionLabel =
+    mainSystem.recommendation === "No Trade" ? "No Trade" : "Watchlist";
 
   const recommendation: StrategyRecommendation = {
     recommendedStrategy: mainLabel,
@@ -70,9 +72,9 @@ export function scoreWatchlistRow(
       mainSystem.recommendation
     ),
     totalScore: mainSystem.strategyFitScore,
-    decisionLabel: mainDecision,
-    actionLabel: mainDecision,
-    action: decisionToAction(mainDecision),
+    decisionLabel: null,
+    actionLabel: mainSystem.recommendation,
+    action: mainSystem.recommendation === "No Trade" ? "avoid" : "enter",
     passFailExplanation: tradingSystems.decisionReason,
     scoreBreakdown: [],
     primaryReason: mainSystem.reason,
@@ -101,8 +103,8 @@ export function scoreWatchlistRow(
   return {
     ...componentScore,
     totalScore: mainSystem.strategyFitScore,
-    decisionLabel: mainDecision,
-    action: decisionToAction(mainDecision),
+    decisionLabel,
+    action: mainSystem.recommendation === "No Trade" ? "avoid" : "enter",
     tradingSystems,
     recommendation,
     intelligence,
@@ -122,15 +124,11 @@ export function attachScoresToRows(
   });
 }
 
-/** Sort key: strategy fit → confluence → EMA score. */
+/** Sort key: strategy fit → EMA score. */
 export function tradingSystemsSortKey(row: WatchlistScannerRow): number {
   const ts = row.score?.tradingSystems;
   if (!ts) return 0;
-  return (
-    ts.mainSystem.strategyFitScore * 1_000_000 +
-    ts.confluence.score * 1_000 +
-    ts.emaSystem.emaScore
-  );
+  return ts.mainSystem.strategyFitScore * 1_000_000 + ts.emaSystem.emaScore;
 }
 
 export function sortRowsByTradingSystems(

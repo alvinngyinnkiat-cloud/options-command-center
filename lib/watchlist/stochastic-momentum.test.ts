@@ -1,50 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyStochasticMomentum,
-  emaSystemStochasticScore,
-  mainSystemStochasticScore,
+  isCallMomentumConfirmed,
+  isPutMomentumConfirmed,
+  mainSystemMomentumScore,
 } from "./stochastic-momentum";
 
-describe("classifyStochasticMomentum", () => {
-  it("XSP 14.7 -> 38.9 = ROLLING UP", () => {
-    expect(classifyStochasticMomentum(38.9, 14.7)).toBe("ROLLING UP");
+describe("classifyStochasticMomentum V3", () => {
+  it("ROLLING UP when prev < 25 and current > previous", () => {
+    expect(classifyStochasticMomentum(20, 18)).toBe("ROLLING UP");
   });
 
-  it("IWM 31.1 -> 48.5 = STRONG", () => {
-    expect(classifyStochasticMomentum(48.5, 31.1)).toBe("STRONG");
-  });
-
-  it("82 -> 69 = ROLLING DOWN", () => {
+  it("ROLLING DOWN when prev > 75 and current < previous", () => {
     expect(classifyStochasticMomentum(69, 82)).toBe("ROLLING DOWN");
   });
 
-  it("previous null defaults to STRONG", () => {
-    expect(classifyStochasticMomentum(50, null)).toBe("STRONG");
+  it("STRONG otherwise", () => {
+    expect(classifyStochasticMomentum(48.5, 31.1)).toBe("STRONG");
   });
 });
 
-describe("mainSystemStochasticScore", () => {
-  it("Bull Put rolling up = 25", () => {
-    expect(
-      mainSystemStochasticScore("Sell Put", "ROLLING UP", 38.9)
-    ).toBe(25);
+describe("momentum confirmation", () => {
+  it("put accepts ROLLING UP or STRONG", () => {
+    expect(isPutMomentumConfirmed("ROLLING UP")).toBe(true);
+    expect(isPutMomentumConfirmed("STRONG")).toBe(true);
+    expect(isPutMomentumConfirmed("ROLLING DOWN")).toBe(false);
   });
 
-  it("Iron Condor SO 40-60 = 25", () => {
-    expect(mainSystemStochasticScore("Iron Condor", "STRONG", 50)).toBe(25);
-  });
-
-  it("Iron Condor SO 35-65 = 15", () => {
-    expect(mainSystemStochasticScore("Iron Condor", "STRONG", 62)).toBe(15);
+  it("call accepts ROLLING DOWN or STRONG", () => {
+    expect(isCallMomentumConfirmed("ROLLING DOWN")).toBe(true);
+    expect(isCallMomentumConfirmed("STRONG")).toBe(true);
   });
 });
 
-describe("emaSystemStochasticScore", () => {
-  it("Sell Put rolling up = 30", () => {
-    expect(emaSystemStochasticScore("Sell Put", "ROLLING UP")).toBe(30);
-  });
-
-  it("Sell Call rolling down = 30", () => {
-    expect(emaSystemStochasticScore("Sell Call", "ROLLING DOWN")).toBe(30);
+describe("mainSystemMomentumScore", () => {
+  it("awards 20 for rolling momentum only", () => {
+    expect(mainSystemMomentumScore("Sell Put", "ROLLING UP")).toBe(20);
+    expect(mainSystemMomentumScore("Sell Put", "STRONG")).toBe(0);
   });
 });

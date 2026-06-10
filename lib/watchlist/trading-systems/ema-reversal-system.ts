@@ -22,8 +22,15 @@ import {
 
 const EMA_SCORE_MIN = 75;
 
+/** Sell Put: avg at/slightly above EMA, or deeply below. */
+const PUT_EMA_UPPER_BAND_PCT = 2.5;
+const PUT_EMA_DEEP_BELOW_PCT = -7.5;
+
+/** Sell Call: avg at/slightly below EMA, or well above. */
+const CALL_EMA_LOWER_BAND_PCT = -2.5;
+const CALL_EMA_DEEP_ABOVE_PCT = 7.5;
+
 export type BaseSrSignal = "Sell Put" | "Sell Call" | "No Trade";
-export type EmaTrend = EmaReversalSystemResult["emaTrend"];
 
 function emaScoreTier(score: number): EmaScoreTier {
   if (score >= 90) return "Elite Reversal";
@@ -45,31 +52,20 @@ export function computeEmaDifference(
   };
 }
 
-/** EMA20 trend from completed daily bars (current vs previous). */
-export function classifyEmaTrend(
-  currentEma20: number,
-  previousEma20: number | null
-): EmaTrend {
-  if (previousEma20 == null) return "—";
-  if (currentEma20 > previousEma20) return "RISING";
-  if (currentEma20 < previousEma20) return "FALLING";
-  return "FLAT";
+export function isPutEmaConfirmation(differencePct: number | null): boolean {
+  if (differencePct == null) return false;
+  return (
+    (differencePct >= 0 && differencePct <= PUT_EMA_UPPER_BAND_PCT) ||
+    differencePct < PUT_EMA_DEEP_BELOW_PCT
+  );
 }
 
-/** Sell Put requires current EMA20 > previous EMA20. */
-export function isPutEmaTrendConfirmed(
-  currentEma20: number,
-  previousEma20: number | null
-): boolean {
-  return previousEma20 != null && currentEma20 > previousEma20;
-}
-
-/** Sell Call requires current EMA20 < previous EMA20. */
-export function isCallEmaTrendConfirmed(
-  currentEma20: number,
-  previousEma20: number | null
-): boolean {
-  return previousEma20 != null && currentEma20 < previousEma20;
+export function isCallEmaConfirmation(differencePct: number | null): boolean {
+  if (differencePct == null) return false;
+  return (
+    (differencePct <= 0 && differencePct >= CALL_EMA_LOWER_BAND_PCT) ||
+    differencePct > CALL_EMA_DEEP_ABOVE_PCT
+  );
 }
 
 function isNearPriceLevel(
@@ -182,18 +178,18 @@ function computeEmaReversalScore(input: {
   systems: TradingSystemsInput;
   recommendation: EmaReversalSystemResult["recommendation"];
   baseSrSignal: BaseSrSignal;
-  emaTrendConfirmed: boolean;
+  emaConfirmed: boolean;
   momentumScore: number;
   nearSupport: boolean;
   nearResistance: boolean;
 }): number {
-  const { systems, recommendation, emaTrendConfirmed, momentumScore } = input;
+  const { systems, recommendation, emaConfirmed, momentumScore } = input;
   const { support, resistance } = resolveSupportResistance(systems);
 
   if (recommendation === "No Trade") {
     let partial = 0;
     if (input.baseSrSignal !== "No Trade") partial += 20;
-    if (emaTrendConfirmed) partial += 15;
+    if (emaConfirmed) partial += 15;
     partial += momentumScore;
     if (input.nearSupport || input.nearResistance) partial += 10;
     return clampScore(partial);
@@ -201,7 +197,7 @@ function computeEmaReversalScore(input: {
 
   let score = 35;
   if (input.baseSrSignal === recommendation) score += 20;
-  if (emaTrendConfirmed) score += 20;
+  if (emaConfirmed) score += 20;
   score += momentumScore;
 
   if (recommendation === "Sell Put") {
@@ -230,7 +226,7 @@ function computeEmaReversalScore(input: {
   return clampScore(score);
 }
 
-/** System 1 — 20 EMA shorter-DTE reversal. S/R first, EMA trend confirms timing. */
+/** System 1 — 20 EMA shorter-DTE reversal. S/R first, EMA20 timing, SO direction. */
 export function computeEmaReversalSystem(
   input: TradingSystemsInput
 ): EmaReversalSystemResult {
@@ -242,16 +238,6 @@ export function computeEmaReversalSystem(
   const { baseSrSignal, nearSupport, nearResistance } =
     computeBaseSrSignal(input);
 
-  const emaTrend = classifyEmaTrend(input.ema20, input.ema20Previous);
-  const putEmaTrendOk = isPutEmaTrendConfirmed(
-    input.ema20,
-    input.ema20Previous
-  );
-  const callEmaTrendOk = isCallEmaTrendConfirmed(
-    input.ema20,
-    input.ema20Previous
-  );
-
   const momentumStatus = classifyStochasticMomentum(
     input.stochastic,
     input.previousStochastic
@@ -259,34 +245,43 @@ export function computeEmaReversalSystem(
   const putMomentumOk = isPutMomentumConfirmed(momentumStatus);
   const callMomentumOk = isCallMomentumConfirmed(momentumStatus);
 
+  const putEmaOk = isPutEmaConfirmation(differencePct);
+  const callEmaOk = isCallEmaConfirmation(differencePct);
+
   let recommendation: EmaReversalSystemResult["recommendation"] = "No Trade";
   let reason = "No S/R base signal";
 
-  if (baseSrSignal === "Sell Put" && !putEmaTrendOk) {
-    reason = "EMA trend confirmation failed";
-  } else if (baseSrSignal === "Sell Call" && !callEmaTrendOk) {
-    reason = "EMA trend confirmation failed";
-  } else if (baseSrSignal === "Sell Put" && putEmaTrendOk && putMomentumOk) {
+  if (baseSrSignal === "Sell Put" && putEmaOk && putMomentumOk) {
     recommendation = "Sell Put";
-    reason = "S/R base Sell Put, EMA rising, stochastic rolling up";
-  } else if (baseSrSignal === "Sell Call" && callEmaTrendOk && callMomentumOk) {
+    reason = "S/R base Sell Put, EMA timing confirmed, momentum confirmed";
+  } else if (baseSrSignal === "Sell Call" && callEmaOk && callMomentumOk) {
     recommendation = "Sell Call";
-    reason = "S/R base Sell Call, EMA falling, stochastic rolling down";
+    reason = "S/R base Sell Call, EMA timing confirmed, momentum confirmed";
   } else {
     const misses: string[] = [];
     if (baseSrSignal === "No Trade") misses.push("not near S/R");
-    if (baseSrSignal === "Sell Put" && putEmaTrendOk && !putMomentumOk) {
-      misses.push("momentum not rolling up");
+    if (baseSrSignal === "Sell Put") {
+      if (!putEmaOk) {
+        misses.push(
+          `EMA % ${differencePct?.toFixed(2) ?? "—"} outside put bands (0–${PUT_EMA_UPPER_BAND_PCT}% or <${PUT_EMA_DEEP_BELOW_PCT}%)`
+        );
+      }
+      if (!putMomentumOk) misses.push("momentum not confirmed for put");
     }
-    if (baseSrSignal === "Sell Call" && callEmaTrendOk && !callMomentumOk) {
-      misses.push("momentum not rolling down");
+    if (baseSrSignal === "Sell Call") {
+      if (!callEmaOk) {
+        misses.push(
+          `EMA % ${differencePct?.toFixed(2) ?? "—"} outside call bands (${CALL_EMA_LOWER_BAND_PCT}–0% or >${CALL_EMA_DEEP_ABOVE_PCT}%)`
+        );
+      }
+      if (!callMomentumOk) misses.push("momentum not confirmed for call");
     }
     reason = misses.length > 0 ? misses.join("; ") : reason;
   }
 
-  const emaTrendConfirmed =
-    (baseSrSignal === "Sell Put" && putEmaTrendOk) ||
-    (baseSrSignal === "Sell Call" && callEmaTrendOk);
+  const emaConfirmed =
+    (baseSrSignal === "Sell Put" && putEmaOk) ||
+    (baseSrSignal === "Sell Call" && callEmaOk);
 
   const momentumScore = momentumScoreForEmaSystem({
     recommendation,
@@ -298,7 +293,7 @@ export function computeEmaReversalSystem(
     systems: input,
     recommendation,
     baseSrSignal,
-    emaTrendConfirmed,
+    emaConfirmed,
     momentumScore,
     nearSupport,
     nearResistance,
@@ -312,7 +307,6 @@ export function computeEmaReversalSystem(
     baseSrSignal,
     emaDifference: difference,
     emaDifferencePct: differencePct,
-    emaTrend,
     momentumStatus,
   };
 

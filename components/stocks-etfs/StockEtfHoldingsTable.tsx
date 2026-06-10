@@ -102,7 +102,7 @@ export function StockEtfHoldingsTable({
               </td>
               <td
                 className={cn(
-                  "px-2 py-2 font-mono tabular-nums truncate",
+                  "px-2 py-2 font-mono tabular-nums whitespace-normal break-words",
                   pnlClass(row.pl)
                 )}
               >

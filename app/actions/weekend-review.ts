@@ -12,11 +12,7 @@ import { buildWeekendReviewSummary } from "@/lib/weekend-review/summary";
 import { buildWeekendWorkflowAlerts } from "@/lib/weekend-review/workflow-alerts";
 import type { WeekendMarketReviewActionResult } from "@/lib/weekend-review/types";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
-import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
-import { getRiskDashboardData } from "@/lib/supabase/queries/risk-dashboard";
-import { getAggregatedIntelligenceImpacts } from "@/lib/supabase/queries/market-intelligence";
 import { getWatchlistScannerData } from "@/lib/supabase/queries/watchlist-scanner";
-import { buildMarketCondition } from "@/lib/trading-workflow/market-condition";
 import { buildTradeQueue } from "@/lib/trading-workflow/trade-queue";
 import { persistScannerScores } from "@/lib/supabase/queries/scanner-scores";
 import {
@@ -89,18 +85,7 @@ export async function runWeekendMarketReview(): Promise<WeekendMarketReviewActio
       ...history,
     ]);
 
-    const [trades, risk, intelligenceMap] = await Promise.all([
-      getOptionsTradesData(),
-      getRiskDashboardData(),
-      getAggregatedIntelligenceImpacts(),
-    ]);
-    const marketCondition = buildMarketCondition(rows, intelligenceMap);
-    const tradeQueue = buildTradeQueue(
-      rows,
-      trades.trades,
-      risk.capitalLiquidity,
-      marketCondition
-    );
+    const tradeQueue = buildTradeQueue(rows);
 
     revalidatePath("/");
     revalidatePath("/trade-queue");
