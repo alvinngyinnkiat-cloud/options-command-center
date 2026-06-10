@@ -57,6 +57,11 @@ export interface EmaReversalSystemResult {
   emaScore: number;
   tier: EmaScoreTier;
   reason: string;
+  /** Step 1 — S/R base signal before EMA confirmation. */
+  baseSrSignal: "Sell Put" | "Sell Call" | "No Trade";
+  emaDifference: number;
+  emaDifferencePct: number | null;
+  stochasticDirection: "Up" | "Down" | "Flat" | "—";
 }
 
 export interface MainTradingSystemResult {

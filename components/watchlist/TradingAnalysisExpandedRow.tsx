@@ -115,12 +115,29 @@ export function TradingAnalysisExpandedRow({
             {score?.tradingSystems ? (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 {[
-                  ["Decision", score.tradingSystems.emaSystem.recommendation],
+                  ["Base S/R Signal", score.tradingSystems.emaSystem.baseSrSignal],
+                  [
+                    "EMA Difference",
+                    score.tradingSystems.emaSystem.emaDifferencePct != null
+                      ? `${score.tradingSystems.emaSystem.emaDifference.toFixed(2)} (${score.tradingSystems.emaSystem.emaDifferencePct.toFixed(2)}%)`
+                      : "—",
+                  ],
+                  [
+                    "Stochastic Direction",
+                    score.tradingSystems.emaSystem.stochasticDirection,
+                  ],
+                  [
+                    "20 EMA Decision",
+                    score.tradingSystems.emaSystem.recommendation,
+                  ],
                   ["EMA Score", String(score.tradingSystems.emaSystem.emaScore)],
                   ["Tier", score.tradingSystems.emaSystem.tier],
                   ["Reason", score.tradingSystems.emaSystem.reason],
                 ].map(([label, value]) => (
-                  <div key={label} className={label === "Reason" ? "col-span-2" : undefined}>
+                  <div
+                    key={label}
+                    className={label === "Reason" ? "col-span-2" : undefined}
+                  >
                     <dt className="text-terminal-muted">{label}</dt>
                     <dd className="font-mono text-terminal-text">{value}</dd>
                   </div>
