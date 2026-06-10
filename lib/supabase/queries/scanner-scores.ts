@@ -19,7 +19,7 @@ function mapScoreToRow(
     stochastic_score: score.stochastic.score,
     ema_score: score.tradingSystems.emaSystem.emaScore,
     support_resistance_score: score.supportResistance.score,
-    total_score: score.tradingSystems.mainSystem.mainScore,
+    total_score: score.tradingSystems.mainSystem.strategyFitScore,
     recommended_strategy: recommendation.recommendedStrategyType,
     action: recommendation.action,
     decision_label: score.tradingSystems.confluence.status,

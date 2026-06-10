@@ -18,7 +18,6 @@ import { Pencil, Trash2 } from "lucide-react";
 import { AveragePricePositionCell } from "./AveragePricePositionCell";
 import { DirectionIndicator } from "./DirectionIndicator";
 import { IndicatorComparisonCell } from "./IndicatorComparisonCell";
-import { ScoreCell } from "./ScoreCell";
 import { SupportResistanceEditor } from "./SupportResistanceEditor";
 
 interface WatchlistTableProps {
@@ -90,7 +89,7 @@ export function WatchlistTable({
                 Manual S/R
               </th>
               <th
-                colSpan={8}
+                colSpan={7}
                 className="px-3 py-2 font-medium text-center border-l border-terminal-border text-accent"
               >
                 Dual Trading Systems
@@ -133,14 +132,13 @@ export function WatchlistTable({
               <th className="px-2 py-2 font-medium">R1</th>
               <th className="px-2 py-2 font-medium">R2</th>
               <th className="px-2 py-2 font-medium">Avg Position</th>
-              <th className="px-2 py-2 font-medium border-l border-terminal-border">EMA Sys</th>
+              <th className="px-2 py-2 font-medium border-l border-terminal-border">20 EMA</th>
               <th className="px-2 py-2 font-medium text-right">EMA Score</th>
-              <th className="px-2 py-2 font-medium">Main Sys</th>
-              <th className="px-2 py-2 font-medium text-right">Main Score</th>
+              <th className="px-2 py-2 font-medium">Main</th>
+              <th className="px-2 py-2 font-medium text-right">Strategy Fit</th>
               <th className="px-2 py-2 font-medium text-right">Confluence</th>
               <th className="px-2 py-2 font-medium">Status</th>
-              <th className="px-2 py-2 font-medium text-right">Trend</th>
-              <th className="px-2 py-2 font-medium text-right">S/R</th>
+              <th className="px-2 py-2 font-medium">Decision Reason</th>
               <th className="px-2 py-2 font-medium border-l border-terminal-border" />
             </tr>
           </thead>
@@ -316,7 +314,7 @@ export function WatchlistTable({
                         {row.score.tradingSystems.mainSystem.recommendation}
                       </td>
                       <td className="px-2 py-2.5 font-mono text-right font-semibold text-terminal-text">
-                        {formatScore(row.score.tradingSystems.mainSystem.mainScore)}
+                        {formatScore(row.score.tradingSystems.mainSystem.strategyFitScore)}
                       </td>
                       <td
                         className="px-2 py-2.5 font-mono text-right font-semibold text-accent"
@@ -327,12 +325,16 @@ export function WatchlistTable({
                       <td className="px-2 py-2.5 text-[10px] text-terminal-muted whitespace-nowrap">
                         {row.score.tradingSystems.confluence.status}
                       </td>
-                      <ScoreCell result={row.score.trend} />
-                      <ScoreCell result={row.score.supportResistance} />
+                      <td
+                        className="px-2 py-2.5 text-[10px] text-terminal-muted max-w-[200px] truncate"
+                        title={row.score.tradingSystems.decisionReason}
+                      >
+                        {row.score.tradingSystems.decisionReason}
+                      </td>
                     </>
                   ) : (
                     <td
-                      colSpan={8}
+                      colSpan={7}
                       className="px-2 py-2.5 border-l border-terminal-border/50 text-terminal-muted"
                     >
                       —

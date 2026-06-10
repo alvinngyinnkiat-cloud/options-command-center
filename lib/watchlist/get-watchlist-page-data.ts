@@ -9,17 +9,13 @@ import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import { getRiskDashboardData } from "@/lib/supabase/queries/risk-dashboard";
 import { getWatchlistScannerData } from "@/lib/supabase/queries/watchlist-scanner";
 import { getWeekendReviewStatus } from "@/lib/supabase/queries/weekly-market-updates";
-import { buildReadinessForRows } from "@/lib/trading-workflow/readiness";
-import { buildMarketCondition } from "@/lib/trading-workflow/market-condition";
 import type { WatchlistScannerData } from "@/lib/watchlist/types";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
-import type { TradeReadinessResult } from "@/lib/trading-workflow/types";
 
 export interface WatchlistPageData {
   scanner: WatchlistScannerData;
   reviewStatus: WeekendReviewStatus;
   alerts: EnrichedAlert[];
-  readinessByTicker: Record<string, TradeReadinessResult>;
 }
 
 /**
@@ -48,20 +44,9 @@ export async function getWatchlistPageData(): Promise<WatchlistPageData> {
   });
   const alerts = applyAlertStatuses(rawAlerts, alertStatuses);
 
-  const marketCondition = buildMarketCondition(scanner.rows, intelligenceMap);
-  const allReadiness = buildReadinessForRows(scanner.rows, {
-    openTrades: tradesData.trades,
-    liquidityBase: riskData.capitalLiquidity,
-    reviewStatus,
-    marketCondition,
-  });
-
   return {
     scanner,
     reviewStatus,
     alerts,
-    readinessByTicker: Object.fromEntries(
-      allReadiness.map((r) => [r.ticker, r])
-    ),
   };
 }

@@ -19,7 +19,6 @@ import {
 import type { EnrichedAlert } from "@/lib/alerts/types";
 import type { WatchlistScannerData } from "@/lib/watchlist/types";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
-import type { TradeReadinessResult } from "@/lib/trading-workflow/types";
 import { WeekendMarketReviewPanel } from "@/components/weekend-review/WeekendMarketReviewPanel";
 import { LayoutGrid, RefreshCw, ScanLine, Table2 } from "lucide-react";
 import { AddTickerForm } from "./AddTickerForm";
@@ -35,14 +34,12 @@ interface WatchlistScannerClientProps {
   initialData: WatchlistScannerData;
   reviewStatus: WeekendReviewStatus;
   alerts?: EnrichedAlert[];
-  readinessByTicker?: Record<string, TradeReadinessResult>;
 }
 
 export function WatchlistScannerClient({
   initialData,
   reviewStatus,
   alerts = [],
-  readinessByTicker = {},
 }: WatchlistScannerClientProps) {
   const [rows, setRows] = useState(initialData.rows);
   const [dataSource, setDataSource] = useState(initialData.dataSource);
@@ -283,7 +280,6 @@ export function WatchlistScannerClient({
           rows={activeRows}
           reviewStatus={reviewStatus}
           alerts={alerts}
-          readinessByTicker={readinessByTicker}
           allowRemove
           onRowsChange={handleRowsChange}
           dataSource={dataSource}
@@ -299,7 +295,6 @@ export function WatchlistScannerClient({
             rows={categoryRows}
             reviewStatus={reviewStatus}
             alerts={alerts}
-            readinessByTicker={readinessByTicker}
             emptyMessage={`No tickers in ${getCategoryLabel(activeCategory)}.`}
           />
           <p className="mt-2 text-[11px] text-terminal-muted">

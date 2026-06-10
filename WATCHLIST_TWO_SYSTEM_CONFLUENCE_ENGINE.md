@@ -2,46 +2,67 @@
 
 ## Overview
 
-The Watchlist Scanner runs **three independent engines** on each completed daily candle:
+The Watchlist Scanner runs **two independent decision engines** plus an **informational confluence layer** on each completed daily candle:
 
 | Engine | Purpose | Output |
 |--------|---------|--------|
-| **System 1 — 20 EMA Reversal** | Early reversal setups | Sell Put · Sell Call · No Trade |
+| **System 1 — 20 EMA (Shorter-DTE)** | Early reversal setups | Sell Put · Sell Call · No Trade |
 | **System 2 — Main Trading** | High-probability premium selling | Sell Put · Sell Call · Iron Condor · No Trade |
-| **System 3 — Confluence** | Agreement ranking | 0–10 score + status tier |
+| **System 3 — Confluence** | Agreement between systems (informational only) | 0–10 score + status |
+
+**Removed from Watchlist Scanner** (Risk Dashboard only):
+
+- Trade Readiness Score
+- Trade Readiness Checklist
+- Liquidity / Capacity / No Active Trade / Market Condition checklists
+- Final decision override logic driven by confluence or readiness
 
 All scoring uses **Average Price = (High + Low) / 2** from the completed candle — never current/live price.
 
+**Refresh schedule:**
+
+- US stocks / ETFs: 6:00 AM SGT
+- SG stocks: 5:30 PM SGT
+
 ---
 
-## System 1 — 20 EMA Reversal
+## System 1 — 20 EMA Shorter-DTE
 
 **File:** `lib/watchlist/trading-systems/ema-reversal-system.ts`
 
+Operates **independently**. Never outputs Iron Condor.
+
+### Inputs
+
+Completed daily candle only: High, Low, Average Price, EMA20, Stochastic, Daily/Weekly Support & Resistance.
+
 ### Sell Put
-1. Average price near support or mid-support zone (lower 50% of S/R range)
-2. Average price below or near EMA20 (within ±2.5%)
-3. Stochastic turning upward (today > previous)
+
+1. Average price near support or mid-support zone
+2. Average price near or below EMA20
+3. Stochastic turning upward
 
 ### Sell Call
-1. Average price near resistance or mid-resistance zone (upper 50%)
-2. Average price above or near EMA20
+
+1. Average price near resistance or mid-resistance zone
+2. Average price near or above EMA20
 3. Stochastic turning downward
 
 ### No Trade
-Any rule fails, or setup is ambiguous.
 
-**Never outputs Iron Condor.**
+Not near S/R, stochastic not confirming, or **EMA Score &lt; 75**.
 
-### EMA Score (0–100)
+### EMA Score (0–100) — gates System 1 decision
+
 | Range | Tier |
 |-------|------|
-| 90–100 | Strong Reversal |
-| 75–89 | Good Reversal |
-| 60–74 | Watchlist |
-| < 60 | Ignore |
+| 90–100 | Elite Reversal |
+| 85–89 | Strong Reversal |
+| 80–84 | Good Reversal |
+| 75–79 | Tradable Reversal |
+| &lt; 75 | No Trade (decision forced to No Trade) |
 
-Factors: EMA20 proximity, S/R ATR-adjusted zone, stochastic direction, trend alignment.
+Factors: distance from EMA20, support/resistance proximity, stochastic direction, trend alignment.
 
 ---
 
@@ -49,116 +70,125 @@ Factors: EMA20 proximity, S/R ATR-adjusted zone, stochastic direction, trend ali
 
 **File:** `lib/watchlist/trading-systems/main-trading-system.ts`
 
+Operates **independently**. Primary workflow system.
+
 ### Sell Put
-- Bullish trend (avg > SMA200, SMA50 > SMA200, SMA50 rising)
-- Stochastic < 25
-- Near support zone
+
+- Bullish trend
+- Stochastic &lt; 25
+- Near support
 
 ### Sell Call
-- Bearish trend
-- Stochastic > 75
-- Near resistance zone
+
+- Stochastic &gt; 75
+- Near resistance
 
 ### Iron Condor
-- Between support and resistance
-- Stochastic 40–60
 
-### Main Score (0–100)
+- Between support and resistance
+- Stochastic 40–60 (neutral; bullish trend not over-weighted)
+
+### Strategy Fit Score (0–100) — gates System 2 decision
+
 | Range | Tier |
 |-------|------|
-| 90–100 | A+ Setup |
-| 80–89 | A Setup |
-| 70–79 | B Setup |
-| < 70 | Pass |
+| 90–100 | Elite Setup |
+| 85–89 | A Setup |
+| 80–84 | Good Setup |
+| 75–79 | Tradable Setup |
+| &lt; 75 | No Trade (decision forced to No Trade) |
 
 ---
 
-## System 3 — Confluence
+## System 3 — Confluence (Informational Only)
 
 **File:** `lib/watchlist/trading-systems/confluence-engine.ts`
 
-| Score | Status | Condition |
-|-------|--------|-----------|
-| **10/10** | STRONG CONFLUENCE | Both systems same active recommendation |
-| **8–9/10** | GOOD CONFLUENCE | Same direction, different active labels |
-| **7/10** | EARLY SETUP | One system trades, other No Trade |
-| **6/10** | NEUTRAL | EMA No Trade + Main Iron Condor |
-| **0–5/10** | CONFLICTING SIGNALS | Bullish vs bearish disagreement |
+Confluence **does not override** either system's decision.
 
-### Priority Tiers
-- **Tier 1:** Confluence 10 — highest priority
-- **Tier 2:** Confluence 8–9 — strong candidate
-- **Tier 3:** Confluence 7 — watchlist candidate
-- **Tier 4:** Confluence ≤ 6 — no immediate action
+| Score | Status |
+|-------|--------|
+| 10/10 | STRONG AGREEMENT — both systems same direction |
+| 8–9/10 | GOOD AGREEMENT |
+| 7/10 | SHORTER-DTE ONLY — 20 EMA active, Main on sidelines |
+| 6/10 | MAIN SYSTEM ONLY — Main active, 20 EMA on sidelines |
+| 0–5/10 | CONFLICTING SIGNALS |
 
 ---
 
-## Trade Queue Sort Order
+## Scanner Table Columns
 
-1. Confluence score (desc)
-2. Main trade score (desc)
-3. EMA score (desc)
+| Column |
+|--------|
+| Ticker |
+| 20 EMA Decision |
+| EMA Score |
+| Main Decision |
+| Strategy Fit Score |
+| Confluence Score |
+| Confluence Status |
+| Decision Reason |
+| Final Rank |
 
-**File:** `lib/trading-workflow/trade-queue.ts`
+### Sort order
 
----
-
-## Legacy Scoring (Component Breakdown)
-
-The original weighted components (Trend 35, Stochastic 25, S/R 20) remain for **breakdown display only**.
-
-**EMA20 is removed from the legacy component total** — it is scored exclusively in System 1.
-
-**File:** `lib/watchlist/scoring/compute.ts`
-
----
-
-## UI Surfaces
-
-| View | Columns |
-|------|---------|
-| Scanner grid | Ticker · EMA System · EMA Score · Main System · Main Score · Confluence |
-| Full table | Dual Trading Systems section |
-| Detail cards | Section 6: Dual System Scores |
-| Category table | Main System · Confluence |
+1. Strategy Fit Score (primary)
+2. Confluence Score
+3. EMA Score
 
 ---
 
-## Key Files
+## Code Map
 
 ```
 lib/watchlist/trading-systems/
-  types.ts
-  shared.ts
-  ema-reversal-system.ts
-  main-trading-system.ts
-  confluence-engine.ts
-  legacy-bridge.ts
-  compute.ts
-  index.ts
-  trading-systems.test.ts
+  types.ts                 — shared types
+  shared.ts                — S/R zones, EMA proximity, stochastic helpers
+  ema-reversal-system.ts   — System 1
+  main-trading-system.ts   — System 2
+  confluence-engine.ts     — System 3
+  index.ts                 — orchestrator + decisionReason
+  legacy-bridge.ts         — legacy Bull Put / Bear Call labels
+  compute.ts               — (via index)
 
-lib/watchlist/scoring/map-row.ts      — orchestrates all engines per row
-lib/watchlist/scanner-result.ts       — ScannerScoreResult.tradingSystems
+lib/watchlist/scoring/map-row.ts  — wires systems into scanner rows
 ```
-
----
-
-## Refresh Schedule (unchanged)
-
-- US stocks/ETFs: 6:00 AM SGT (`vercel.json` cron 22:00 UTC)
-- SG stocks: 5:30 PM SGT
-- Completed daily candles only
 
 ---
 
 ## Validation Checklist
 
-- [x] 20 EMA system never outputs Iron Condor
-- [x] Main system can output Iron Condor
-- [x] Average price = (High + Low) / 2
-- [x] S/R remains primary decision framework
-- [x] EMA20 acts as reversal confirmation (System 1 only)
-- [x] Stochastic confirms direction in System 1
-- [x] Scanner displays both systems separately
-- [x] Trade queue sorts by confluence first
+1. Trade Readiness Score removed from Watchlist Scanner UI
+2. 20 EMA System operates independently
+3. Main System operates independently
+4. 20 EMA never outputs Iron Condor
+5. Main System can output Iron Condor
+6. EMA Score gates only 20 EMA decisions (≥ 75)
+7. Strategy Fit Score gates only Main decisions (≥ 75)
+8. Confluence is informational only
+9. Support/Resistance remains primary framework
+10. EMA20 = reversal confirmation; Stochastic = direction confirmation
+11. Existing ticker data preserved
+12. `npm run build` passes
+
+---
+
+## Examples
+
+### Strong agreement
+
+- 20 EMA: Sell Put (92)
+- Main: Sell Put (88)
+- Confluence: 10/10 — STRONG AGREEMENT
+
+### Shorter-DTE only
+
+- 20 EMA: Sell Put (89)
+- Main: No Trade (70)
+- Confluence: 7/10 — SHORTER-DTE ONLY
+
+### Main system only
+
+- 20 EMA: No Trade (40)
+- Main: Iron Condor (91)
+- Confluence: 6/10 — MAIN SYSTEM ONLY

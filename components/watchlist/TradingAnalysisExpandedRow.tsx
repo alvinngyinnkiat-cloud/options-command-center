@@ -11,7 +11,6 @@ import type { TradingAnalysisViewModel } from "@/lib/watchlist/analysis-card";
 import { passFailClass } from "@/lib/watchlist/scanner-grid-colors";
 import { SCORE_WEIGHTS } from "@/lib/watchlist/scoring/types";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
-import type { TradeReadinessResult } from "@/lib/trading-workflow/types";
 import { cn } from "@/lib/utils";
 
 interface TradingAnalysisExpandedRowProps {
@@ -19,7 +18,6 @@ interface TradingAnalysisExpandedRowProps {
   model: TradingAnalysisViewModel;
   reviewStatus: WeekendReviewStatus;
   weekendAnalystNote?: string | null;
-  readiness?: TradeReadinessResult;
   colSpan: number;
 }
 
@@ -47,7 +45,6 @@ export function TradingAnalysisExpandedRow({
   model,
   reviewStatus,
   weekendAnalystNote,
-  readiness,
   colSpan,
 }: TradingAnalysisExpandedRowProps) {
   const score = row.score;
@@ -100,27 +97,16 @@ export function TradingAnalysisExpandedRow({
             </dl>
           </DetailBlock>
 
-          <DetailBlock title="Trading Systems">
+          <DetailBlock title="20 EMA System (Shorter-DTE)">
             {score?.tradingSystems ? (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 {[
-                  ["20 EMA System", score.tradingSystems.emaSystem.recommendation],
-                  [
-                    "EMA Score",
-                    String(score.tradingSystems.emaSystem.emaScore),
-                  ],
-                  ["Main System", score.tradingSystems.mainSystem.recommendation],
-                  [
-                    "Main Score",
-                    String(score.tradingSystems.mainSystem.mainScore),
-                  ],
-                  [
-                    "Confluence",
-                    `${score.tradingSystems.confluence.score}/10`,
-                  ],
-                  ["Status", score.tradingSystems.confluence.status],
+                  ["Decision", score.tradingSystems.emaSystem.recommendation],
+                  ["EMA Score", String(score.tradingSystems.emaSystem.emaScore)],
+                  ["Tier", score.tradingSystems.emaSystem.tier],
+                  ["Reason", score.tradingSystems.emaSystem.reason],
                 ].map(([label, value]) => (
-                  <div key={label}>
+                  <div key={label} className={label === "Reason" ? "col-span-2" : undefined}>
                     <dt className="text-terminal-muted">{label}</dt>
                     <dd className="font-mono text-terminal-text">{value}</dd>
                   </div>
@@ -128,6 +114,51 @@ export function TradingAnalysisExpandedRow({
               </dl>
             ) : (
               <p className="text-xs text-terminal-muted">No system data</p>
+            )}
+          </DetailBlock>
+
+          <DetailBlock title="Main System (Main Workflow)">
+            {score?.tradingSystems ? (
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                {[
+                  ["Decision", score.tradingSystems.mainSystem.recommendation],
+                  [
+                    "Strategy Fit Score",
+                    String(score.tradingSystems.mainSystem.strategyFitScore),
+                  ],
+                  ["Tier", score.tradingSystems.mainSystem.tier],
+                  ["Reason", score.tradingSystems.mainSystem.reason],
+                ].map(([label, value]) => (
+                  <div key={label} className={label === "Reason" ? "col-span-2" : undefined}>
+                    <dt className="text-terminal-muted">{label}</dt>
+                    <dd className="font-mono text-terminal-text">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="text-xs text-terminal-muted">No system data</p>
+            )}
+          </DetailBlock>
+
+          <DetailBlock title="Confluence">
+            {score?.tradingSystems ? (
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                {[
+                  [
+                    "Confluence Score",
+                    `${score.tradingSystems.confluence.score}/10`,
+                  ],
+                  ["Status", score.tradingSystems.confluence.status],
+                  ["Reason", score.tradingSystems.confluence.reason],
+                ].map(([label, value]) => (
+                  <div key={label} className={label === "Reason" ? "col-span-2" : undefined}>
+                    <dt className="text-terminal-muted">{label}</dt>
+                    <dd className="font-mono text-terminal-text">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="text-xs text-terminal-muted">No confluence data</p>
             )}
           </DetailBlock>
 
@@ -246,38 +277,6 @@ export function TradingAnalysisExpandedRow({
                 </div>
               </dl>
             </div>
-          </DetailBlock>
-
-          <DetailBlock title="Trade Readiness Score">
-            {readiness ? (
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span
-                    className={cn(
-                      "font-mono text-lg font-semibold",
-                      readiness.label === "Ready To Trade"
-                        ? "text-gain"
-                        : readiness.label === "Do Not Trade"
-                          ? "text-loss"
-                          : "text-warn"
-                    )}
-                  >
-                    {readiness.score}/100
-                  </span>
-                  <span className="text-terminal-muted">{readiness.label}</span>
-                </div>
-                <p className="text-terminal-text">{readiness.finalRecommendation}</p>
-                <ul className="space-y-0.5 text-[11px] text-terminal-muted">
-                  {readiness.checks.map((c) => (
-                    <li key={c.id}>
-                      {c.passed ? "✓" : "✗"} {c.label}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="text-xs text-terminal-muted">—</p>
-            )}
           </DetailBlock>
 
           <DetailBlock title="Last Review Date">

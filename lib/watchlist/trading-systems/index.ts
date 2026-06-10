@@ -3,6 +3,15 @@ import { computeEmaReversalSystem } from "./ema-reversal-system";
 import { computeMainTradingSystem } from "./main-trading-system";
 import { computeConfluence } from "./confluence-engine";
 
+function buildDecisionReason(result: Omit<TradingSystemsResult, "decisionReason">): string {
+  const { emaSystem, mainSystem, confluence } = result;
+  return [
+    `20 EMA: ${emaSystem.recommendation} (${emaSystem.emaScore}) — ${emaSystem.reason}`,
+    `Main: ${mainSystem.recommendation} (${mainSystem.strategyFitScore}) — ${mainSystem.reason}`,
+    `Confluence ${confluence.score}/10 — ${confluence.status}`,
+  ].join(" | ");
+}
+
 export function computeTradingSystems(
   input: TradingSystemsInput
 ): TradingSystemsResult {
@@ -10,7 +19,11 @@ export function computeTradingSystems(
   const mainSystem = computeMainTradingSystem(input);
   const confluence = computeConfluence(emaSystem, mainSystem);
 
-  return { emaSystem, mainSystem, confluence };
+  const partial = { emaSystem, mainSystem, confluence };
+  return {
+    ...partial,
+    decisionReason: buildDecisionReason(partial),
+  };
 }
 
 export type {
@@ -19,6 +32,7 @@ export type {
   TradingSystemRecommendation,
   ConfluenceStatus,
   ConfluenceTier,
+  StrategyFitTier,
 } from "./types";
 
 export { computeEmaReversalSystem } from "./ema-reversal-system";

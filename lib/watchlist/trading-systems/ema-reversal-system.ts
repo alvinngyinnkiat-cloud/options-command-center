@@ -17,11 +17,14 @@ import {
   srZoneScore,
 } from "./shared";
 
+const EMA_SCORE_MIN = 75;
+
 function emaScoreTier(score: number): EmaScoreTier {
-  if (score >= 90) return "Strong Reversal";
-  if (score >= 75) return "Good Reversal";
-  if (score >= 60) return "Watchlist";
-  return "Ignore";
+  if (score >= 90) return "Elite Reversal";
+  if (score >= 85) return "Strong Reversal";
+  if (score >= 80) return "Good Reversal";
+  if (score >= 75) return "Tradable Reversal";
+  return "No Trade";
 }
 
 function computeEmaReversalScore(input: {
@@ -76,7 +79,7 @@ function computeEmaReversalScore(input: {
   return clampScore(score);
 }
 
-/** System 1 — 20 EMA reversal (early setups). Never outputs Iron Condor. */
+/** System 1 — 20 EMA reversal (shorter-DTE). Never outputs Iron Condor. */
 export function computeEmaReversalSystem(
   input: TradingSystemsInput
 ): EmaReversalSystemResult {
@@ -104,16 +107,16 @@ export function computeEmaReversalSystem(
     input.previousStochastic
   );
 
-  let recommendation: EmaReversalSystemResult["recommendation"] = "No Trade";
-  let reason = "Not near S/R or stochastic not confirming";
+  let ruleRecommendation: EmaReversalSystemResult["recommendation"] = "No Trade";
+  let ruleReason = "Not near S/R or stochastic not confirming";
 
   if (nearSupport && putEmaOk && soUp) {
-    recommendation = "Sell Put";
-    reason =
+    ruleRecommendation = "Sell Put";
+    ruleReason =
       "Avg price near support/mid-support, below/near EMA20, stochastic turning up";
   } else if (nearResistance && callEmaOk && soDown) {
-    recommendation = "Sell Call";
-    reason =
+    ruleRecommendation = "Sell Call";
+    ruleReason =
       "Avg price near resistance/mid-resistance, above/near EMA20, stochastic turning down";
   } else {
     const misses: string[] = [];
@@ -122,26 +125,35 @@ export function computeEmaReversalSystem(
     if (nearResistance && !callEmaOk) misses.push("EMA20 not above/near");
     if (nearSupport && !soUp) misses.push("SO not turning up");
     if (nearResistance && !soDown) misses.push("SO not turning down");
-    reason = misses.length > 0 ? misses.join("; ") : reason;
+    ruleReason = misses.length > 0 ? misses.join("; ") : ruleReason;
   }
 
   const emaScore = computeEmaReversalScore({
     systems: input,
-    recommendation,
+    recommendation: ruleRecommendation,
     nearSupport,
     nearResistance,
     emaAligned:
-      (recommendation === "Sell Put" && putEmaOk) ||
-      (recommendation === "Sell Call" && callEmaOk),
+      (ruleRecommendation === "Sell Put" && putEmaOk) ||
+      (ruleRecommendation === "Sell Call" && callEmaOk),
     stochasticConfirmed:
-      (recommendation === "Sell Put" && soUp) ||
-      (recommendation === "Sell Call" && soDown),
+      (ruleRecommendation === "Sell Put" && soUp) ||
+      (ruleRecommendation === "Sell Call" && soDown),
   });
 
+  if (emaScore < EMA_SCORE_MIN) {
+    return {
+      recommendation: "No Trade",
+      emaScore,
+      tier: emaScoreTier(emaScore),
+      reason: "EMA Score below minimum threshold",
+    };
+  }
+
   return {
-    recommendation,
+    recommendation: ruleRecommendation,
     emaScore,
     tier: emaScoreTier(emaScore),
-    reason,
+    reason: ruleReason,
   };
 }

@@ -1,6 +1,5 @@
 import type {
   ConfluenceResult,
-  ConfluenceStatus,
   ConfluenceTier,
   EmaReversalSystemResult,
   MainTradingSystemResult,
@@ -12,6 +11,18 @@ function confluenceTier(score: number): ConfluenceTier {
   if (score >= 8) return "Tier 2";
   if (score >= 7) return "Tier 3";
   return "Tier 4";
+}
+
+function isConflicting(
+  ema: EmaReversalSystemResult,
+  main: MainTradingSystemResult
+): boolean {
+  const eDir = recommendationDirection(ema.recommendation);
+  const mDir = recommendationDirection(main.recommendation);
+  return (
+    (eDir === "bullish" && mDir === "bearish") ||
+    (eDir === "bearish" && mDir === "bullish")
+  );
 }
 
 function directionsAlign(
@@ -32,19 +43,7 @@ function directionsAlign(
   return false;
 }
 
-function isConflicting(
-  ema: EmaReversalSystemResult,
-  main: MainTradingSystemResult
-): boolean {
-  const eDir = recommendationDirection(ema.recommendation);
-  const mDir = recommendationDirection(main.recommendation);
-  return (
-    (eDir === "bullish" && mDir === "bearish") ||
-    (eDir === "bearish" && mDir === "bullish")
-  );
-}
-
-/** System 3 — Confluence between 20 EMA and Main systems. */
+/** System 3 — Confluence between 20 EMA and Main systems (informational only). */
 export function computeConfluence(
   ema: EmaReversalSystemResult,
   main: MainTradingSystemResult
@@ -57,28 +56,27 @@ export function computeConfluence(
   if (e === m && eTrade) {
     return {
       score: 10,
-      status: "STRONG CONFLUENCE",
+      status: "STRONG AGREEMENT",
       tier: confluenceTier(10),
       reason: `Both systems agree: ${e}`,
     };
   }
 
-  if (e === "No Trade" && m === "Iron Condor") {
+  if (eTrade && !mTrade) {
     return {
-      score: 6,
-      status: "NEUTRAL",
-      tier: confluenceTier(6),
-      reason: "20 EMA neutral; Main system Iron Condor",
+      score: 7,
+      status: "SHORTER-DTE ONLY",
+      tier: confluenceTier(7),
+      reason: `20 EMA ${e}; Main on sidelines`,
     };
   }
 
-  if (eTrade !== mTrade) {
-    const active = eTrade ? e : m;
+  if (!eTrade && mTrade) {
     return {
-      score: 7,
-      status: "EARLY SETUP",
-      tier: confluenceTier(7),
-      reason: `One system active (${active}); other on sidelines`,
+      score: 6,
+      status: "MAIN SYSTEM ONLY",
+      tier: confluenceTier(6),
+      reason: `Main ${m}; 20 EMA on sidelines`,
     };
   }
 
@@ -89,7 +87,7 @@ export function computeConfluence(
         0,
         5 -
           Math.floor(
-            Math.abs(ema.emaScore - main.mainScore) / 25
+            Math.abs(ema.emaScore - main.strategyFitScore) / 25
           )
       )
     );
@@ -102,11 +100,11 @@ export function computeConfluence(
   }
 
   if (directionsAlign(ema, main) && eTrade && mTrade && e !== m) {
-    const avgQuality = (ema.emaScore + main.mainScore) / 2;
+    const avgQuality = (ema.emaScore + main.strategyFitScore) / 2;
     const score = avgQuality >= 85 ? 9 : 8;
     return {
       score,
-      status: "GOOD CONFLUENCE",
+      status: "GOOD AGREEMENT",
       tier: confluenceTier(score),
       reason: `Aligned direction: 20 EMA ${e}, Main ${m}`,
     };
@@ -115,9 +113,18 @@ export function computeConfluence(
   if (directionsAlign(ema, main) && (eTrade || mTrade)) {
     return {
       score: 8,
-      status: "GOOD CONFLUENCE",
+      status: "GOOD AGREEMENT",
       tier: confluenceTier(8),
-      reason: `Directional agreement with partial activation`,
+      reason: "Directional agreement with partial activation",
+    };
+  }
+
+  if (!eTrade && !mTrade) {
+    return {
+      score: 5,
+      status: "CONFLICTING SIGNALS",
+      tier: confluenceTier(5),
+      reason: "Both systems: No Trade",
     };
   }
 

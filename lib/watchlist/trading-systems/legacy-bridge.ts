@@ -32,18 +32,11 @@ export function tradingSystemToStrategyType(
   }
 }
 
-export function mainScoreToDecisionLabel(mainScore: number): import("@/lib/watchlist/scoring/types").DecisionLabel {
-  if (mainScore >= 90) return "Trade Immediately";
-  if (mainScore >= 80) return "Strong Candidate";
-  if (mainScore >= 70) return "Watchlist";
-  return "No Trade";
-}
-
-export function confluenceToDecisionLabel(
-  confluenceScore: number
+export function strategyFitScoreToDecisionLabel(
+  strategyFitScore: number
 ): import("@/lib/watchlist/scoring/types").DecisionLabel {
-  if (confluenceScore >= 10) return "Trade Immediately";
-  if (confluenceScore >= 8) return "Strong Candidate";
-  if (confluenceScore >= 7) return "Watchlist";
+  if (strategyFitScore >= 90) return "Trade Immediately";
+  if (strategyFitScore >= 80) return "Strong Candidate";
+  if (strategyFitScore >= 75) return "Watchlist";
   return "No Trade";
 }

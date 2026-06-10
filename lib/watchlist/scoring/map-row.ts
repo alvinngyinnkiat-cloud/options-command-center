@@ -8,8 +8,7 @@ import { calculateEma20DistancePct } from "./ema20";
 import { computeScannerScore } from "./compute";
 import { decisionToAction } from "./decision";
 import {
-  confluenceToDecisionLabel,
-  mainScoreToDecisionLabel,
+  strategyFitScoreToDecisionLabel,
   tradingSystemToLegacyLabel,
   tradingSystemToStrategyType,
 } from "@/lib/watchlist/trading-systems/legacy-bridge";
@@ -62,19 +61,18 @@ export function scoreWatchlistRow(
 
   const { emaSystem, mainSystem, confluence } = tradingSystems;
   const mainLabel = tradingSystemToLegacyLabel(mainSystem.recommendation);
-  const mainDecision = mainScoreToDecisionLabel(mainSystem.mainScore);
-  const confluenceDecision = confluenceToDecisionLabel(confluence.score);
+  const mainDecision = strategyFitScoreToDecisionLabel(mainSystem.strategyFitScore);
 
   const recommendation: StrategyRecommendation = {
     recommendedStrategy: mainLabel,
     recommendedStrategyType: tradingSystemToStrategyType(
       mainSystem.recommendation
     ),
-    totalScore: mainSystem.mainScore,
-    decisionLabel: confluenceDecision,
-    actionLabel: confluenceDecision,
-    action: decisionToAction(confluenceDecision),
-    passFailExplanation: `${confluence.status}: ${confluence.reason}`,
+    totalScore: mainSystem.strategyFitScore,
+    decisionLabel: mainDecision,
+    actionLabel: mainDecision,
+    action: decisionToAction(mainDecision),
+    passFailExplanation: tradingSystems.decisionReason,
     scoreBreakdown: [
       {
         category: "Trend",
@@ -116,11 +114,14 @@ export function scoreWatchlistRow(
   };
 
   const intelligence = resolveIntelligenceLayer(row.ticker, intelligenceMap);
-  const combined = computeCombinedScore(mainSystem.mainScore, intelligence.score);
+  const combined = computeCombinedScore(
+    mainSystem.strategyFitScore,
+    intelligence.score
+  );
 
   return {
     ...componentScore,
-    totalScore: mainSystem.mainScore,
+    totalScore: mainSystem.strategyFitScore,
     decisionLabel: mainDecision,
     action: decisionToAction(mainDecision),
     tradingSystems,
@@ -142,13 +143,13 @@ export function attachScoresToRows(
   });
 }
 
-/** Sort key for scanner rows: confluence → main score → EMA score. */
+/** Sort key: strategy fit → confluence → EMA score. */
 export function tradingSystemsSortKey(row: WatchlistScannerRow): number {
   const ts = row.score?.tradingSystems;
   if (!ts) return 0;
   return (
-    ts.confluence.score * 1_000_000 +
-    ts.mainSystem.mainScore * 1_000 +
+    ts.mainSystem.strategyFitScore * 1_000_000 +
+    ts.confluence.score * 1_000 +
     ts.emaSystem.emaScore
   );
 }

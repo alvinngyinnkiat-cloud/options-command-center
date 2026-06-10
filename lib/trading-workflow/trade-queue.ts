@@ -13,14 +13,15 @@ import { tradingSystemToLegacyLabel } from "@/lib/watchlist/trading-systems/lega
 
 function sortKey(row: WatchlistScannerRow, status: TradeQueueStatus): number {
   const ts = row.score?.tradingSystems;
+  const strategyFitScore =
+    ts?.mainSystem.strategyFitScore ?? row.score?.totalScore ?? 0;
   const confluence = ts?.confluence.score ?? 0;
-  const mainScore = ts?.mainSystem.mainScore ?? row.score?.totalScore ?? 0;
   const emaScore = ts?.emaSystem.emaScore ?? 0;
   const statusPri = status === "Ready" ? 10 : status === "Waiting" ? 5 : 0;
 
   return (
-    confluence * 1_000_000 +
-    mainScore * 1_000 +
+    strategyFitScore * 1_000_000 +
+    confluence * 1_000 +
     emaScore * 10 +
     statusPri
   );
@@ -73,11 +74,11 @@ function resolveQueueStatus(input: {
     };
   }
 
-  if (confluence >= 8 || (ts?.mainSystem.mainScore ?? 0) >= 80) {
-    return { status: "Ready", warning: ts?.confluence.reason ?? null };
+  if (mainRec !== "No Trade" && (ts?.mainSystem.strategyFitScore ?? 0) >= 75) {
+    return { status: "Ready", warning: ts?.mainSystem.reason ?? null };
   }
 
-  return { status: "Waiting", warning: "Confluence or main score below threshold" };
+  return { status: "Waiting", warning: "Strategy fit below threshold or no trade" };
 }
 
 export function buildTradeQueue(
@@ -113,7 +114,7 @@ export function buildTradeQueue(
         warning,
         sortKey: sortKey(row, status),
         confluence: ts.confluence.score,
-        mainScore: ts.mainSystem.mainScore,
+        mainScore: ts.mainSystem.strategyFitScore,
         emaScore: ts.emaSystem.emaScore,
         strategy: tradingSystemToLegacyLabel(mainRec),
       };

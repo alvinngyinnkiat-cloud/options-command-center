@@ -56,9 +56,10 @@ export interface TradingAnalysisViewModel {
   emaRecommendation: string;
   emaSystemScore: number | null;
   mainRecommendation: string;
-  mainSystemScore: number | null;
+  strategyFitScore: number | null;
   confluenceScore: number | null;
   confluenceStatus: string;
+  decisionReason: string;
   strategy: string;
   action: string;
   primaryReason: string;
@@ -227,13 +228,14 @@ export function buildTradingAnalysisViewModel(
     soScore: score?.stochastic.score ?? null,
     ema20Score: score?.ema20.score ?? null,
     srScore: score?.supportResistance.score ?? null,
-    totalScore: score?.tradingSystems?.mainSystem.mainScore ?? score?.totalScore ?? null,
+    totalScore: score?.tradingSystems?.mainSystem.strategyFitScore ?? score?.totalScore ?? null,
     emaRecommendation: score?.tradingSystems?.emaSystem.recommendation ?? "—",
     emaSystemScore: score?.tradingSystems?.emaSystem.emaScore ?? null,
     mainRecommendation: score?.tradingSystems?.mainSystem.recommendation ?? "—",
-    mainSystemScore: score?.tradingSystems?.mainSystem.mainScore ?? null,
+    strategyFitScore: score?.tradingSystems?.mainSystem.strategyFitScore ?? null,
     confluenceScore: score?.tradingSystems?.confluence.score ?? null,
     confluenceStatus: score?.tradingSystems?.confluence.status ?? "—",
+    decisionReason: score?.tradingSystems?.decisionReason ?? "—",
     strategy:
       score?.tradingSystems?.mainSystem.recommendation ??
       score?.recommendation.recommendedStrategy ??

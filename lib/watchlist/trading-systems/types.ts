@@ -6,19 +6,26 @@ export type TradingSystemRecommendation =
   | "No Trade";
 
 export type ConfluenceStatus =
-  | "STRONG CONFLUENCE"
-  | "GOOD CONFLUENCE"
+  | "STRONG AGREEMENT"
+  | "GOOD AGREEMENT"
   | "EARLY SETUP"
-  | "NEUTRAL"
+  | "MAIN SYSTEM ONLY"
+  | "SHORTER-DTE ONLY"
   | "CONFLICTING SIGNALS";
 
 export type EmaScoreTier =
+  | "Elite Reversal"
   | "Strong Reversal"
   | "Good Reversal"
-  | "Watchlist"
-  | "Ignore";
+  | "Tradable Reversal"
+  | "No Trade";
 
-export type MainScoreTier = "A+ Setup" | "A Setup" | "B Setup" | "Pass";
+export type StrategyFitTier =
+  | "Elite Setup"
+  | "A Setup"
+  | "Good Setup"
+  | "Tradable Setup"
+  | "No Trade";
 
 export type ConfluenceTier =
   | "Tier 1"
@@ -54,8 +61,8 @@ export interface EmaReversalSystemResult {
 
 export interface MainTradingSystemResult {
   recommendation: TradingSystemRecommendation;
-  mainScore: number;
-  tier: MainScoreTier;
+  strategyFitScore: number;
+  tier: StrategyFitTier;
   reason: string;
 }
 
@@ -70,4 +77,6 @@ export interface TradingSystemsResult {
   emaSystem: EmaReversalSystemResult;
   mainSystem: MainTradingSystemResult;
   confluence: ConfluenceResult;
+  /** Informational summary — does not override either system. */
+  decisionReason: string;
 }

@@ -46,19 +46,41 @@ describe("computeTradingSystems", () => {
       result.mainSystem.recommendation === "Sell Put"
     ) {
       expect(result.confluence.score).toBe(10);
-      expect(result.confluence.status).toBe("STRONG CONFLUENCE");
+      expect(result.confluence.status).toBe("STRONG AGREEMENT");
     }
   });
 
   it("uses average price not current price (input is average)", () => {
     const result = computeTradingSystems(BASE);
     expect(result.emaSystem.emaScore).toBeGreaterThan(0);
-    expect(result.mainSystem.mainScore).toBeGreaterThan(0);
+    expect(result.mainSystem.strategyFitScore).toBeGreaterThan(0);
+  });
+
+  it("gates 20 EMA decision when EMA score is below 75", () => {
+    const weak: TradingSystemsInput = {
+      ...BASE,
+      averagePrice: 760,
+      ema20: 720,
+      stochastic: 50,
+      previousStochastic: 48,
+    };
+    const result = computeTradingSystems(weak);
+    if (result.emaSystem.emaScore < 75) {
+      expect(result.emaSystem.recommendation).toBe("No Trade");
+      expect(result.emaSystem.reason).toContain("minimum threshold");
+    }
+  });
+
+  it("includes informational decision reason", () => {
+    const result = computeTradingSystems(BASE);
+    expect(result.decisionReason).toContain("20 EMA:");
+    expect(result.decisionReason).toContain("Main:");
+    expect(result.decisionReason).toContain("Confluence");
   });
 });
 
 describe("confluence tiers", () => {
-  it("marks early setup when only one system trades", () => {
+  it("marks shorter-DTE only when EMA trades and main does not", () => {
     const early: TradingSystemsInput = {
       ...BASE,
       stochastic: 55,
@@ -73,7 +95,28 @@ describe("confluence tiers", () => {
       result.mainSystem.recommendation === "No Trade"
     ) {
       expect(result.confluence.score).toBe(7);
-      expect(result.confluence.status).toBe("EARLY SETUP");
+      expect(result.confluence.status).toBe("SHORTER-DTE ONLY");
+    }
+  });
+
+  it("marks main system only when main trades and EMA does not", () => {
+    const neutral: TradingSystemsInput = {
+      ...BASE,
+      averagePrice: 745,
+      stochastic: 50,
+      previousStochastic: 52,
+      sma50: 740,
+      sma200: 745,
+      sma50Previous: 741,
+      ema20: 700,
+    };
+    const result = computeTradingSystems(neutral);
+    if (
+      result.emaSystem.recommendation === "No Trade" &&
+      result.mainSystem.recommendation !== "No Trade"
+    ) {
+      expect(result.confluence.score).toBe(6);
+      expect(result.confluence.status).toBe("MAIN SYSTEM ONLY");
     }
   });
 });

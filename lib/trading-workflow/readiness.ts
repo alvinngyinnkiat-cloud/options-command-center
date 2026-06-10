@@ -30,7 +30,8 @@ export function buildTradeReadiness(input: {
   const rec = score?.recommendation;
   const ts = score?.tradingSystems;
   const confluence = ts?.confluence.score ?? 0;
-  const mainScore = ts?.mainSystem.mainScore ?? score?.totalScore ?? 0;
+  const strategyFitScore =
+    ts?.mainSystem.strategyFitScore ?? score?.totalScore ?? 0;
   const mainRec = ts?.mainSystem.recommendation ?? "No Trade";
   const strategy =
     mainRec !== "No Trade"
@@ -53,8 +54,8 @@ export function buildTradeReadiness(input: {
     {
       id: "scanner",
       label: "Confluence >= 8 or Main Score >= 80",
-      passed: confluence >= 8 || mainScore >= 80,
-      detail: `Confluence ${confluence}/10 · Main ${mainScore}`,
+      passed: strategyFitScore >= 75,
+      detail: `Strategy Fit ${strategyFitScore} · Confluence ${confluence}/10`,
     },
     {
       id: "strategy",

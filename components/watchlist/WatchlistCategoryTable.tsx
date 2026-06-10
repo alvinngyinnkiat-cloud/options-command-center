@@ -17,7 +17,6 @@ import {
 } from "@/lib/watchlist/scanner-grid-colors";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
-import type { TradeReadinessResult } from "@/lib/trading-workflow/types";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { TradingAnalysisExpandedRow } from "./TradingAnalysisExpandedRow";
@@ -28,7 +27,6 @@ interface WatchlistCategoryTableProps {
   rows: WatchlistScannerRow[];
   reviewStatus: WeekendReviewStatus;
   alerts?: EnrichedAlert[];
-  readinessByTicker?: Record<string, TradeReadinessResult>;
   allowRemove?: boolean;
   onRowsChange: (rows: WatchlistScannerRow[], dataSource: "supabase" | "mock") => void;
   dataSource: "supabase" | "mock";
@@ -59,7 +57,6 @@ export function WatchlistCategoryTable({
   rows,
   reviewStatus,
   alerts = [],
-  readinessByTicker = {},
   allowRemove = false,
   onRowsChange,
   dataSource,
@@ -199,7 +196,6 @@ export function WatchlistCategoryTable({
                       row={row}
                       model={model}
                       reviewStatus={reviewStatus}
-                      readiness={readinessByTicker[row.ticker]}
                       colSpan={allowRemove ? COLUMN_COUNT + 1 : COLUMN_COUNT}
                     />
                     <tr className="bg-terminal-elevated/10">

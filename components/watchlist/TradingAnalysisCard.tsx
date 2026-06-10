@@ -309,10 +309,10 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             />
             <Field label="Main System" value={model.mainRecommendation} />
             <Field
-              label="Main Score"
+              label="Strategy Fit Score"
               value={
-                model.mainSystemScore != null
-                  ? formatScore(model.mainSystemScore)
+                model.strategyFitScore != null
+                  ? formatScore(model.strategyFitScore)
                   : "—"
               }
             />
@@ -325,6 +325,11 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
               }
             />
             <Field label="Confluence Status" value={model.confluenceStatus} />
+            <Field
+              label="Decision Reason"
+              value={model.decisionReason}
+              className="col-span-2"
+            />
           </Section>
 
           <Section title="7. Component Breakdown">
