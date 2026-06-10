@@ -4,6 +4,8 @@ import {
   computeEmaDifference,
   computeEmaReversalSystem,
   isCallEmaConfirmation,
+  isInStrictResistanceZone,
+  isInStrictSupportZone,
   isPutEmaConfirmation,
 } from "./ema-reversal-system";
 import type { TradingSystemsInput } from "./types";
@@ -26,7 +28,54 @@ const BASE: TradingSystemsInput = {
   weeklyResistance: null,
 };
 
-describe("20 EMA system V3", () => {
+describe("strict S/R zones", () => {
+  it("Sell Put zone: Support ≤ avg ≤ Support + ATR", () => {
+    expect(isInStrictSupportZone(105, 100, 10)).toBe(true);
+    expect(isInStrictSupportZone(100, 100, 10)).toBe(true);
+    expect(isInStrictSupportZone(110, 100, 10)).toBe(true);
+    expect(isInStrictSupportZone(111, 100, 10)).toBe(false);
+    expect(isInStrictSupportZone(99, 100, 10)).toBe(false);
+  });
+
+  it("Sell Call zone: Resistance − ATR ≤ avg ≤ Resistance", () => {
+    expect(isInStrictResistanceZone(195, 200, 10)).toBe(true);
+    expect(isInStrictResistanceZone(190, 200, 10)).toBe(true);
+    expect(isInStrictResistanceZone(200, 200, 10)).toBe(true);
+    expect(isInStrictResistanceZone(189, 200, 10)).toBe(false);
+    expect(isInStrictResistanceZone(201, 200, 10)).toBe(false);
+  });
+
+  it("JPM — average above support zone is NO TRADE", () => {
+    const jpm: TradingSystemsInput = {
+      ...BASE,
+      ticker: "JPM",
+      averagePrice: 312.7,
+      atr14: 6.36,
+      dailySupport: 300,
+      dailyResistance: 400,
+    };
+    const base = computeBaseSrSignal(jpm);
+    expect(base.adjustedSupport).toBeCloseTo(306.36, 2);
+    expect(base.baseSrSignal).toBe("No Trade");
+    expect(base.baseSrReason).toBe(
+      "Average Price outside support/resistance zone"
+    );
+
+    const result = computeEmaReversalSystem(jpm);
+    expect(result.recommendation).toBe("No Trade");
+    expect(result.reason).toBe(
+      "Average Price outside support/resistance zone"
+    );
+  });
+});
+
+const PUT_EMA_SETUP: TradingSystemsInput = {
+  ...BASE,
+  averagePrice: 700,
+  ema20: 700,
+};
+
+describe("20 EMA system — stochastic confirmation", () => {
   it("never outputs Iron Condor", () => {
     expect(computeEmaReversalSystem(BASE).recommendation).not.toBe("Iron Condor");
   });
@@ -38,16 +87,36 @@ describe("20 EMA system V3", () => {
     expect(isCallEmaConfirmation(-2)).toBe(true);
   });
 
-  it("confirms Sell Put with STRONG momentum and EMA bands", () => {
-    const putSetup: TradingSystemsInput = {
-      ...BASE,
-      averagePrice: 702,
-      ema20: 700,
+  it("confirms Sell Put when in support zone and SO below 25", () => {
+    const result = computeEmaReversalSystem({
+      ...PUT_EMA_SETUP,
+      stochastic: 22,
+      previousStochastic: 21,
+    });
+    expect(result.baseSrSignal).toBe("Sell Put");
+    if (result.emaScore >= 75) {
+      expect(result.recommendation).toBe("Sell Put");
+    }
+  });
+
+  it("rejects Sell Put when STRONG and SO not below 25", () => {
+    const result = computeEmaReversalSystem({
+      ...PUT_EMA_SETUP,
       stochastic: 30,
       previousStochastic: 28,
+    });
+    expect(result.recommendation).toBe("No Trade");
+    expect(result.reason).toContain("SO not rolling up");
+  });
+
+  it("confirms Sell Call when in resistance zone", () => {
+    const callBase: TradingSystemsInput = {
+      ...BASE,
+      averagePrice: 785,
+      ema20: 790,
+      dailySupport: 695,
+      dailyResistance: 790,
     };
-    const result = computeEmaReversalSystem(putSetup);
-    expect(result.momentumStatus).toBe("STRONG");
-    expect(result.baseSrSignal).toBe("Sell Put");
+    expect(computeBaseSrSignal(callBase).baseSrSignal).toBe("Sell Call");
   });
 });

@@ -118,7 +118,46 @@ export function TradingAnalysisExpandedRow({
             {score?.tradingSystems ? (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 {[
-                  ["Base S/R Signal", score.tradingSystems.emaSystem.baseSrSignal],
+                  [
+                    "Average Price",
+                    formatIndicator(model.currentAveragePrice),
+                  ],
+                  [
+                    "Support",
+                    score.tradingSystems.emaSystem.support != null
+                      ? formatIndicator(score.tradingSystems.emaSystem.support)
+                      : "—",
+                  ],
+                  [
+                    "Adjusted Support",
+                    score.tradingSystems.emaSystem.adjustedSupport != null
+                      ? formatIndicator(
+                          score.tradingSystems.emaSystem.adjustedSupport
+                        )
+                      : "—",
+                  ],
+                  [
+                    "Resistance",
+                    score.tradingSystems.emaSystem.resistance != null
+                      ? formatIndicator(score.tradingSystems.emaSystem.resistance)
+                      : "—",
+                  ],
+                  [
+                    "Adjusted Resistance",
+                    score.tradingSystems.emaSystem.adjustedResistance != null
+                      ? formatIndicator(
+                          score.tradingSystems.emaSystem.adjustedResistance
+                        )
+                      : "—",
+                  ],
+                  [
+                    "Base S/R Signal",
+                    score.tradingSystems.emaSystem.baseSrSignal,
+                  ],
+                  [
+                    "Base S/R Reason",
+                    score.tradingSystems.emaSystem.baseSrReason,
+                  ],
                   [
                     "EMA Difference",
                     formatIndicator(score.tradingSystems.emaSystem.emaDifference),

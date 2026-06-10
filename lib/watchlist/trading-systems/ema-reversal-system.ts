@@ -4,18 +4,17 @@ import type {
   TradingSystemsInput,
 } from "./types";
 import {
-  buildAdjustedSupportResistanceLevels,
+  calculateAdjustedResistance,
+  calculateAdjustedSupport,
 } from "@/lib/watchlist/support-resistance-atr";
 import {
   classifyStochasticMomentum,
   emaSystemStochasticScore,
-  isCallMomentumConfirmed,
-  isPutMomentumConfirmed,
+  isEmaCallStochasticConfirmed,
+  isEmaPutStochasticConfirmed,
 } from "@/lib/watchlist/stochastic-momentum";
 import {
   clampScore,
-  isNearResistanceZone,
-  isNearSupportZone,
   resolveSupportResistance,
   srZoneScore,
 } from "./shared";
@@ -31,6 +30,17 @@ const CALL_EMA_LOWER_BAND_PCT = -2.5;
 const CALL_EMA_DEEP_ABOVE_PCT = 7.5;
 
 export type BaseSrSignal = "Sell Put" | "Sell Call" | "No Trade";
+
+export interface BaseSrSignalResult {
+  baseSrSignal: BaseSrSignal;
+  baseSrReason: string;
+  nearSupport: boolean;
+  nearResistance: boolean;
+  support: number | null;
+  adjustedSupport: number | null;
+  resistance: number | null;
+  adjustedResistance: number | null;
+}
 
 function emaScoreTier(score: number): EmaScoreTier {
   if (score >= 90) return "Elite Reversal";
@@ -68,90 +78,115 @@ export function isCallEmaConfirmation(differencePct: number | null): boolean {
   );
 }
 
-function isNearPriceLevel(
-  price: number,
-  level: number,
+/** Support zone: Support ≤ Average Price ≤ Support + ATR. */
+export function isInStrictSupportZone(
+  averagePrice: number,
+  support: number,
   atr14: number
 ): boolean {
-  if (atr14 > 0) return Math.abs(price - level) <= atr14;
-  if (level === 0) return false;
-  return Math.abs((price - level) / level) * 100 <= 2.5;
+  if (atr14 <= 0) return false;
+  const adjustedSupport = calculateAdjustedSupport(support, atr14);
+  return averagePrice >= support && averagePrice <= adjustedSupport;
 }
 
-/** Step 1 — S/R base signal using manual and ATR-adjusted levels. */
-export function computeBaseSrSignal(input: TradingSystemsInput): {
-  baseSrSignal: BaseSrSignal;
-  nearSupport: boolean;
-  nearResistance: boolean;
-} {
+/** Resistance zone: Resistance − ATR ≤ Average Price ≤ Resistance. */
+export function isInStrictResistanceZone(
+  averagePrice: number,
+  resistance: number,
+  atr14: number
+): boolean {
+  if (atr14 <= 0) return false;
+  const adjustedResistance = calculateAdjustedResistance(resistance, atr14);
+  return averagePrice >= adjustedResistance && averagePrice <= resistance;
+}
+
+/** Step 1 — strict S/R zones only (no midpoint or loose proximity). */
+export function computeBaseSrSignal(input: TradingSystemsInput): BaseSrSignalResult {
   const { support, resistance } = resolveSupportResistance(input);
+  const atr14 = input.atr14;
 
-  if (support == null && resistance == null) {
-    return { baseSrSignal: "No Trade", nearSupport: false, nearResistance: false };
-  }
-
-  const nearSupportZone =
-    support != null &&
-    resistance != null &&
-    isNearSupportZone(input.averagePrice, support, resistance);
-
-  const nearResistanceZone =
-    support != null &&
-    resistance != null &&
-    isNearResistanceZone(input.averagePrice, support, resistance);
-
-  const adjusted =
-    support != null && resistance != null && input.atr14 > 0
-      ? buildAdjustedSupportResistanceLevels(
-          support,
-          resistance,
-          input.atr14
-        )
+  const adjustedSupport =
+    support != null && atr14 > 0
+      ? calculateAdjustedSupport(support, atr14)
+      : null;
+  const adjustedResistance =
+    resistance != null && atr14 > 0
+      ? calculateAdjustedResistance(resistance, atr14)
       : null;
 
-  const nearRawSupport =
-    support != null && isNearPriceLevel(input.averagePrice, support, input.atr14);
-  const nearAdjSupport =
-    adjusted != null &&
-    isNearPriceLevel(
-      input.averagePrice,
-      adjusted.adjustedSupport,
-      input.atr14
-    );
+  const inSupportZone =
+    support != null &&
+    adjustedSupport != null &&
+    isInStrictSupportZone(input.averagePrice, support, atr14);
 
-  const nearRawResistance =
+  const inResistanceZone =
     resistance != null &&
-    isNearPriceLevel(input.averagePrice, resistance, input.atr14);
-  const nearAdjResistance =
-    adjusted != null &&
-    isNearPriceLevel(
-      input.averagePrice,
-      adjusted.adjustedResistance,
-      input.atr14
-    );
+    adjustedResistance != null &&
+    isInStrictResistanceZone(input.averagePrice, resistance, atr14);
 
-  const nearSupport =
-    nearSupportZone || nearRawSupport || nearAdjSupport;
-  const nearResistance =
-    nearResistanceZone || nearRawResistance || nearAdjResistance;
-
-  if (nearSupport && !nearResistance) {
-    return { baseSrSignal: "Sell Put", nearSupport: true, nearResistance: false };
-  }
-  if (nearResistance && !nearSupport) {
-    return { baseSrSignal: "Sell Call", nearSupport: false, nearResistance: true };
-  }
-  if (nearSupport && nearResistance) {
-    const { support: s, resistance: r } = resolveSupportResistance(input);
-    const mid =
-      s != null && r != null ? (s + r) / 2 : input.averagePrice;
-    if (input.averagePrice <= mid) {
-      return { baseSrSignal: "Sell Put", nearSupport: true, nearResistance: true };
-    }
-    return { baseSrSignal: "Sell Call", nearSupport: true, nearResistance: true };
+  if (support == null && resistance == null) {
+    return {
+      baseSrSignal: "No Trade",
+      baseSrReason: "Support/resistance levels not configured",
+      nearSupport: false,
+      nearResistance: false,
+      support: null,
+      adjustedSupport: null,
+      resistance: null,
+      adjustedResistance: null,
+    };
   }
 
-  return { baseSrSignal: "No Trade", nearSupport: false, nearResistance: false };
+  if (inSupportZone && inResistanceZone) {
+    return {
+      baseSrSignal: "No Trade",
+      baseSrReason:
+        "Average Price in both support and resistance zones — ambiguous",
+      nearSupport: true,
+      nearResistance: true,
+      support,
+      adjustedSupport,
+      resistance,
+      adjustedResistance,
+    };
+  }
+
+  if (inSupportZone) {
+    return {
+      baseSrSignal: "Sell Put",
+      baseSrReason: `Average Price in support zone (${support!.toFixed(2)}–${adjustedSupport!.toFixed(2)})`,
+      nearSupport: true,
+      nearResistance: false,
+      support,
+      adjustedSupport,
+      resistance,
+      adjustedResistance,
+    };
+  }
+
+  if (inResistanceZone) {
+    return {
+      baseSrSignal: "Sell Call",
+      baseSrReason: `Average Price in resistance zone (${adjustedResistance!.toFixed(2)}–${resistance!.toFixed(2)})`,
+      nearSupport: false,
+      nearResistance: true,
+      support,
+      adjustedSupport,
+      resistance,
+      adjustedResistance,
+    };
+  }
+
+  return {
+    baseSrSignal: "No Trade",
+    baseSrReason: "Average Price outside support/resistance zone",
+    nearSupport: false,
+    nearResistance: false,
+    support,
+    adjustedSupport,
+    resistance,
+    adjustedResistance,
+  };
 }
 
 function momentumScoreForEmaSystem(input: {
@@ -235,38 +270,58 @@ export function computeEmaReversalSystem(
     input.ema20
   );
 
-  const { baseSrSignal, nearSupport, nearResistance } =
-    computeBaseSrSignal(input);
+  const baseSr = computeBaseSrSignal(input);
+  const {
+    baseSrSignal,
+    baseSrReason,
+    nearSupport,
+    nearResistance,
+    support,
+    adjustedSupport,
+    resistance,
+    adjustedResistance,
+  } = baseSr;
 
   const momentumStatus = classifyStochasticMomentum(
     input.stochastic,
     input.previousStochastic
   );
-  const putMomentumOk = isPutMomentumConfirmed(momentumStatus);
-  const callMomentumOk = isCallMomentumConfirmed(momentumStatus);
+  const putStochasticOk = isEmaPutStochasticConfirmed(
+    momentumStatus,
+    input.stochastic
+  );
+  const callStochasticOk = isEmaCallStochasticConfirmed(
+    momentumStatus,
+    input.stochastic
+  );
 
   const putEmaOk = isPutEmaConfirmation(differencePct);
   const callEmaOk = isCallEmaConfirmation(differencePct);
 
   let recommendation: EmaReversalSystemResult["recommendation"] = "No Trade";
-  let reason = "No S/R base signal";
+  let reason = baseSrReason;
 
-  if (baseSrSignal === "Sell Put" && putEmaOk && putMomentumOk) {
+  if (baseSrSignal === "Sell Put" && putEmaOk && putStochasticOk) {
     recommendation = "Sell Put";
-    reason = "S/R base Sell Put, EMA timing confirmed, momentum confirmed";
-  } else if (baseSrSignal === "Sell Call" && callEmaOk && callMomentumOk) {
+    reason =
+      "S/R base Sell Put, EMA timing confirmed, rolling up or SO oversold";
+  } else if (baseSrSignal === "Sell Call" && callEmaOk && callStochasticOk) {
     recommendation = "Sell Call";
-    reason = "S/R base Sell Call, EMA timing confirmed, momentum confirmed";
+    reason =
+      "S/R base Sell Call, EMA timing confirmed, rolling down or SO overbought";
+  } else if (baseSrSignal === "No Trade") {
+    reason = baseSrReason;
   } else {
     const misses: string[] = [];
-    if (baseSrSignal === "No Trade") misses.push("not near S/R");
     if (baseSrSignal === "Sell Put") {
       if (!putEmaOk) {
         misses.push(
           `EMA % ${differencePct?.toFixed(2) ?? "—"} outside put bands (0–${PUT_EMA_UPPER_BAND_PCT}% or <${PUT_EMA_DEEP_BELOW_PCT}%)`
         );
       }
-      if (!putMomentumOk) misses.push("momentum not confirmed for put");
+      if (!putStochasticOk) {
+        misses.push("SO not rolling up and SO not below 25");
+      }
     }
     if (baseSrSignal === "Sell Call") {
       if (!callEmaOk) {
@@ -274,9 +329,11 @@ export function computeEmaReversalSystem(
           `EMA % ${differencePct?.toFixed(2) ?? "—"} outside call bands (${CALL_EMA_LOWER_BAND_PCT}–0% or >${CALL_EMA_DEEP_ABOVE_PCT}%)`
         );
       }
-      if (!callMomentumOk) misses.push("momentum not confirmed for call");
+      if (!callStochasticOk) {
+        misses.push("SO not rolling down and SO not above 75");
+      }
     }
-    reason = misses.length > 0 ? misses.join("; ") : reason;
+    reason = misses.length > 0 ? misses.join("; ") : baseSrReason;
   }
 
   const emaConfirmed =
@@ -305,6 +362,11 @@ export function computeEmaReversalSystem(
     tier: emaScoreTier(emaScore),
     reason,
     baseSrSignal,
+    baseSrReason,
+    support,
+    adjustedSupport,
+    resistance,
+    adjustedResistance,
     emaDifference: difference,
     emaDifferencePct: differencePct,
     momentumStatus,
@@ -315,7 +377,10 @@ export function computeEmaReversalSystem(
       ...result,
       recommendation: "No Trade",
       tier: emaScoreTier(emaScore),
-      reason: "EMA Score below minimum threshold",
+      reason:
+        recommendation === "No Trade"
+          ? reason
+          : "EMA Score below minimum threshold",
     };
   }
 

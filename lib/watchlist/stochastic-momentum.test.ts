@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   classifyStochasticMomentum,
   isCallMomentumConfirmed,
+  isEmaCallStochasticConfirmed,
+  isEmaPutStochasticConfirmed,
   isPutMomentumConfirmed,
   mainSystemMomentumScore,
 } from "./stochastic-momentum";
@@ -21,15 +23,26 @@ describe("classifyStochasticMomentum V3", () => {
 });
 
 describe("momentum confirmation", () => {
-  it("put accepts ROLLING UP or STRONG", () => {
+  it("main put requires ROLLING UP only", () => {
     expect(isPutMomentumConfirmed("ROLLING UP")).toBe(true);
-    expect(isPutMomentumConfirmed("STRONG")).toBe(true);
-    expect(isPutMomentumConfirmed("ROLLING DOWN")).toBe(false);
+    expect(isPutMomentumConfirmed("STRONG")).toBe(false);
   });
 
-  it("call accepts ROLLING DOWN or STRONG", () => {
+  it("main call requires ROLLING DOWN only", () => {
     expect(isCallMomentumConfirmed("ROLLING DOWN")).toBe(true);
-    expect(isCallMomentumConfirmed("STRONG")).toBe(true);
+    expect(isCallMomentumConfirmed("STRONG")).toBe(false);
+  });
+
+  it("20 EMA put accepts ROLLING UP or SO below 25", () => {
+    expect(isEmaPutStochasticConfirmed("ROLLING UP", 40)).toBe(true);
+    expect(isEmaPutStochasticConfirmed("STRONG", 22)).toBe(true);
+    expect(isEmaPutStochasticConfirmed("STRONG", 30)).toBe(false);
+  });
+
+  it("20 EMA call accepts ROLLING DOWN or SO above 75", () => {
+    expect(isEmaCallStochasticConfirmed("ROLLING DOWN", 50)).toBe(true);
+    expect(isEmaCallStochasticConfirmed("STRONG", 80)).toBe(true);
+    expect(isEmaCallStochasticConfirmed("STRONG", 70)).toBe(false);
   });
 });
 

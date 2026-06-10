@@ -18,11 +18,27 @@ export function formatMomentumStatus(momentum: StochasticMomentum): string {
 }
 
 export function isPutMomentumConfirmed(momentum: StochasticMomentum): boolean {
-  return momentum === "ROLLING UP" || momentum === "STRONG";
+  return momentum === "ROLLING UP";
 }
 
 export function isCallMomentumConfirmed(momentum: StochasticMomentum): boolean {
-  return momentum === "ROLLING DOWN" || momentum === "STRONG";
+  return momentum === "ROLLING DOWN";
+}
+
+/** 20 EMA — Sell Put: ROLLING UP or SO oversold. */
+export function isEmaPutStochasticConfirmed(
+  momentum: StochasticMomentum,
+  currentSo: number
+): boolean {
+  return momentum === "ROLLING UP" || currentSo < 25;
+}
+
+/** 20 EMA — Sell Call: ROLLING DOWN or SO overbought. */
+export function isEmaCallStochasticConfirmed(
+  momentum: StochasticMomentum,
+  currentSo: number
+): boolean {
+  return momentum === "ROLLING DOWN" || currentSo > 75;
 }
 
 /** Main System momentum confirmation score (0 or 20). */
