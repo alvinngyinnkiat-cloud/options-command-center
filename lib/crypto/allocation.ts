@@ -16,25 +16,26 @@ export interface CryptoRankedHolding {
   allocationPct: number;
 }
 
+export interface CryptoTierGroup {
+  label: string;
+  value: number;
+  percent: number;
+  color: string;
+  holdings: CryptoRankedHolding[];
+}
+
 export interface CryptoDeploymentBucket {
   label: string;
   percent: number;
   amountSgd: number;
 }
 
-const SLICE_COLORS: Record<string, string> = {
-  BTC: "#f7931a",
-  ETH: "#627eea",
-  SOL: "#9945ff",
-  USDT: "#26a17b",
-  USDC: "#2775ca",
-  XRP: "#23292f",
-  ADA: "#0033ad",
-  "Other coins": "#64748b",
-  "Crypto Cash": "#94a3b8",
+const TIER_COLORS: Record<string, string> = {
+  "Top Holding": "#f7931a",
+  "2nd–5th Holdings": "#627eea",
+  "6th–10th Holdings": "#9945ff",
+  Others: "#64748b",
 };
-
-const FEATURED_TICKERS = ["BTC", "ETH", "SOL", "USDT", "USDC", "XRP", "ADA"];
 
 const DEPLOYMENT_BUCKETS: { label: string; percent: number }[] = [
   { label: "Top Holding", percent: 50 },
@@ -51,57 +52,6 @@ function coinHoldingsOnly(
   );
 }
 
-export function buildCryptoAllocationSlices(
-  holdings: EnrichedCryptoHolding[],
-  cryptoCashSgd: number
-): CryptoAllocationSlice[] {
-  const coins = coinHoldingsOnly(holdings);
-  const totalPortfolio =
-    coins.reduce((s, h) => s + h.currentValueSgd, 0) + cryptoCashSgd;
-
-  if (totalPortfolio <= 0) return [];
-
-  const featured = new Set(FEATURED_TICKERS);
-  const slices: CryptoAllocationSlice[] = [];
-  let otherSgd = 0;
-
-  for (const h of coins) {
-    if (featured.has(h.ticker.toUpperCase())) {
-      slices.push({
-        name: h.ticker.toUpperCase(),
-        value: h.currentValueSgd,
-        percent: calculateCryptoAllocationPct(
-          h.currentValueSgd,
-          totalPortfolio
-        ),
-        color: SLICE_COLORS[h.ticker.toUpperCase()] ?? "#64748b",
-      });
-    } else {
-      otherSgd += h.currentValueSgd;
-    }
-  }
-
-  if (otherSgd > 0) {
-    slices.push({
-      name: "Other coins",
-      value: otherSgd,
-      percent: calculateCryptoAllocationPct(otherSgd, totalPortfolio),
-      color: SLICE_COLORS["Other coins"],
-    });
-  }
-
-  if (cryptoCashSgd > 0) {
-    slices.push({
-      name: "Crypto Cash",
-      value: cryptoCashSgd,
-      percent: calculateCryptoAllocationPct(cryptoCashSgd, totalPortfolio),
-      color: SLICE_COLORS["Crypto Cash"],
-    });
-  }
-
-  return slices.sort((a, b) => b.value - a.value);
-}
-
 export function buildCryptoRankings(
   holdings: EnrichedCryptoHolding[]
 ): CryptoRankedHolding[] {
@@ -116,6 +66,93 @@ export function buildCryptoRankings(
       currentValueSgd: h.currentValueSgd,
       allocationPct: calculateCryptoAllocationPct(h.currentValueSgd, total),
     }));
+}
+
+/** Four tier groups for allocation chart and Holdings by Tier. */
+export function buildCryptoTierGroups(
+  holdings: EnrichedCryptoHolding[],
+  cryptoCashSgd: number,
+  totalCryptoPortfolioValue: number
+): CryptoTierGroup[] {
+  const rankings = buildCryptoRankings(holdings);
+  const top = rankings.slice(0, 10);
+  const outsideTop10 = rankings.slice(10);
+
+  const topHolding = top[0] ?? null;
+  const secondToFifth = top.slice(1, 5);
+  const sixthToTenth = top.slice(5, 10);
+
+  const topHoldingValue = topHolding?.currentValueSgd ?? 0;
+  const secondToFifthValue = secondToFifth.reduce(
+    (s, h) => s + h.currentValueSgd,
+    0
+  );
+  const sixthToTenthValue = sixthToTenth.reduce(
+    (s, h) => s + h.currentValueSgd,
+    0
+  );
+  const othersValue =
+    outsideTop10.reduce((s, h) => s + h.currentValueSgd, 0) + cryptoCashSgd;
+
+  const tiers: Omit<CryptoTierGroup, "percent">[] = [
+    {
+      label: "Top Holding",
+      value: topHoldingValue,
+      color: TIER_COLORS["Top Holding"],
+      holdings: topHolding ? [topHolding] : [],
+    },
+    {
+      label: "2nd–5th Holdings",
+      value: secondToFifthValue,
+      color: TIER_COLORS["2nd–5th Holdings"],
+      holdings: secondToFifth,
+    },
+    {
+      label: "6th–10th Holdings",
+      value: sixthToTenthValue,
+      color: TIER_COLORS["6th–10th Holdings"],
+      holdings: sixthToTenth,
+    },
+    {
+      label: "Others",
+      value: othersValue,
+      color: TIER_COLORS.Others,
+      holdings: outsideTop10,
+    },
+  ];
+
+  return tiers.map((tier) => ({
+    ...tier,
+    percent:
+      totalCryptoPortfolioValue > 0
+        ? calculateCryptoAllocationPct(tier.value, totalCryptoPortfolioValue)
+        : 0,
+  }));
+}
+
+export function tierGroupsToAllocationSlices(
+  tiers: CryptoTierGroup[]
+): CryptoAllocationSlice[] {
+  return tiers
+    .filter((t) => t.value > 0)
+    .map((t) => ({
+      name: t.label,
+      value: t.value,
+      percent: t.percent,
+      color: t.color,
+    }));
+}
+
+/** @deprecated Use buildCryptoTierGroups + tierGroupsToAllocationSlices */
+export function buildCryptoAllocationSlices(
+  holdings: EnrichedCryptoHolding[],
+  cryptoCashSgd: number
+): CryptoAllocationSlice[] {
+  const total =
+    coinHoldingsOnly(holdings).reduce((s, h) => s + h.currentValueSgd, 0) +
+    cryptoCashSgd;
+  const tiers = buildCryptoTierGroups(holdings, cryptoCashSgd, total);
+  return tierGroupsToAllocationSlices(tiers);
 }
 
 export function buildCryptoDeploymentPlan(
@@ -135,4 +172,15 @@ export function buildCoinHoldingsTotal(
     (s, h) => s + h.currentValueSgd,
     0
   );
+}
+
+export function splitOpenClosedHoldings(
+  holdings: EnrichedCryptoHolding[]
+): {
+  open: EnrichedCryptoHolding[];
+  closed: EnrichedCryptoHolding[];
+} {
+  const open = holdings.filter((h) => h.currentValueSgd > 0);
+  const closed = holdings.filter((h) => h.currentValueSgd === 0);
+  return { open, closed };
 }

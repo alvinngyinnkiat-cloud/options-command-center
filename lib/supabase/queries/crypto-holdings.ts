@@ -1,8 +1,8 @@
 import { buildCryptoTrackerSummary, buildCryptoPortfolioManualFromTracker } from "@/lib/crypto/calculations";
 import {
-  buildCryptoAllocationSlices,
   buildCryptoDeploymentPlan,
-  buildCryptoRankings,
+  buildCryptoTierGroups,
+  tierGroupsToAllocationSlices,
 } from "@/lib/crypto/allocation";
 import { splitCryptoTrackerValues, resolveCryptoCashSgd } from "@/lib/portfolio/capital-pools";
 import { enrichAllCryptoHoldings } from "@/lib/crypto/map-holding";
@@ -41,12 +41,18 @@ function buildData(
     holdings,
   });
 
+  const tierGroups = buildCryptoTierGroups(
+    holdings,
+    cryptoCashSgd,
+    totalPortfolio
+  );
+
   return {
     holdings,
     summary: buildCryptoTrackerSummary(holdings),
     portfolioManual,
-    allocationSlices: buildCryptoAllocationSlices(holdings, cryptoCashSgd),
-    rankings: buildCryptoRankings(holdings),
+    allocationSlices: tierGroupsToAllocationSlices(tierGroups),
+    tierGroups,
     deploymentPlan: buildCryptoDeploymentPlan(cryptoCashSgd),
     dataSource,
   };

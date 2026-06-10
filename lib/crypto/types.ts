@@ -3,7 +3,7 @@ import type { DataSource } from "@/lib/portfolio/types";
 import type {
   CryptoAllocationSlice,
   CryptoDeploymentBucket,
-  CryptoRankedHolding,
+  CryptoTierGroup,
 } from "./allocation";
 
 export type CryptoAssetLabel = "BTC" | "ETH" | "SOL" | "Other";
@@ -60,7 +60,7 @@ export interface CryptoTrackerData {
   summary: CryptoTrackerSummary;
   portfolioManual: CryptoPortfolioManualState;
   allocationSlices: CryptoAllocationSlice[];
-  rankings: CryptoRankedHolding[];
+  tierGroups: CryptoTierGroup[];
   deploymentPlan: CryptoDeploymentBucket[];
   dataSource: DataSource;
 }

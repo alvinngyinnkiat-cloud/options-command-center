@@ -31,7 +31,8 @@ export function CryptoAllocationChart({ slices }: CryptoAllocationChartProps) {
       <CardHeader>
         <CardTitle>Crypto Allocation</CardTitle>
         <CardDescription>
-          All coin holdings including stablecoins, plus exchange cash
+          Four tier groups — Top Holding through Others (includes exchange cash
+          in Others)
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -73,15 +74,15 @@ export function CryptoAllocationChart({ slices }: CryptoAllocationChartProps) {
             </PieChart>
           </ResponsiveContainer>
         </SafeChartContainer>
-        <ul className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {chartData.map((slice) => (
-            <li key={slice.name} className="flex items-center gap-2 text-xs">
+            <li key={slice.name} className="flex items-center gap-2 text-xs min-w-0">
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: slice.color }}
               />
-              <span className="text-terminal-muted">{slice.name}</span>
-              <span className="ml-auto font-mono text-terminal-text">
+              <span className="text-terminal-muted truncate">{slice.name}</span>
+              <span className="ml-auto font-mono text-terminal-text tabular-nums shrink-0">
                 {slice.percent.toFixed(1)}%
               </span>
             </li>

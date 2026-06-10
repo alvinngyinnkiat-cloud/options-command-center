@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { splitOpenClosedHoldings } from "@/lib/crypto/allocation";
 import type { CryptoTrackerData, EnrichedCryptoHolding } from "@/lib/crypto/types";
 import { Plus } from "lucide-react";
 import { CryptoFormModal } from "./CryptoFormModal";
@@ -11,7 +12,7 @@ import { CryptoHoldingsTable } from "./CryptoHoldingsTable";
 import { CryptoManualPortfolioCard } from "./CryptoManualPortfolioCard";
 import { CryptoSummaryCards } from "./CryptoSummaryCards";
 import { CryptoAllocationChart } from "./CryptoAllocationChart";
-import { CryptoRankingsPanel } from "./CryptoRankingsPanel";
+import { CryptoHoldingsByTier } from "./CryptoHoldingsByTier";
 import { CryptoDeploymentPlanner } from "./CryptoDeploymentPlanner";
 
 interface CryptoTrackerClientProps {
@@ -22,6 +23,11 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
   const [formHolding, setFormHolding] = useState<
     EnrichedCryptoHolding | null | undefined
   >(undefined);
+
+  const { open, closed } = useMemo(
+    () => splitOpenClosedHoldings(initialData.holdings),
+    [initialData.holdings]
+  );
 
   function handleRefresh() {
     window.location.reload();
@@ -54,6 +60,11 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
 
       <CryptoSummaryCards portfolioManual={initialData.portfolioManual} />
 
+      <CryptoManualPortfolioCard
+        portfolioManual={initialData.portfolioManual}
+        onSaved={handleRefresh}
+      />
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <CryptoAllocationChart slices={initialData.allocationSlices} />
         <CryptoDeploymentPlanner
@@ -62,23 +73,32 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
         />
       </div>
 
-      <CryptoRankingsPanel rankings={initialData.rankings} />
+      <CryptoHoldingsByTier tierGroups={initialData.tierGroups} />
 
-      <CryptoManualPortfolioCard
-        portfolioManual={initialData.portfolioManual}
-        onSaved={handleRefresh}
-      />
-
-      <div>
+      <section>
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
-          Optional Per-Asset Breakdown
+          Open Positions
         </h2>
         <CryptoHoldingsTable
-          holdings={initialData.holdings}
+          holdings={open}
+          variant="open"
           onEdit={(h) => setFormHolding(h)}
           onRefresh={handleRefresh}
+          emptyMessage="No open positions. Add a holding or set Current SGD above zero."
         />
-      </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
+          Closed Positions
+        </h2>
+        <CryptoHoldingsTable
+          holdings={closed}
+          variant="closed"
+          onRefresh={handleRefresh}
+          emptyMessage="No closed positions. Set Current SGD to zero to close a position."
+        />
+      </section>
 
       {formHolding !== undefined && (
         <CryptoFormModal
@@ -89,10 +109,10 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
       )}
 
       <p className="text-[11px] text-terminal-muted">
-        Coin Holdings Total includes all tokens and stablecoins. Available
-        Exchange Cash is uninvested fiat only. Current Crypto Portfolio Value =
-        Coin Holdings Total + Available Exchange Cash. Deployment Planner uses
-        exchange cash only.
+        Manual Portfolio is the source of truth for cash and contributions.
+        Allocation chart uses four tiers (Top Holding, 2nd–5th, 6th–10th,
+        Others). Positions with Current SGD &gt; 0 appear under Open Positions;
+        zero-value positions move to Closed Positions automatically.
       </p>
     </div>
   );
