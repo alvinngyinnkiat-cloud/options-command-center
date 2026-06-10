@@ -71,9 +71,23 @@ export function TradingAnalysisExpandedRow({
                 ["Average Price", formatIndicator(model.currentAveragePrice)],
                 ["ATR", formatIndicator(model.atr14)],
                 ["EMA20", formatIndicator(model.ema20)],
+                [
+                  "Previous EMA20",
+                  model.previousEma20 != null
+                    ? formatIndicator(model.previousEma20)
+                    : "—",
+                ],
+                ["EMA Trend", model.emaTrend],
                 ["SMA50", formatIndicator(model.sma50)],
                 ["SMA200", formatIndicator(model.sma200)],
                 ["SO", formatStochastic(model.soValue)],
+                [
+                  "Previous SO",
+                  model.previousSo != null
+                    ? formatStochastic(model.previousSo)
+                    : "—",
+                ],
+                ["Momentum", model.momentumStatus],
                 [
                   "Support",
                   model.support1 != null
@@ -112,6 +126,8 @@ export function TradingAnalysisExpandedRow({
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 {[
                   ["Decision", score.tradingSystems.emaSystem.recommendation],
+                  ["EMA Trend", score.tradingSystems.emaSystem.emaTrend],
+                  ["Momentum", score.tradingSystems.emaSystem.momentumStatus],
                   ["EMA Score", String(score.tradingSystems.emaSystem.emaScore)],
                   ["Tier", score.tradingSystems.emaSystem.tier],
                   ["Reason", score.tradingSystems.emaSystem.reason],

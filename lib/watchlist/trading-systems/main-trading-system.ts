@@ -4,6 +4,10 @@ import type {
   TradingSystemsInput,
 } from "./types";
 import {
+  classifyStochasticMomentum,
+  mainSystemStochasticScore,
+} from "@/lib/watchlist/stochastic-momentum";
+import {
   clampScore,
   IRON_CONDOR_TREND_CAP,
   isBetweenSupportAndResistance,
@@ -33,6 +37,15 @@ function computeIronCondorScore(
   support: number | null,
   resistance: number | null
 ): number {
+  const momentum = classifyStochasticMomentum(
+    systems.stochastic,
+    systems.previousStochastic
+  );
+  const soScore = mainSystemStochasticScore(
+    "Iron Condor",
+    momentum,
+    systems.stochastic
+  );
   const neutral = isNeutralTrend(systems);
 
   if (!neutral) {
@@ -40,9 +53,7 @@ function computeIronCondorScore(
     if (isBetweenSupportAndResistance(systems.averagePrice, support, resistance)) {
       capped += 15;
     }
-    if (systems.stochastic >= 40 && systems.stochastic <= 60) {
-      capped += 15;
-    }
+    capped += soScore;
     if (isStronglyBullishTrend(systems) || isStronglyBearishTrend(systems)) {
       capped += 5;
     }
@@ -54,9 +65,7 @@ function computeIronCondorScore(
   // Major factor — neutral / mixed trend
   score += 25;
 
-  if (systems.stochastic >= 40 && systems.stochastic <= 60) {
-    score += 15;
-  }
+  score += soScore;
 
   if (isBetweenSupportAndResistance(systems.averagePrice, support, resistance)) {
     score += 10;
@@ -97,17 +106,25 @@ function computeStrategyFitScore(input: {
 }): number {
   const { systems, recommendation } = input;
   const { support, resistance } = resolveSupportResistance(systems);
+  const momentum = classifyStochasticMomentum(
+    systems.stochastic,
+    systems.previousStochastic
+  );
 
   if (recommendation === "No Trade") {
     let partial = 0;
     if (isNearSupportZone(systems.averagePrice, support, resistance)) partial += 10;
     if (isNearResistanceZone(systems.averagePrice, support, resistance)) partial += 10;
-    if (systems.stochastic >= 40 && systems.stochastic <= 60) partial += 8;
+    partial += mainSystemStochasticScore(
+      "Iron Condor",
+      momentum,
+      systems.stochastic
+    );
 
     const icLike =
       isBetweenSupportAndResistance(systems.averagePrice, support, resistance) &&
-      systems.stochastic >= 40 &&
-      systems.stochastic <= 60;
+      systems.stochastic >= 35 &&
+      systems.stochastic <= 65;
 
     if (icLike && !isNeutralTrend(systems)) {
       return computeIronCondorScore(systems, support, resistance);
@@ -120,7 +137,7 @@ function computeStrategyFitScore(input: {
 
   if (recommendation === "Sell Put") {
     if (isBullishTrend(systems)) score += 20;
-    if (systems.stochastic < 25) score += 15;
+    score += mainSystemStochasticScore("Sell Put", momentum, systems.stochastic);
     score += srZoneScore(
       systems.averagePrice,
       support,
@@ -133,7 +150,7 @@ function computeStrategyFitScore(input: {
       score += Math.max(0, 10 - atrPct);
     }
   } else if (recommendation === "Sell Call") {
-    if (systems.stochastic > 75) score += 15;
+    score += mainSystemStochasticScore("Sell Call", momentum, systems.stochastic);
     score += srZoneScore(
       systems.averagePrice,
       support,

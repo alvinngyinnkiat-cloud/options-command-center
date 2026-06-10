@@ -2,6 +2,11 @@ import { differenceInCalendarDays, parseISO, startOfDay, subDays } from "date-fn
 import { calculateMidPoint } from "@/lib/watchlist/support-resistance-mid";
 import { buildAdjustedSupportResistanceLevels } from "@/lib/watchlist/support-resistance-atr";
 import {
+  classifyStochasticMomentum,
+  type StochasticMomentum,
+} from "@/lib/watchlist/stochastic-momentum";
+import { classifyEmaTrend } from "@/lib/watchlist/trading-systems/ema-reversal-system";
+import {
   isBearCallCandidate,
   isBullPutCandidate,
 } from "@/lib/watchlist/scoring/candidate";
@@ -24,9 +29,8 @@ export interface TradingAnalysisViewModel {
   priorityRank: number;
   soValue: number;
   previousSo: number | null;
-  soDirection: Direction | null;
-  soRollingLabel: string;
-  soRollingSentiment: AnalysisSentiment;
+  momentumStatus: StochasticMomentum;
+  momentumSentiment: AnalysisSentiment;
   atr14: number;
   support1: number | null;
   adjustedSupport1: number | null;
@@ -39,6 +43,8 @@ export interface TradingAnalysisViewModel {
   averagePriceDifferencePct: number;
   averagePriceDirection: Direction;
   ema20: number;
+  previousEma20: number | null;
+  emaTrend: string;
   averagePriceVsEma20Label: string;
   ema20DistancePct: number;
   ema20PassFail: "Pass" | "Fail" | "—";
@@ -69,9 +75,18 @@ export interface TradingAnalysisViewModel {
 /** Mid Point = (Support 1 + Resistance 1) / 2 */
 export { calculateMidPoint };
 
+export function getMomentumSentiment(
+  momentum: StochasticMomentum
+): AnalysisSentiment {
+  if (momentum === "ROLLING UP") return "bullish";
+  if (momentum === "ROLLING DOWN") return "bearish";
+  return "neutral";
+}
+
+/** @deprecated Use classifyStochasticMomentum + getMomentumSentiment */
 export function getSoRollingLabel(
   stochastic: number,
-  direction: Direction | null
+  direction: import("@/lib/watchlist/types").Direction | null
 ): { label: string; sentiment: AnalysisSentiment } {
   if (!direction || direction === "flat") {
     return { label: "Flat", sentiment: "neutral" };
@@ -160,10 +175,14 @@ export function buildTradingAnalysisViewModel(
   reviewStatus: WeekendReviewStatus
 ): TradingAnalysisViewModel {
   const avg = row.averagePriceComparison;
-  const soComp = row.technicalComparisons.stochastic;
-  const soRolling = getSoRollingLabel(
+  const momentumStatus = classifyStochasticMomentum(
     row.technicals.stochastic,
-    soComp.direction
+    row.previousTechnicals.stochastic
+  );
+  const momentumSentiment = getMomentumSentiment(momentumStatus);
+  const emaTrend = classifyEmaTrend(
+    row.technicals.ema20,
+    row.previousTechnicals.ema20
   );
   const vsEma20 = getPriceVsMaLabel(
     row.market.averagePrice,
@@ -191,9 +210,8 @@ export function buildTradingAnalysisViewModel(
     priorityRank: resolveDisplayRank(row),
     soValue: row.technicals.stochastic,
     previousSo: row.previousTechnicals.stochastic,
-    soDirection: soComp.direction,
-    soRollingLabel: soRolling.label,
-    soRollingSentiment: soRolling.sentiment,
+    momentumStatus,
+    momentumSentiment,
     atr14: row.technicals.atr14,
     support1: row.supportResistance.support1,
     adjustedSupport1: adjustedLevels?.adjustedSupport ?? null,
@@ -209,6 +227,8 @@ export function buildTradingAnalysisViewModel(
     averagePriceDifferencePct: avg.differencePct,
     averagePriceDirection: avg.direction,
     ema20: row.technicals.ema20,
+    previousEma20: row.previousTechnicals.ema20,
+    emaTrend,
     averagePriceVsEma20Label: vsEma20.label,
     ema20DistancePct: row.distances.distanceEma20Pct,
     ema20PassFail: score?.ema20.passed

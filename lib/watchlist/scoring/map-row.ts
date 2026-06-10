@@ -47,6 +47,7 @@ export function scoreWatchlistRow(
     averagePrice,
     atr14: row.technicals.atr14,
     ema20: row.technicals.ema20,
+    ema20Previous: row.previousTechnicals.ema20,
     sma50: row.technicals.sma50,
     sma200: row.technicals.sma200,
     sma50Previous: row.previousTechnicals.sma50,

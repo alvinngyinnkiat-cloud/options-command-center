@@ -155,19 +155,9 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
               }
             />
             <Field
-              label="Direction"
-              value={
-                model.soDirection ? (
-                  <DirectionIndicator direction={model.soDirection} />
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <Field
-              label="Rolling Up / Down"
-              value={model.soRollingLabel}
-              valueClassName={sentimentTextClass(model.soRollingSentiment)}
+              label="Momentum Status"
+              value={model.momentumStatus}
+              valueClassName={sentimentTextClass(model.momentumSentiment)}
             />
           </Section>
 
@@ -246,6 +236,15 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
 
           <Section title="4. EMA20 Analysis">
             <Field label="EMA20" value={formatIndicator(model.ema20)} />
+            <Field
+              label="Previous EMA20"
+              value={
+                model.previousEma20 != null
+                  ? formatIndicator(model.previousEma20)
+                  : "—"
+              }
+            />
+            <Field label="EMA Trend" value={model.emaTrend} />
             <Field
               label="Avg Price vs EMA20"
               value={model.averagePriceVsEma20Label}

@@ -8,6 +8,7 @@ const BASE: TradingSystemsInput = {
   averagePrice: 738,
   atr14: 10,
   ema20: 742,
+  ema20Previous: 740,
   sma50: 720,
   sma200: 680,
   sma50Previous: 715,

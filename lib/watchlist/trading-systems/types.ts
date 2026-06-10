@@ -1,3 +1,5 @@
+import type { StochasticMomentum } from "@/lib/watchlist/stochastic-momentum";
+
 /** Shared recommendation labels across both trading systems. */
 export type TradingSystemRecommendation =
   | "Sell Put"
@@ -40,6 +42,7 @@ export interface TradingSystemsInput {
   averagePrice: number;
   atr14: number;
   ema20: number;
+  ema20Previous: number | null;
   sma50: number;
   sma200: number;
   sma50Previous: number | null;
@@ -61,7 +64,8 @@ export interface EmaReversalSystemResult {
   baseSrSignal: "Sell Put" | "Sell Call" | "No Trade";
   emaDifference: number;
   emaDifferencePct: number | null;
-  stochasticDirection: "Up" | "Down" | "Flat" | "—";
+  emaTrend: "RISING" | "FALLING" | "FLAT" | "—";
+  momentumStatus: StochasticMomentum;
 }
 
 export interface MainTradingSystemResult {
