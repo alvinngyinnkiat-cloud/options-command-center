@@ -5,10 +5,15 @@ import type {
 } from "./types";
 import {
   clampScore,
+  IRON_CONDOR_TREND_CAP,
   isBetweenSupportAndResistance,
   isBullishTrend,
   isNearResistanceZone,
   isNearSupportZone,
+  isNeutralTrend,
+  isStronglyBearishTrend,
+  isStronglyBullishTrend,
+  positionPct,
   resolveSupportResistance,
   srZoneScore,
 } from "./shared";
@@ -23,6 +28,69 @@ function strategyFitTier(score: number): StrategyFitTier {
   return "No Trade";
 }
 
+function computeIronCondorScore(
+  systems: TradingSystemsInput,
+  support: number | null,
+  resistance: number | null
+): number {
+  const neutral = isNeutralTrend(systems);
+
+  if (!neutral) {
+    let capped = 35;
+    if (isBetweenSupportAndResistance(systems.averagePrice, support, resistance)) {
+      capped += 15;
+    }
+    if (systems.stochastic >= 40 && systems.stochastic <= 60) {
+      capped += 15;
+    }
+    if (isStronglyBullishTrend(systems) || isStronglyBearishTrend(systems)) {
+      capped += 5;
+    }
+    return clampScore(Math.min(capped, IRON_CONDOR_TREND_CAP));
+  }
+
+  let score = 10;
+
+  // Major factor — neutral / mixed trend
+  score += 25;
+
+  if (systems.stochastic >= 40 && systems.stochastic <= 60) {
+    score += 15;
+  }
+
+  if (isBetweenSupportAndResistance(systems.averagePrice, support, resistance)) {
+    score += 10;
+  }
+
+  const pct = positionPct(systems.averagePrice, support, resistance);
+  if (pct != null) {
+    const centerDistance = Math.abs(pct - 50);
+    score += Math.max(0, 15 - centerDistance * 0.3);
+  }
+
+  if (support != null && resistance != null && systems.atr14 > 0) {
+    const distSupport =
+      Math.abs(systems.averagePrice - support) / systems.atr14;
+    const distResistance =
+      Math.abs(resistance - systems.averagePrice) / systems.atr14;
+    const minDist = Math.min(distSupport, distResistance);
+    score += Math.min(15, minDist * 5);
+
+    const rangeAtr = (resistance - support) / systems.atr14;
+    score += Math.min(10, rangeAtr * 2);
+  }
+
+  score += srZoneScore(
+    systems.averagePrice,
+    support,
+    resistance,
+    systems.atr14,
+    "condor"
+  );
+
+  return clampScore(score);
+}
+
 function computeStrategyFitScore(input: {
   systems: TradingSystemsInput;
   recommendation: MainTradingSystemResult["recommendation"];
@@ -35,6 +103,16 @@ function computeStrategyFitScore(input: {
     if (isNearSupportZone(systems.averagePrice, support, resistance)) partial += 10;
     if (isNearResistanceZone(systems.averagePrice, support, resistance)) partial += 10;
     if (systems.stochastic >= 40 && systems.stochastic <= 60) partial += 8;
+
+    const icLike =
+      isBetweenSupportAndResistance(systems.averagePrice, support, resistance) &&
+      systems.stochastic >= 40 &&
+      systems.stochastic <= 60;
+
+    if (icLike && !isNeutralTrend(systems)) {
+      return computeIronCondorScore(systems, support, resistance);
+    }
+
     return clampScore(partial);
   }
 
@@ -69,21 +147,7 @@ function computeStrategyFitScore(input: {
     }
     if (!isBullishTrend(systems)) score += 8;
   } else if (recommendation === "Iron Condor") {
-    if (isBetweenSupportAndResistance(systems.averagePrice, support, resistance)) {
-      score += 20;
-    }
-    if (systems.stochastic >= 40 && systems.stochastic <= 60) score += 15;
-    if (support != null && resistance != null && systems.atr14 > 0) {
-      const rangeAtr = (resistance - support) / systems.atr14;
-      score += Math.min(20, rangeAtr * 4);
-      const distSupport =
-        support > 0 ? Math.abs(systems.averagePrice - support) / systems.atr14 : 0;
-      const distResistance =
-        resistance > 0
-          ? Math.abs(resistance - systems.averagePrice) / systems.atr14
-          : 0;
-      score += Math.min(10, (distSupport + distResistance) * 2);
-    }
+    return computeIronCondorScore(systems, support, resistance);
   }
 
   return clampScore(score);
@@ -113,6 +177,7 @@ export function computeMainTradingSystem(
   );
   const soNeutral =
     input.stochastic >= 40 && input.stochastic <= 60;
+  const trendNeutral = isNeutralTrend(input);
 
   let ruleRecommendation: MainTradingSystemResult["recommendation"] = "No Trade";
   let ruleReason = "Main system rules not met";
@@ -123,9 +188,15 @@ export function computeMainTradingSystem(
   } else if (input.stochastic > 75 && nearResistance) {
     ruleRecommendation = "Sell Call";
     ruleReason = "SO > 75, near resistance";
-  } else if (betweenSr && soNeutral) {
+  } else if (betweenSr && soNeutral && trendNeutral) {
     ruleRecommendation = "Iron Condor";
-    ruleReason = "Between support/resistance, SO 40–60";
+    ruleReason = "Between support/resistance, SO 40–60, neutral trend";
+  } else if (betweenSr && soNeutral && !trendNeutral) {
+    ruleReason = isStronglyBullishTrend(input)
+      ? "Strongly bullish trend — Iron Condor not suitable"
+      : isStronglyBearishTrend(input)
+        ? "Strongly bearish trend — Iron Condor not suitable"
+        : "Trend not neutral for Iron Condor";
   } else {
     const misses: string[] = [];
     if (bullish && input.stochastic >= 25) misses.push("SO not oversold");
@@ -133,6 +204,9 @@ export function computeMainTradingSystem(
     if (input.stochastic <= 75 && nearResistance) misses.push("SO not overbought");
     if (!nearResistance && input.stochastic > 75) misses.push("not near resistance");
     if (!soNeutral && betweenSr) misses.push("SO not neutral");
+    if (betweenSr && soNeutral && !trendNeutral) {
+      misses.push("trend not neutral");
+    }
     if (!betweenSr && !bullish && input.stochastic <= 75) {
       misses.push("no clear setup");
     }
@@ -145,11 +219,17 @@ export function computeMainTradingSystem(
   });
 
   if (strategyFitScore < STRATEGY_FIT_MIN) {
+    const reason =
+      ruleRecommendation === "No Trade" &&
+      ruleReason !== "Main system rules not met"
+        ? ruleReason
+        : "Strategy Fit Score below minimum threshold";
+
     return {
       recommendation: "No Trade",
       strategyFitScore,
       tier: strategyFitTier(strategyFitScore),
-      reason: "Strategy Fit Score below minimum threshold",
+      reason,
     };
   }
 

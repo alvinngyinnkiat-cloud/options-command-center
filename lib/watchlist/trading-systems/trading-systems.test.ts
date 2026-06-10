@@ -120,3 +120,43 @@ describe("confluence tiers", () => {
     }
   });
 });
+
+describe("Iron Condor trend filter", () => {
+  it("caps score and blocks trade when trend is strongly bullish", () => {
+    const iwm: TradingSystemsInput = {
+      ...BASE,
+      ticker: "IWM",
+      averagePrice: 284.25,
+      sma50: 275.69,
+      sma200: 256.03,
+      sma50Previous: 274,
+      stochastic: 50,
+      previousStochastic: 50,
+      dailySupport: 270,
+      dailyResistance: 295,
+    };
+    const result = computeTradingSystems(iwm);
+    expect(result.mainSystem.recommendation).toBe("No Trade");
+    expect(result.mainSystem.strategyFitScore).toBeLessThanOrEqual(70);
+    expect(result.mainSystem.strategyFitScore).toBeGreaterThanOrEqual(55);
+    expect(result.mainSystem.reason).toContain("bullish");
+  });
+
+  it("allows elite Iron Condor only with neutral trend and range centering", () => {
+    const neutral: TradingSystemsInput = {
+      ...BASE,
+      averagePrice: 272.5,
+      sma50: 275,
+      sma200: 270,
+      sma50Previous: 274,
+      stochastic: 50,
+      previousStochastic: 50,
+      dailySupport: 265,
+      dailyResistance: 280,
+      atr14: 4,
+    };
+    const result = computeTradingSystems(neutral);
+    expect(result.mainSystem.recommendation).toBe("Iron Condor");
+    expect(result.mainSystem.strategyFitScore).toBeGreaterThanOrEqual(75);
+  });
+});

@@ -106,6 +106,45 @@ export function isBearishTrend(input: {
   return isBearCallCandidate(input);
 }
 
+/** All trend signals aligned bullish — not suitable for Iron Condor neutrality. */
+export function isStronglyBullishTrend(input: {
+  averagePrice: number;
+  sma50: number;
+  sma200: number;
+}): boolean {
+  return (
+    input.averagePrice > input.sma50 &&
+    input.averagePrice > input.sma200 &&
+    input.sma50 > input.sma200
+  );
+}
+
+/** All trend signals aligned bearish — not suitable for Iron Condor neutrality. */
+export function isStronglyBearishTrend(input: {
+  averagePrice: number;
+  sma50: number;
+  sma200: number;
+}): boolean {
+  return (
+    input.averagePrice < input.sma50 &&
+    input.averagePrice < input.sma200 &&
+    input.sma50 < input.sma200
+  );
+}
+
+/** Mixed / conflicting SMA signals — required for Iron Condor eligibility. */
+export function isNeutralTrend(input: {
+  averagePrice: number;
+  sma50: number;
+  sma200: number;
+}): boolean {
+  return (
+    !isStronglyBullishTrend(input) && !isStronglyBearishTrend(input)
+  );
+}
+
+export const IRON_CONDOR_TREND_CAP = 70;
+
 export function srZoneScore(
   averagePrice: number,
   support: number | null,
