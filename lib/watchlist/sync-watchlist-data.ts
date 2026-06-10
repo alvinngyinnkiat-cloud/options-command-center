@@ -4,6 +4,7 @@ import { calculateAveragePrice } from "@/lib/watchlist/average-price";
 import {
   computeIndicatorsFromCandles,
   computePreviousSma50,
+  buildStochasticDebug,
 } from "@/lib/watchlist/compute-indicators";
 import { MarketDataFetchError } from "@/lib/watchlist/market-data-fetch-error";
 import {
@@ -235,6 +236,13 @@ async function syncSingleWatchlistItem(
       supabase
     );
     let indicatorRows = 1;
+
+    const soDebug = buildStochasticDebug(eligible, symbol);
+    if (soDebug) {
+      console.log(
+        `[watchlist-sync] ${symbol} SO debug: length=${soDebug.soLength} smooth=${soDebug.soSmoothing} close=${soDebug.close} rawHigh=${soDebug.rawHigh} rawLow=${soDebug.rawLow} rawK=${soDebug.rawK.toFixed(2)} so=${soDebug.soValue.toFixed(2)} date=${soDebug.candleDate}`
+      );
+    }
 
     const prevDate = eligible[eligible.length - 2]?.date;
     if (prevDate) {

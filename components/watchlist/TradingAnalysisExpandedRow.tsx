@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { getStochasticDebugAction } from "@/app/actions/watchlist";
 import { formatReviewDateLabel } from "@/lib/weekend-review/dates";
+import type { StochasticDebugInfo } from "@/lib/watchlist/compute-indicators";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
 import {
   formatIndicator,
@@ -50,6 +53,17 @@ export function TradingAnalysisExpandedRow({
   const score = row.score;
   const rec = score?.recommendation;
   const srNotes = row.supportResistance.notes;
+  const [soDebug, setSoDebug] = useState<StochasticDebugInfo | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getStochasticDebugAction(row.watchlistId, row.ticker).then((debug) => {
+      if (!cancelled) setSoDebug(debug);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [row.watchlistId, row.ticker]);
 
   return (
     <tr className="border-b border-terminal-border/50 bg-terminal-elevated/20">
@@ -159,6 +173,41 @@ export function TradingAnalysisExpandedRow({
               </dl>
             ) : (
               <p className="text-xs text-terminal-muted">No confluence data</p>
+            )}
+          </DetailBlock>
+
+          <DetailBlock title="Stochastic Debug (Daily)">
+            {soDebug ? (
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                {[
+                  ["Ticker", soDebug.ticker ?? row.ticker],
+                  ["Candle Date", soDebug.candleDate],
+                  ["Close", formatIndicator(soDebug.close)],
+                  ["Raw High (10-bar)", formatIndicator(soDebug.rawHigh)],
+                  ["Raw Low (10-bar)", formatIndicator(soDebug.rawLow)],
+                  ["Raw %K", soDebug.rawK.toFixed(2)],
+                  ["SO Value (fast %K)", formatStochastic(soDebug.soValue)],
+                  [
+                    "Smoothed %K (K=3)",
+                    soDebug.smoothedK != null
+                      ? formatStochastic(soDebug.smoothedK)
+                      : "—",
+                  ],
+                  ["Scanner SO (stored)", formatStochastic(model.soValue)],
+                  ["SO Length", String(soDebug.soLength)],
+                  ["SO Smoothing", String(soDebug.soSmoothing)],
+                  ["Timeframe", soDebug.timeframe],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-terminal-muted">{label}</dt>
+                    <dd className="font-mono text-terminal-text">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="text-xs text-terminal-muted">
+                Loading daily SO debug… (Length=10, K Smoothing=3)
+              </p>
             )}
           </DetailBlock>
 

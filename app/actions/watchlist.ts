@@ -29,6 +29,11 @@ import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import { requireUserId, withSupabaseQuery } from "@/lib/supabase/resolve-user";
 import { createClient } from "@/lib/supabase/server";
 import { WATCHLIST_MANUAL_REFRESH_LOG_SOURCE } from "@/lib/watchlist/sync-concurrency";
+import { buildStochasticDebug } from "@/lib/watchlist/compute-indicators";
+import type { StochasticDebugInfo } from "@/lib/watchlist/compute-indicators";
+import { getWatchlistHistoryRange } from "@/lib/watchlist/market-data-sync-range";
+import { buildStochasticDebugFromMarketData } from "@/lib/watchlist/stochastic-debug-for-ticker";
+import { listMarketDataForWatchlistIds } from "@/lib/watchlist/sync-watchlist-data";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import type { SupportResistance, WatchlistItem } from "@/types/database";
@@ -461,6 +466,26 @@ export async function saveSupportResistance(
       success: false,
       error: e instanceof Error ? e.message : "Failed to save support/resistance.",
     };
+  }
+}
+
+export async function getStochasticDebugAction(
+  watchlistId: string,
+  ticker: string
+): Promise<StochasticDebugInfo | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  try {
+    const { completedCandleDate } = getWatchlistHistoryRange();
+    const map = await listMarketDataForWatchlistIds([watchlistId]);
+    const rows = map.get(watchlistId) ?? [];
+    return buildStochasticDebugFromMarketData(
+      rows,
+      ticker,
+      completedCandleDate
+    );
+  } catch {
+    return null;
   }
 }
 
