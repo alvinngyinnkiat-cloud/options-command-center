@@ -9,21 +9,22 @@ import type {
   TradeQueueItem,
   TradeQueueStatus,
 } from "./types";
+import { tradingSystemToLegacyLabel } from "@/lib/watchlist/trading-systems/legacy-bridge";
 
-const ACTION_PRIORITY: Record<string, number> = {
-  enter: 4,
-  hold: 3,
-  watch: 2,
-  avoid: 1,
-  exit: 0,
-};
+function sortKey(row: WatchlistScannerRow, status: TradeQueueStatus): number {
+  const ts = row.score?.tradingSystems;
+  const confluence = ts?.confluence.score ?? 0;
+  const mainScore = ts?.mainSystem.mainScore ?? row.score?.totalScore ?? 0;
+  const emaScore = ts?.emaSystem.emaScore ?? 0;
+  const statusPri = status === "Ready" ? 10 : status === "Waiting" ? 5 : 0;
 
-const DECISION_PRIORITY: Record<string, number> = {
-  "Trade Immediately": 4,
-  "Strong Candidate": 3,
-  Watchlist: 2,
-  "No Trade": 1,
-};
+  return (
+    confluence * 1_000_000 +
+    mainScore * 1_000 +
+    emaScore * 10 +
+    statusPri
+  );
+}
 
 function resolveQueueStatus(input: {
   row: WatchlistScannerRow;
@@ -33,12 +34,17 @@ function resolveQueueStatus(input: {
 }): { status: TradeQueueStatus; warning: string | null } {
   const { row, openTrades, liquidityBase, marketCondition } = input;
   const score = row.score;
-  const rec = score?.recommendation;
-  const strategy = rec?.recommendedStrategy ?? "No Trade";
+  const ts = score?.tradingSystems;
+  const mainRec = ts?.mainSystem.recommendation ?? "No Trade";
+  const strategy = tradingSystemToLegacyLabel(mainRec);
   const zone = row.averagePricePosition.zone;
+  const confluence = ts?.confluence.score ?? 0;
 
-  if (strategy === "No Trade") {
-    return { status: "No Trade", warning: rec?.primaryReason ?? null };
+  if (mainRec === "No Trade" && confluence < 7) {
+    return {
+      status: "No Trade",
+      warning: ts?.mainSystem.reason ?? score?.recommendation.primaryReason ?? null,
+    };
   }
 
   const liquidity = buildCapitalLiquidityCheck(liquidityBase, 2500);
@@ -60,37 +66,18 @@ function resolveQueueStatus(input: {
     return { status: "Near Resistance", warning: "Price near manual resistance" };
   }
 
-  if (
-    !marketConditionSupportsStrategy(marketCondition.condition, strategy)
-  ) {
+  if (!marketConditionSupportsStrategy(marketCondition.condition, strategy)) {
     return {
       status: "Waiting",
       warning: `Market ${marketCondition.condition} — strategy mismatch`,
     };
   }
 
-  const combined = score?.combinedScore ?? score?.totalScore ?? 0;
-  if (combined >= 80) {
-    return { status: "Ready", warning: rec?.warningNotes?.[0] ?? null };
+  if (confluence >= 8 || (ts?.mainSystem.mainScore ?? 0) >= 80) {
+    return { status: "Ready", warning: ts?.confluence.reason ?? null };
   }
 
-  return { status: "Waiting", warning: "Score below 80 threshold" };
-}
-
-function sortKey(row: WatchlistScannerRow, status: TradeQueueStatus): number {
-  const score = row.score;
-  const rec = score?.recommendation;
-  const combined = score?.combinedScore ?? score?.totalScore ?? 0;
-  const actionPri = ACTION_PRIORITY[String(rec?.action ?? "avoid")] ?? 0;
-  const decisionPri = DECISION_PRIORITY[rec?.decisionLabel ?? "No Trade"] ?? 0;
-  const statusPri = status === "Ready" ? 10 : status === "Waiting" ? 5 : 0;
-
-  return (
-    combined * 1000 +
-    decisionPri * 100 +
-    actionPri * 10 +
-    statusPri
-  );
+  return { status: "Waiting", warning: "Confluence or main score below threshold" };
 }
 
 export function buildTradeQueue(
@@ -103,7 +90,14 @@ export function buildTradeQueue(
   const now = new Date().toISOString();
 
   const candidates = rows
-    .filter((r) => r.score && r.score.recommendation.recommendedStrategy !== "No Trade")
+    .filter((r) => {
+      const ts = r.score?.tradingSystems;
+      if (!ts) return false;
+      return (
+        ts.mainSystem.recommendation !== "No Trade" ||
+        ts.confluence.score >= 7
+      );
+    })
     .map((row) => {
       const { status, warning } = resolveQueueStatus({
         row,
@@ -111,14 +105,17 @@ export function buildTradeQueue(
         liquidityBase,
         marketCondition,
       });
-      const score = row.score!;
-      const rec = score.recommendation;
+      const ts = row.score!.tradingSystems;
+      const mainRec = ts.mainSystem.recommendation;
       return {
         row,
         status,
         warning,
         sortKey: sortKey(row, status),
-        combined: score.combinedScore ?? score.totalScore,
+        confluence: ts.confluence.score,
+        mainScore: ts.mainSystem.mainScore,
+        emaScore: ts.emaSystem.emaScore,
+        strategy: tradingSystemToLegacyLabel(mainRec),
       };
     })
     .sort((a, b) => b.sortKey - a.sortKey)
@@ -127,12 +124,12 @@ export function buildTradeQueue(
   return candidates.map((item, index) => ({
     priorityRank: index + 1,
     ticker: item.row.ticker,
-    strategy: item.row.score!.recommendation.recommendedStrategy,
-    scannerScore: item.row.score!.totalScore,
-    combinedScore: item.combined,
+    strategy: item.strategy,
+    scannerScore: item.mainScore,
+    combinedScore: item.confluence,
     action: item.row.score!.recommendation.actionLabel,
     status: item.status,
-    reason: item.row.score!.recommendation.primaryReason,
+    reason: item.row.score!.tradingSystems.confluence.reason,
     warning: item.warning,
     lastUpdated: now,
   }));

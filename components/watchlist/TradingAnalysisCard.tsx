@@ -297,7 +297,37 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             />
           </Section>
 
-          <Section title="6. Score Analysis">
+          <Section title="6. Dual System Scores">
+            <Field label="20 EMA System" value={model.emaRecommendation} />
+            <Field
+              label="EMA Score"
+              value={
+                model.emaSystemScore != null
+                  ? formatScore(model.emaSystemScore)
+                  : "—"
+              }
+            />
+            <Field label="Main System" value={model.mainRecommendation} />
+            <Field
+              label="Main Score"
+              value={
+                model.mainSystemScore != null
+                  ? formatScore(model.mainSystemScore)
+                  : "—"
+              }
+            />
+            <Field
+              label="Confluence"
+              value={
+                model.confluenceScore != null
+                  ? `${model.confluenceScore}/10`
+                  : "—"
+              }
+            />
+            <Field label="Confluence Status" value={model.confluenceStatus} />
+          </Section>
+
+          <Section title="7. Component Breakdown">
             <Field
               label="Trend Score"
               value={model.trendScore != null ? formatScore(model.trendScore) : "—"}
@@ -307,25 +337,12 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
               value={model.soScore != null ? formatScore(model.soScore) : "—"}
             />
             <Field
-              label="EMA20 Score"
-              value={
-                model.ema20Score != null ? formatScore(model.ema20Score) : "—"
-              }
-            />
-            <Field
               label="S/R Score"
               value={model.srScore != null ? formatScore(model.srScore) : "—"}
             />
-            <Field
-              label="Total Score"
-              value={
-                model.totalScore != null ? formatScore(model.totalScore) : "—"
-              }
-              className="col-span-2"
-            />
           </Section>
 
-          <Section title="7. Recommendation">
+          <Section title="8. Recommendation">
             <Field
               label="Strategy"
               value={
@@ -360,7 +377,7 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             )}
           </Section>
 
-          <Section title="8. Weekend Review Status">
+          <Section title="9. Weekend Review Status">
             <Field
               label="Updated This Weekend"
               value={boolLabel(model.weekendReview.updatedThisWeekend)}

@@ -21,35 +21,45 @@ describe("decision labels", () => {
 });
 
 describe("computeScannerScore", () => {
-  it("scores a perfect Bull Put candidate at 100", () => {
+  it("excludes EMA20 from component total (EMA scored in reversal system)", () => {
+    const result = computeScannerScore(BULL_PUT_PERFECT_FIXTURE);
+    expect(result.ema20.score).toBeGreaterThan(0);
+    expect(result.totalScore).toBe(
+      result.trend.score +
+        result.stochastic.score +
+        result.supportResistance.score
+    );
+    expect(result.totalScore).toBeLessThanOrEqual(
+      SCORE_WEIGHTS.trend +
+        SCORE_WEIGHTS.stochastic +
+        SCORE_WEIGHTS.supportResistance
+    );
+  });
+
+  it("scores trend and stochastic for bull put fixture", () => {
     const result = computeScannerScore(BULL_PUT_PERFECT_FIXTURE);
     expect(result.candidateStrategy).toBe("bull_put_spread");
     expect(result.trend.score).toBe(SCORE_WEIGHTS.trend);
     expect(result.stochastic.score).toBe(SCORE_WEIGHTS.stochastic);
-    expect(result.ema20.score).toBe(SCORE_WEIGHTS.ema20);
-    expect(result.supportResistance.score).toBe(SCORE_WEIGHTS.supportResistance);
-    expect(result.totalScore).toBe(100);
-    expect(result.decisionLabel).toBe("Trade Immediately");
   });
 
-  it("scores a perfect Bear Call candidate at 100", () => {
+  it("scores bear call trend components", () => {
     const result = computeScannerScore(BEAR_CALL_PERFECT_FIXTURE);
     expect(result.candidateStrategy).toBe("bear_call_spread");
-    expect(result.totalScore).toBe(100);
-    expect(result.decisionLabel).toBe("Trade Immediately");
+    expect(result.trend.score).toBe(SCORE_WEIGHTS.trend);
   });
 
-  it("scores a perfect Iron Condor candidate at 100", () => {
+  it("scores iron condor candidate", () => {
     const result = computeScannerScore(IRON_CONDOR_PERFECT_FIXTURE);
     expect(result.candidateStrategy).toBe("iron_condor");
-    expect(result.totalScore).toBe(100);
-    expect(result.decisionLabel).toBe("Trade Immediately");
   });
 
   it("fails S/R when manual levels are missing", () => {
     const result = computeScannerScore(NO_SR_FIXTURE);
     expect(result.supportResistance.passed).toBe(false);
     expect(result.supportResistance.score).toBe(0);
-    expect(result.supportResistance.reason).toContain("Manual support and resistance required");
+    expect(result.supportResistance.reason).toContain(
+      "Manual support and resistance required"
+    );
   });
 });

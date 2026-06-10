@@ -22,11 +22,6 @@ export function computeScannerScore(input: ScannerScoringInput): ComputedScore {
     strategy,
   });
 
-  const ema20 = scoreEma20Distance({
-    distanceEma20Pct: input.distanceEma20Pct,
-    strategy,
-  });
-
   const supportResistance = scoreSupportResistance({
     averagePrice: input.averagePrice,
     support: input.support,
@@ -37,11 +32,16 @@ export function computeScannerScore(input: ScannerScoringInput): ComputedScore {
     strategy,
   });
 
-  const totalScore =
-    trend.score +
-    stochastic.score +
-    ema20.score +
-    supportResistance.score;
+  /** EMA20 is scored separately in the 20 EMA Reversal System — not part of main total. */
+  const ema20 = scoreEma20Distance({
+    distanceEma20Pct: input.distanceEma20Pct,
+    strategy,
+  });
+
+  const componentTotal =
+    trend.score + stochastic.score + supportResistance.score;
+
+  const totalScore = componentTotal;
 
   const decisionLabel = getDecisionLabel(totalScore);
 

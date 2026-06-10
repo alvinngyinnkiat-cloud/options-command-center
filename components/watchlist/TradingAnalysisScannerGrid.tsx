@@ -2,12 +2,13 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { buildTradingAnalysisViewModel } from "@/lib/watchlist/analysis-card";
-import { decisionClass, strategyClass } from "@/lib/watchlist/scanner-grid-colors";
-import { resolveDisplayRank, sortRowsByWatchlistRank } from "@/lib/watchlist/watchlist-rank";
+import { sortRowsByTradingSystems } from "@/lib/watchlist/scoring/map-row";
+import { resolveDisplayRank } from "@/lib/watchlist/watchlist-rank";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
 import type { TradeReadinessResult } from "@/lib/trading-workflow/types";
 import { cn } from "@/lib/utils";
+import { formatScore } from "@/lib/watchlist/format";
 import { filterAlertsByTicker } from "@/lib/alerts/summary";
 import type { EnrichedAlert } from "@/lib/alerts/types";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -17,17 +18,14 @@ import { TradingAnalysisExpandedRow } from "./TradingAnalysisExpandedRow";
 interface TradingAnalysisScannerGridProps {
   rows: WatchlistScannerRow[];
   reviewStatus: WeekendReviewStatus;
-  /** Sort rows by weekend rank (watchlistId → rank) */
   rankByWatchlistId?: Map<string, number>;
-  /** Analyst notes from weekly_market_updates keyed by watchlistId */
   weekendNotesByWatchlistId?: Map<string, string | null>;
   alerts?: EnrichedAlert[];
   readinessByTicker?: Record<string, TradeReadinessResult>;
   emptyMessage?: string;
 }
 
-/** Expand + Ticker + Rank + Alert + Strategy + Action */
-const COLUMN_COUNT = 6;
+const COLUMN_COUNT = 9;
 
 export function TradingAnalysisScannerGrid({
   rows,
@@ -48,7 +46,7 @@ export function TradingAnalysisScannerGrid({
         return ra - rb || a.ticker.localeCompare(b.ticker);
       });
     }
-    return sortRowsByWatchlistRank(rows);
+    return sortRowsByTradingSystems(rows);
   }, [rows, rankByWatchlistId]);
 
   function toggleExpanded(watchlistId: string) {
@@ -70,15 +68,18 @@ export function TradingAnalysisScannerGrid({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-terminal-border">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm min-w-[960px]">
         <thead>
           <tr className="border-b border-terminal-border bg-terminal-elevated/80 text-left uppercase tracking-wider text-terminal-muted">
             <th className="w-10 px-3 py-3" />
-            <th className="px-4 py-3 font-medium w-[120px]">Ticker</th>
-            <th className="px-4 py-3 font-medium w-16">Rank</th>
+            <th className="px-3 py-3 font-medium">Ticker</th>
+            <th className="px-3 py-3 font-medium w-14">Rank</th>
             <th className="w-10 px-3 py-3" />
-            <th className="px-4 py-3 font-medium">Strategy</th>
-            <th className="px-4 py-3 font-medium">Action</th>
+            <th className="px-3 py-3 font-medium">EMA System</th>
+            <th className="px-3 py-3 font-medium text-right">EMA Score</th>
+            <th className="px-3 py-3 font-medium">Main System</th>
+            <th className="px-3 py-3 font-medium text-right">Main Score</th>
+            <th className="px-3 py-3 font-medium text-right">Confluence</th>
           </tr>
         </thead>
         <tbody>
@@ -102,10 +103,10 @@ export function TradingAnalysisScannerGrid({
                       <ChevronRight className="h-4 w-4" />
                     )}
                   </td>
-                  <td className="px-4 py-3 font-mono font-semibold text-terminal-text">
+                  <td className="px-3 py-3 font-mono font-semibold text-terminal-text">
                     {model.ticker}
                   </td>
-                  <td className="px-4 py-3 font-mono text-terminal-muted">
+                  <td className="px-3 py-3 font-mono text-terminal-muted">
                     #{resolveDisplayRank(row)}
                   </td>
                   <td className="px-3 py-3">
@@ -113,21 +114,29 @@ export function TradingAnalysisScannerGrid({
                       alerts={filterAlertsByTicker(alerts, model.ticker)}
                     />
                   </td>
-                  <td
-                    className={cn(
-                      "px-4 py-3 font-medium",
-                      strategyClass(model.strategy)
-                    )}
-                  >
-                    {model.strategy}
+                  <td className="px-3 py-3 font-medium text-terminal-text">
+                    {model.emaRecommendation}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-right text-terminal-text">
+                    {model.emaSystemScore != null
+                      ? formatScore(model.emaSystemScore)
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-3 font-medium text-terminal-text">
+                    {model.mainRecommendation}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-right text-terminal-text">
+                    {model.mainSystemScore != null
+                      ? formatScore(model.mainSystemScore)
+                      : "—"}
                   </td>
                   <td
-                    className={cn(
-                      "px-4 py-3 font-medium",
-                      decisionClass(model.decisionLabel)
-                    )}
+                    className="px-3 py-3 font-mono text-right font-semibold text-accent"
+                    title={model.confluenceStatus}
                   >
-                    {model.action}
+                    {model.confluenceScore != null
+                      ? `${model.confluenceScore}/10`
+                      : "—"}
                   </td>
                 </tr>
                 {expanded && (

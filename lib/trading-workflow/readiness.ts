@@ -5,9 +5,8 @@ import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
 import type { EnrichedTrade } from "@/lib/trades/types";
 import { findActiveTradeForTicker } from "./one-trade-per-ticker";
-import {
-  marketConditionSupportsStrategy,
-} from "./market-condition";
+import { marketConditionSupportsStrategy } from "./market-condition";
+import { tradingSystemToLegacyLabel } from "@/lib/watchlist/trading-systems/legacy-bridge";
 import type { MarketConditionResult } from "./types";
 import type {
   FinalRecommendation,
@@ -29,8 +28,14 @@ export function buildTradeReadiness(input: {
     input;
   const score = row.score;
   const rec = score?.recommendation;
-  const combined = score?.combinedScore ?? score?.totalScore ?? 0;
-  const strategy = rec?.recommendedStrategy ?? "No Trade";
+  const ts = score?.tradingSystems;
+  const confluence = ts?.confluence.score ?? 0;
+  const mainScore = ts?.mainSystem.mainScore ?? score?.totalScore ?? 0;
+  const mainRec = ts?.mainSystem.recommendation ?? "No Trade";
+  const strategy =
+    mainRec !== "No Trade"
+      ? tradingSystemToLegacyLabel(mainRec)
+      : (rec?.recommendedStrategy ?? "No Trade");
   const hypotheticalRisk = score
     ? Math.max(500, (rec?.recommendedStrategy !== "No Trade" ? 2500 : 0))
     : 0;
@@ -47,9 +52,9 @@ export function buildTradeReadiness(input: {
   const checks: ReadinessCheckItem[] = [
     {
       id: "scanner",
-      label: "Scanner Score >= 80",
-      passed: combined >= 80,
-      detail: `Combined score ${combined}`,
+      label: "Confluence >= 8 or Main Score >= 80",
+      passed: confluence >= 8 || mainScore >= 80,
+      detail: `Confluence ${confluence}/10 · Main ${mainScore}`,
     },
     {
       id: "strategy",

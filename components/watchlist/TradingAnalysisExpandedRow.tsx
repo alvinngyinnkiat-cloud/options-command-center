@@ -100,6 +100,37 @@ export function TradingAnalysisExpandedRow({
             </dl>
           </DetailBlock>
 
+          <DetailBlock title="Trading Systems">
+            {score?.tradingSystems ? (
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                {[
+                  ["20 EMA System", score.tradingSystems.emaSystem.recommendation],
+                  [
+                    "EMA Score",
+                    String(score.tradingSystems.emaSystem.emaScore),
+                  ],
+                  ["Main System", score.tradingSystems.mainSystem.recommendation],
+                  [
+                    "Main Score",
+                    String(score.tradingSystems.mainSystem.mainScore),
+                  ],
+                  [
+                    "Confluence",
+                    `${score.tradingSystems.confluence.score}/10`,
+                  ],
+                  ["Status", score.tradingSystems.confluence.status],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-terminal-muted">{label}</dt>
+                    <dd className="font-mono text-terminal-text">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="text-xs text-terminal-muted">No system data</p>
+            )}
+          </DetailBlock>
+
           <DetailBlock title="Score Breakdown">
             {score ? (
               <ul className="space-y-1.5 text-xs">

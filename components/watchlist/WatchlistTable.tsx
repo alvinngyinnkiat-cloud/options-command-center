@@ -16,7 +16,6 @@ import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import { cn, formatPercent } from "@/lib/utils";
 import { Pencil, Trash2 } from "lucide-react";
 import { AveragePricePositionCell } from "./AveragePricePositionCell";
-import { DecisionBadge } from "./DecisionBadge";
 import { DirectionIndicator } from "./DirectionIndicator";
 import { IndicatorComparisonCell } from "./IndicatorComparisonCell";
 import { ScoreCell } from "./ScoreCell";
@@ -91,10 +90,10 @@ export function WatchlistTable({
                 Manual S/R
               </th>
               <th
-                colSpan={7}
+                colSpan={8}
                 className="px-3 py-2 font-medium text-center border-l border-terminal-border text-accent"
               >
-                Scanner Scores
+                Dual Trading Systems
               </th>
               <th className="px-3 py-2.5 font-medium border-l border-terminal-border">
                 Actions
@@ -134,15 +133,14 @@ export function WatchlistTable({
               <th className="px-2 py-2 font-medium">R1</th>
               <th className="px-2 py-2 font-medium">R2</th>
               <th className="px-2 py-2 font-medium">Avg Position</th>
-              <th className="px-2 py-2 font-medium border-l border-terminal-border">Recommend</th>
+              <th className="px-2 py-2 font-medium border-l border-terminal-border">EMA Sys</th>
+              <th className="px-2 py-2 font-medium text-right">EMA Score</th>
+              <th className="px-2 py-2 font-medium">Main Sys</th>
+              <th className="px-2 py-2 font-medium text-right">Main Score</th>
+              <th className="px-2 py-2 font-medium text-right">Confluence</th>
+              <th className="px-2 py-2 font-medium">Status</th>
               <th className="px-2 py-2 font-medium text-right">Trend</th>
-              <th className="px-2 py-2 font-medium text-right">Stoch</th>
-              <th className="px-2 py-2 font-medium text-right">EMA</th>
               <th className="px-2 py-2 font-medium text-right">S/R</th>
-              <th className="px-2 py-2 font-medium text-right">Tech</th>
-              <th className="px-2 py-2 font-medium text-right">Intel</th>
-              <th className="px-2 py-2 font-medium text-right">Combined</th>
-              <th className="px-2 py-2 font-medium">Decision</th>
               <th className="px-2 py-2 font-medium border-l border-terminal-border" />
             </tr>
           </thead>
@@ -304,30 +302,37 @@ export function WatchlistTable({
                     <>
                       <td
                         className="px-2 py-2.5 border-l border-terminal-border/50 font-medium whitespace-nowrap text-terminal-text"
-                        title={row.score.recommendation.primaryReason}
+                        title={row.score.tradingSystems.emaSystem.reason}
                       >
-                        {row.score.recommendation.recommendedStrategy}
+                        {row.score.tradingSystems.emaSystem.recommendation}
+                      </td>
+                      <td className="px-2 py-2.5 font-mono text-right text-terminal-text">
+                        {formatScore(row.score.tradingSystems.emaSystem.emaScore)}
+                      </td>
+                      <td
+                        className="px-2 py-2.5 font-medium whitespace-nowrap text-terminal-text"
+                        title={row.score.tradingSystems.mainSystem.reason}
+                      >
+                        {row.score.tradingSystems.mainSystem.recommendation}
+                      </td>
+                      <td className="px-2 py-2.5 font-mono text-right font-semibold text-terminal-text">
+                        {formatScore(row.score.tradingSystems.mainSystem.mainScore)}
+                      </td>
+                      <td
+                        className="px-2 py-2.5 font-mono text-right font-semibold text-accent"
+                        title={row.score.tradingSystems.confluence.reason}
+                      >
+                        {row.score.tradingSystems.confluence.score}/10
+                      </td>
+                      <td className="px-2 py-2.5 text-[10px] text-terminal-muted whitespace-nowrap">
+                        {row.score.tradingSystems.confluence.status}
                       </td>
                       <ScoreCell result={row.score.trend} />
-                      <ScoreCell result={row.score.stochastic} />
-                      <ScoreCell result={row.score.ema20} />
                       <ScoreCell result={row.score.supportResistance} />
-                      <td className="px-2 py-2.5 font-mono text-right text-terminal-text">
-                        {formatScore(row.score.totalScore)}
-                      </td>
-                      <td className="px-2 py-2.5 font-mono text-right text-terminal-muted">
-                        {formatScore(row.score.intelligence.score)}
-                      </td>
-                      <td className="px-2 py-2.5 font-mono text-right font-semibold text-accent">
-                        {formatScore(row.score.combinedScore)}
-                      </td>
-                      <td className="px-2 py-2.5">
-                        <DecisionBadge label={row.score.combinedDecisionLabel} />
-                      </td>
                     </>
                   ) : (
                     <td
-                      colSpan={9}
+                      colSpan={8}
                       className="px-2 py-2.5 border-l border-terminal-border/50 text-terminal-muted"
                     >
                       —

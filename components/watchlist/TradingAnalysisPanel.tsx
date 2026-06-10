@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { buildTradingAnalysisViewModel } from "@/lib/watchlist/analysis-card";
+import { sortRowsByTradingSystems } from "@/lib/watchlist/scoring/map-row";
 import { sortRowsByWatchlistRank } from "@/lib/watchlist/watchlist-rank";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
@@ -13,7 +14,7 @@ interface TradingAnalysisPanelProps {
   reviewStatus: WeekendReviewStatus;
 }
 
-type SortKey = "rank" | "score" | "ticker";
+type SortKey = "rank" | "confluence" | "ticker";
 
 export function TradingAnalysisPanel({
   rows,
@@ -26,9 +27,13 @@ export function TradingAnalysisPanel({
     const built = sortRowsByWatchlistRank(rows).map((row) =>
       buildTradingAnalysisViewModel(row, reviewStatus)
     );
-    if (sortKey === "score") {
+    if (sortKey === "confluence") {
+      const ordered = sortRowsByTradingSystems(rows);
+      const orderMap = new Map(ordered.map((r, i) => [r.watchlistId, i]));
       return [...built].sort(
-        (a, b) => (b.totalScore ?? 0) - (a.totalScore ?? 0)
+        (a, b) =>
+          (orderMap.get(a.watchlistId) ?? 999) -
+          (orderMap.get(b.watchlistId) ?? 999)
       );
     }
     if (sortKey === "ticker") {
@@ -75,11 +80,11 @@ export function TradingAnalysisPanel({
             By Rank
           </Button>
           <Button
-            variant={sortKey === "score" ? "secondary" : "ghost"}
+            variant={sortKey === "confluence" ? "secondary" : "ghost"}
             size="sm"
-            onClick={() => setSortKey("score")}
+            onClick={() => setSortKey("confluence")}
           >
-            By Score
+            By Confluence
           </Button>
           <Button
             variant={sortKey === "ticker" ? "secondary" : "ghost"}
