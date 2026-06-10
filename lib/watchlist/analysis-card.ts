@@ -48,18 +48,16 @@ export interface TradingAnalysisViewModel {
   sma50VsSma200Label: string;
   trendDirection: string;
   trendSentiment: AnalysisSentiment;
-  trendScore: number | null;
-  soScore: number | null;
-  ema20Score: number | null;
-  srScore: number | null;
-  totalScore: number | null;
   emaRecommendation: string;
   emaSystemScore: number | null;
+  emaTier: string;
+  emaReason: string;
   mainRecommendation: string;
   strategyFitScore: number | null;
+  mainTier: string;
+  mainReason: string;
   confluenceScore: number | null;
-  confluenceStatus: string;
-  decisionReason: string;
+  confluenceReason: string;
   strategy: string;
   action: string;
   primaryReason: string;
@@ -224,18 +222,16 @@ export function buildTradingAnalysisViewModel(
     sma50VsSma200Label: sma50vs200.label,
     trendDirection: trend.label,
     trendSentiment: trend.sentiment,
-    trendScore: score?.trend.score ?? null,
-    soScore: score?.stochastic.score ?? null,
-    ema20Score: score?.ema20.score ?? null,
-    srScore: score?.supportResistance.score ?? null,
-    totalScore: score?.tradingSystems?.mainSystem.strategyFitScore ?? score?.totalScore ?? null,
     emaRecommendation: score?.tradingSystems?.emaSystem.recommendation ?? "—",
     emaSystemScore: score?.tradingSystems?.emaSystem.emaScore ?? null,
+    emaTier: score?.tradingSystems?.emaSystem.tier ?? "—",
+    emaReason: score?.tradingSystems?.emaSystem.reason ?? "—",
     mainRecommendation: score?.tradingSystems?.mainSystem.recommendation ?? "—",
     strategyFitScore: score?.tradingSystems?.mainSystem.strategyFitScore ?? null,
+    mainTier: score?.tradingSystems?.mainSystem.tier ?? "—",
+    mainReason: score?.tradingSystems?.mainSystem.reason ?? "—",
     confluenceScore: score?.tradingSystems?.confluence.score ?? null,
-    confluenceStatus: score?.tradingSystems?.confluence.status ?? "—",
-    decisionReason: score?.tradingSystems?.decisionReason ?? "—",
+    confluenceReason: score?.tradingSystems?.confluence.reason ?? "—",
     strategy:
       score?.tradingSystems?.mainSystem.recommendation ??
       score?.recommendation.recommendedStrategy ??

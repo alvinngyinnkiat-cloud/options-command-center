@@ -7,12 +7,9 @@ import type { StochasticDebugInfo } from "@/lib/watchlist/compute-indicators";
 import type { WeekendReviewStatus } from "@/lib/weekend-review/types";
 import {
   formatIndicator,
-  formatScoreFraction,
   formatStochastic,
 } from "@/lib/watchlist/format";
 import type { TradingAnalysisViewModel } from "@/lib/watchlist/analysis-card";
-import { passFailClass } from "@/lib/watchlist/scanner-grid-colors";
-import { SCORE_WEIGHTS } from "@/lib/watchlist/scoring/types";
 import type { WatchlistScannerRow } from "@/lib/watchlist/types";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +48,6 @@ export function TradingAnalysisExpandedRow({
   colSpan,
 }: TradingAnalysisExpandedRowProps) {
   const score = row.score;
-  const rec = score?.recommendation;
   const srNotes = row.supportResistance.notes;
   const [soDebug, setSoDebug] = useState<StochasticDebugInfo | null>(null);
 
@@ -111,25 +107,11 @@ export function TradingAnalysisExpandedRow({
             </dl>
           </DetailBlock>
 
-          <DetailBlock title="20 EMA System (Shorter-DTE)">
+          <DetailBlock title="20 EMA System">
             {score?.tradingSystems ? (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 {[
-                  ["Base S/R Signal", score.tradingSystems.emaSystem.baseSrSignal],
-                  [
-                    "EMA Difference",
-                    score.tradingSystems.emaSystem.emaDifferencePct != null
-                      ? `${score.tradingSystems.emaSystem.emaDifference.toFixed(2)} (${score.tradingSystems.emaSystem.emaDifferencePct.toFixed(2)}%)`
-                      : "—",
-                  ],
-                  [
-                    "Stochastic Direction",
-                    score.tradingSystems.emaSystem.stochasticDirection,
-                  ],
-                  [
-                    "20 EMA Decision",
-                    score.tradingSystems.emaSystem.recommendation,
-                  ],
+                  ["Decision", score.tradingSystems.emaSystem.recommendation],
                   ["EMA Score", String(score.tradingSystems.emaSystem.emaScore)],
                   ["Tier", score.tradingSystems.emaSystem.tier],
                   ["Reason", score.tradingSystems.emaSystem.reason],
@@ -148,7 +130,7 @@ export function TradingAnalysisExpandedRow({
             )}
           </DetailBlock>
 
-          <DetailBlock title="Main System (Main Workflow)">
+          <DetailBlock title="Main System">
             {score?.tradingSystems ? (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 {[
@@ -160,7 +142,10 @@ export function TradingAnalysisExpandedRow({
                   ["Tier", score.tradingSystems.mainSystem.tier],
                   ["Reason", score.tradingSystems.mainSystem.reason],
                 ].map(([label, value]) => (
-                  <div key={label} className={label === "Reason" ? "col-span-2" : undefined}>
+                  <div
+                    key={label}
+                    className={label === "Reason" ? "col-span-2" : undefined}
+                  >
                     <dt className="text-terminal-muted">{label}</dt>
                     <dd className="font-mono text-terminal-text">{value}</dd>
                   </div>
@@ -176,13 +161,15 @@ export function TradingAnalysisExpandedRow({
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 {[
                   [
-                    "Confluence Score",
+                    "Score",
                     `${score.tradingSystems.confluence.score}/10`,
                   ],
-                  ["Status", score.tradingSystems.confluence.status],
                   ["Reason", score.tradingSystems.confluence.reason],
                 ].map(([label, value]) => (
-                  <div key={label} className={label === "Reason" ? "col-span-2" : undefined}>
+                  <div
+                    key={label}
+                    className={label === "Reason" ? "col-span-2" : undefined}
+                  >
                     <dt className="text-terminal-muted">{label}</dt>
                     <dd className="font-mono text-terminal-text">{value}</dd>
                   </div>
@@ -225,63 +212,6 @@ export function TradingAnalysisExpandedRow({
               <p className="text-xs text-terminal-muted">
                 Loading daily SO debug… (Length=10, K Smoothing=3)
               </p>
-            )}
-          </DetailBlock>
-
-          <DetailBlock title="Score Breakdown">
-            {score ? (
-              <ul className="space-y-1.5 text-xs">
-                {[
-                  { label: "Trend", result: score.trend },
-                  { label: "Stochastic", result: score.stochastic },
-                  { label: "EMA20", result: score.ema20 },
-                  { label: "Support / Resistance", result: score.supportResistance },
-                ].map(({ label, result }) => (
-                  <li
-                    key={label}
-                    className="flex items-start justify-between gap-3"
-                  >
-                    <span className="text-terminal-muted">{label}</span>
-                    <span
-                      className={cn(
-                        "font-mono text-right",
-                        passFailClass(result.passed)
-                      )}
-                      title={result.reason}
-                    >
-                      {formatScoreFraction(result.score, result.maxScore)}
-                    </span>
-                  </li>
-                ))}
-                <li className="flex items-center justify-between gap-3 border-t border-terminal-border/50 pt-1.5 font-medium">
-                  <span className="text-terminal-text">Total</span>
-                  <span className="font-mono text-terminal-text">
-                    {score.totalScore}/{SCORE_WEIGHTS.total}
-                  </span>
-                </li>
-              </ul>
-            ) : (
-              <p className="text-xs text-terminal-muted">No score data</p>
-            )}
-            {rec?.scoreBreakdown && (
-              <ul className="mt-2 space-y-1 border-t border-terminal-border/40 pt-2 text-[11px] text-terminal-muted">
-                {rec.scoreBreakdown.map((item) => (
-                  <li key={item.category} title={item.reason}>
-                    · {item.category}: {item.reason}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </DetailBlock>
-
-          <DetailBlock title="Reason">
-            {rec ? (
-              <div className="space-y-2 text-xs leading-relaxed">
-                <p className="text-terminal-text">{rec.primaryReason}</p>
-                <p className="text-terminal-muted">{rec.passFailExplanation}</p>
-              </div>
-            ) : (
-              <p className="text-xs text-terminal-muted">—</p>
             )}
           </DetailBlock>
 

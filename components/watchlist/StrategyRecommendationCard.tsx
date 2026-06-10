@@ -6,10 +6,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
-import { formatScoreFraction } from "@/lib/watchlist/format";
+import { formatScore } from "@/lib/watchlist/format";
 import type { ScannerScoreResult } from "@/lib/watchlist/scanner-result";
-import { cn } from "@/lib/utils";
-import { DecisionBadge } from "./DecisionBadge";
 
 interface StrategyRecommendationCardProps {
   ticker: string;
@@ -36,6 +34,7 @@ export function StrategyRecommendationCard({
   score,
 }: StrategyRecommendationCardProps) {
   const rec = score.recommendation;
+  const ts = score.tradingSystems;
 
   return (
     <Card variant="bordered" className="h-full">
@@ -43,102 +42,75 @@ export function StrategyRecommendationCard({
         <div className="flex items-start justify-between gap-2">
           <div>
             <CardTitle className="font-mono text-base">{ticker}</CardTitle>
-            <CardDescription>Phase 6 strategy recommendation</CardDescription>
+            <CardDescription>Independent system scores</CardDescription>
           </div>
           <Badge variant={strategyVariant(rec.recommendedStrategy)}>
             {rec.recommendedStrategy}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 text-xs">
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-terminal-muted">
-              Total Score
-            </p>
-            <p className="font-mono font-semibold text-terminal-text">
-              {rec.totalScore}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-terminal-muted">
-              Decision
-            </p>
-            <DecisionBadge label={rec.decisionLabel} />
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-terminal-muted">
-              Action
-            </p>
-            <p className="font-medium text-terminal-text">{rec.actionLabel}</p>
-          </div>
-        </div>
-
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-terminal-muted mb-1">
-            Primary Reason
-          </p>
-          <p className="text-terminal-text leading-relaxed">{rec.primaryReason}</p>
-        </div>
-
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-terminal-muted mb-1">
-            Pass / Fail Explanation
-          </p>
-          <p className="text-terminal-muted leading-relaxed">
-            {rec.passFailExplanation}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-terminal-muted mb-1">
-            Score Breakdown
-          </p>
-          <ul className="space-y-1">
-            {rec.scoreBreakdown.map((item) => (
-              <li
-                key={item.category}
-                className="flex items-center justify-between gap-2"
-                title={item.reason}
-              >
-                <span className="text-terminal-muted">{item.category}</span>
-                <span
-                  className={cn(
-                    "font-mono",
-                    item.passed ? "text-profit" : "text-terminal-muted"
-                  )}
-                >
-                  {formatScoreFraction(item.score, item.maxScore)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {(rec.sellPutEligible || rec.sellCallEligible) && (
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-terminal-muted mb-1">
-              Future Strategy Eligibility
-            </p>
-            <ul className="space-y-1">
-              {rec.sellPutEligible && (
-                <li className="text-profit leading-relaxed">· Sell Put Eligible</li>
-              )}
-              {rec.sellCallEligible && (
-                <li className="text-profit leading-relaxed">· Sell Call Eligible</li>
-              )}
-            </ul>
-            {!rec.sellPutEligible && (
-              <p className="mt-1 text-terminal-muted leading-relaxed">
-                {rec.sellPutReason}
+      <CardContent className="space-y-4 text-xs">
+        {ts ? (
+          <>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-terminal-muted mb-1">
+                Main System
               </p>
-            )}
-            {!rec.sellCallEligible && (
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+                <dt className="text-terminal-muted">Decision</dt>
+                <dd className="font-mono text-terminal-text">
+                  {ts.mainSystem.recommendation}
+                </dd>
+                <dt className="text-terminal-muted">Strategy Fit</dt>
+                <dd className="font-mono text-terminal-text">
+                  {formatScore(ts.mainSystem.strategyFitScore)}
+                </dd>
+                <dt className="text-terminal-muted">Tier</dt>
+                <dd className="text-terminal-text">{ts.mainSystem.tier}</dd>
+              </dl>
               <p className="mt-1 text-terminal-muted leading-relaxed">
-                {rec.sellCallReason}
+                {ts.mainSystem.reason}
               </p>
-            )}
-          </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-terminal-muted mb-1">
+                20 EMA System
+              </p>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+                <dt className="text-terminal-muted">Decision</dt>
+                <dd className="font-mono text-terminal-text">
+                  {ts.emaSystem.recommendation}
+                </dd>
+                <dt className="text-terminal-muted">EMA Score</dt>
+                <dd className="font-mono text-terminal-text">
+                  {formatScore(ts.emaSystem.emaScore)}
+                </dd>
+                <dt className="text-terminal-muted">Tier</dt>
+                <dd className="text-terminal-text">{ts.emaSystem.tier}</dd>
+              </dl>
+              <p className="mt-1 text-terminal-muted leading-relaxed">
+                {ts.emaSystem.reason}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-terminal-muted mb-1">
+                Confluence
+              </p>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+                <dt className="text-terminal-muted">Score</dt>
+                <dd className="font-mono text-terminal-text">
+                  {ts.confluence.score}/10
+                </dd>
+              </dl>
+              <p className="mt-1 text-terminal-muted leading-relaxed">
+                {ts.confluence.reason}
+              </p>
+            </div>
+          </>
+        ) : (
+          <p className="text-terminal-muted">No trading system data</p>
         )}
 
         {rec.warningNotes.length > 0 && (

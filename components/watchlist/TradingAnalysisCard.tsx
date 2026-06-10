@@ -18,7 +18,6 @@ import {
 } from "@/lib/watchlist/format";
 import { cn, formatPercent } from "@/lib/utils";
 import { DirectionIndicator } from "./DirectionIndicator";
-import { DecisionBadge } from "./DecisionBadge";
 
 interface TradingAnalysisCardProps {
   model: TradingAnalysisViewModel;
@@ -126,13 +125,18 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
-            {model.totalScore != null && (
+            {model.strategyFitScore != null && (
               <span className="font-mono text-sm font-semibold text-terminal-text">
-                {formatScore(model.totalScore)}
+                Main {formatScore(model.strategyFitScore)}
               </span>
             )}
-            {model.decisionLabel && (
-              <DecisionBadge label={model.decisionLabel} />
+            {model.emaSystemScore != null && (
+              <span className="font-mono text-xs text-terminal-muted">
+                EMA {formatScore(model.emaSystemScore)}
+                {model.confluenceScore != null
+                  ? ` · C ${model.confluenceScore}/10`
+                  : ""}
+              </span>
             )}
           </div>
         </div>
@@ -297,17 +301,8 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             />
           </Section>
 
-          <Section title="6. Dual System Scores">
-            <Field label="20 EMA System" value={model.emaRecommendation} />
-            <Field
-              label="EMA Score"
-              value={
-                model.emaSystemScore != null
-                  ? formatScore(model.emaSystemScore)
-                  : "—"
-              }
-            />
-            <Field label="Main System" value={model.mainRecommendation} />
+          <Section title="6. Main System">
+            <Field label="Decision" value={model.mainRecommendation} />
             <Field
               label="Strategy Fit Score"
               value={
@@ -316,38 +311,49 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
                   : "—"
               }
             />
+            <Field label="Tier" value={model.mainTier} />
             <Field
-              label="Confluence"
+              label="Reason"
+              value={model.mainReason}
+              className="col-span-2"
+            />
+          </Section>
+
+          <Section title="7. 20 EMA System">
+            <Field label="Decision" value={model.emaRecommendation} />
+            <Field
+              label="EMA Score"
+              value={
+                model.emaSystemScore != null
+                  ? formatScore(model.emaSystemScore)
+                  : "—"
+              }
+            />
+            <Field label="Tier" value={model.emaTier} />
+            <Field
+              label="Reason"
+              value={model.emaReason}
+              className="col-span-2"
+            />
+          </Section>
+
+          <Section title="8. Confluence">
+            <Field
+              label="Score"
               value={
                 model.confluenceScore != null
                   ? `${model.confluenceScore}/10`
                   : "—"
               }
             />
-            <Field label="Confluence Status" value={model.confluenceStatus} />
             <Field
-              label="Decision Reason"
-              value={model.decisionReason}
+              label="Reason"
+              value={model.confluenceReason}
               className="col-span-2"
             />
           </Section>
 
-          <Section title="7. Component Breakdown">
-            <Field
-              label="Trend Score"
-              value={model.trendScore != null ? formatScore(model.trendScore) : "—"}
-            />
-            <Field
-              label="SO Score"
-              value={model.soScore != null ? formatScore(model.soScore) : "—"}
-            />
-            <Field
-              label="S/R Score"
-              value={model.srScore != null ? formatScore(model.srScore) : "—"}
-            />
-          </Section>
-
-          <Section title="8. Recommendation">
+          <Section title="9. Recommendation">
             <Field
               label="Strategy"
               value={
@@ -382,7 +388,7 @@ export function TradingAnalysisCard({ model }: TradingAnalysisCardProps) {
             )}
           </Section>
 
-          <Section title="9. Weekend Review Status">
+          <Section title="10. Weekend Review Status">
             <Field
               label="Updated This Weekend"
               value={boolLabel(model.weekendReview.updatedThisWeekend)}

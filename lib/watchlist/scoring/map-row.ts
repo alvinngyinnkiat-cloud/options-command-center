@@ -73,29 +73,7 @@ export function scoreWatchlistRow(
     actionLabel: mainDecision,
     action: decisionToAction(mainDecision),
     passFailExplanation: tradingSystems.decisionReason,
-    scoreBreakdown: [
-      {
-        category: "Trend",
-        score: componentScore.trend.score,
-        maxScore: componentScore.trend.maxScore,
-        passed: componentScore.trend.passed,
-        reason: componentScore.trend.reason,
-      },
-      {
-        category: "Stochastic",
-        score: componentScore.stochastic.score,
-        maxScore: componentScore.stochastic.maxScore,
-        passed: componentScore.stochastic.passed,
-        reason: componentScore.stochastic.reason,
-      },
-      {
-        category: "S/R",
-        score: componentScore.supportResistance.score,
-        maxScore: componentScore.supportResistance.maxScore,
-        passed: componentScore.supportResistance.passed,
-        reason: componentScore.supportResistance.reason,
-      },
-    ],
+    scoreBreakdown: [],
     primaryReason: mainSystem.reason,
     warningNotes:
       emaSystem.recommendation !== mainSystem.recommendation &&

@@ -23,7 +23,7 @@ interface TradingAnalysisScannerGridProps {
   emptyMessage?: string;
 }
 
-const COLUMN_COUNT = 11;
+const COLUMN_COUNT = 10;
 
 export function TradingAnalysisScannerGrid({
   rows,
@@ -77,8 +77,7 @@ export function TradingAnalysisScannerGrid({
             <th className="px-3 py-3 font-medium">Main Decision</th>
             <th className="px-3 py-3 font-medium text-right">Strategy Fit</th>
             <th className="px-3 py-3 font-medium text-right">Confluence</th>
-            <th className="px-3 py-3 font-medium">Confluence Status</th>
-            <th className="px-3 py-3 font-medium">Decision Reason</th>
+            <th className="px-3 py-3 font-medium">Confluence Reason</th>
           </tr>
         </thead>
         <tbody>
@@ -136,14 +135,11 @@ export function TradingAnalysisScannerGrid({
                       ? `${model.confluenceScore}/10`
                       : "—"}
                   </td>
-                  <td className="px-3 py-3 text-xs text-terminal-muted whitespace-nowrap">
-                    {model.confluenceStatus}
-                  </td>
                   <td
-                    className="px-3 py-3 text-xs text-terminal-muted max-w-[240px] truncate"
-                    title={model.decisionReason}
+                    className="px-3 py-3 text-xs text-terminal-muted max-w-[280px] truncate"
+                    title={model.confluenceReason}
                   >
-                    {model.decisionReason}
+                    {model.confluenceReason}
                   </td>
                 </tr>
                 {expanded && (
