@@ -2,7 +2,11 @@ import type { TradingSystemRecommendation } from "@/lib/watchlist/trading-system
 
 export type StochasticMomentum = "ROLLING UP" | "ROLLING DOWN" | "STRONG";
 
-/** Classify SO momentum from completed daily bars (current vs previous). */
+export type SoDirection = "Rising" | "Falling" | "Flat";
+
+export type SoConfirmationStatus = "PASS" | "FAIL";
+
+/** Classify SO momentum from completed daily bars (current vs previous). Main System only. */
 export function classifyStochasticMomentum(
   currentSo: number,
   previousSo: number | null
@@ -11,6 +15,16 @@ export function classifyStochasticMomentum(
   if (previousSo < 25 && currentSo > previousSo) return "ROLLING UP";
   if (previousSo > 75 && currentSo < previousSo) return "ROLLING DOWN";
   return "STRONG";
+}
+
+export function classifySoDirection(
+  currentSo: number,
+  previousSo: number | null
+): SoDirection {
+  if (previousSo == null) return "Flat";
+  if (currentSo > previousSo) return "Rising";
+  if (currentSo < previousSo) return "Falling";
+  return "Flat";
 }
 
 export function formatMomentumStatus(momentum: StochasticMomentum): string {
@@ -25,20 +39,46 @@ export function isCallMomentumConfirmed(momentum: StochasticMomentum): boolean {
   return momentum === "ROLLING DOWN";
 }
 
-/** 20 EMA — Sell Put: ROLLING UP or SO oversold. */
+/**
+ * 20 EMA Sell Put — SO turning up from oversold:
+ * current > previous AND (current < 25 OR previous < 25).
+ */
 export function isEmaPutStochasticConfirmed(
-  momentum: StochasticMomentum,
-  currentSo: number
+  currentSo: number,
+  previousSo: number | null
 ): boolean {
-  return momentum === "ROLLING UP" || currentSo < 25;
+  if (previousSo == null) return false;
+  return (
+    currentSo > previousSo && (currentSo < 25 || previousSo < 25)
+  );
 }
 
-/** 20 EMA — Sell Call: ROLLING DOWN or SO overbought. */
+/**
+ * 20 EMA Sell Call — SO turning down from overbought:
+ * current < previous AND (current > 75 OR previous > 75).
+ */
 export function isEmaCallStochasticConfirmed(
-  momentum: StochasticMomentum,
-  currentSo: number
+  currentSo: number,
+  previousSo: number | null
 ): boolean {
-  return momentum === "ROLLING DOWN" || currentSo > 75;
+  if (previousSo == null) return false;
+  return (
+    currentSo < previousSo && (currentSo > 75 || previousSo > 75)
+  );
+}
+
+export function evaluateEmaSoTurningUp(
+  currentSo: number,
+  previousSo: number | null
+): SoConfirmationStatus {
+  return isEmaPutStochasticConfirmed(currentSo, previousSo) ? "PASS" : "FAIL";
+}
+
+export function evaluateEmaSoTurningDown(
+  currentSo: number,
+  previousSo: number | null
+): SoConfirmationStatus {
+  return isEmaCallStochasticConfirmed(currentSo, previousSo) ? "PASS" : "FAIL";
 }
 
 /** Main System momentum confirmation score (0 or 20). */
@@ -51,20 +91,17 @@ export function mainSystemMomentumScore(
   return 0;
 }
 
-/** 20 EMA System stochastic contribution (no Iron Condor). */
+/** 20 EMA System stochastic contribution — directional confirmation only. */
 export function emaSystemStochasticScore(
   recommendation: Extract<TradingSystemRecommendation, "Sell Put" | "Sell Call" | "No Trade">,
-  momentum: StochasticMomentum
+  currentSo: number,
+  previousSo: number | null
 ): number {
-  if (recommendation === "Sell Put") {
-    if (momentum === "ROLLING UP") return 30;
-    if (momentum === "STRONG") return 15;
-    return 0;
+  if (recommendation === "Sell Put" || recommendation === "No Trade") {
+    if (isEmaPutStochasticConfirmed(currentSo, previousSo)) return 30;
   }
   if (recommendation === "Sell Call") {
-    if (momentum === "ROLLING DOWN") return 30;
-    if (momentum === "STRONG") return 15;
-    return 0;
+    if (isEmaCallStochasticConfirmed(currentSo, previousSo)) return 30;
   }
   return 0;
 }

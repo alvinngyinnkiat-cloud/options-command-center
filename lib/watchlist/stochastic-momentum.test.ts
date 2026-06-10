@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifySoDirection,
   classifyStochasticMomentum,
+  evaluateEmaSoTurningDown,
+  evaluateEmaSoTurningUp,
   isCallMomentumConfirmed,
   isEmaCallStochasticConfirmed,
   isEmaPutStochasticConfirmed,
@@ -22,6 +25,14 @@ describe("classifyStochasticMomentum V3", () => {
   });
 });
 
+describe("classifySoDirection", () => {
+  it("detects rising, falling, and flat SO", () => {
+    expect(classifySoDirection(22, 18)).toBe("Rising");
+    expect(classifySoDirection(3.6, 19.8)).toBe("Falling");
+    expect(classifySoDirection(50, 50)).toBe("Flat");
+  });
+});
+
 describe("momentum confirmation", () => {
   it("main put requires ROLLING UP only", () => {
     expect(isPutMomentumConfirmed("ROLLING UP")).toBe(true);
@@ -33,16 +44,31 @@ describe("momentum confirmation", () => {
     expect(isCallMomentumConfirmed("STRONG")).toBe(false);
   });
 
-  it("20 EMA put accepts ROLLING UP or SO below 25", () => {
-    expect(isEmaPutStochasticConfirmed("ROLLING UP", 40)).toBe(true);
-    expect(isEmaPutStochasticConfirmed("STRONG", 22)).toBe(true);
-    expect(isEmaPutStochasticConfirmed("STRONG", 30)).toBe(false);
+  it("20 EMA put requires rising SO from oversold zone", () => {
+    expect(isEmaPutStochasticConfirmed(22, 18)).toBe(true);
+    expect(isEmaPutStochasticConfirmed(22, 21)).toBe(true);
+    expect(isEmaPutStochasticConfirmed(30, 28)).toBe(false);
+    expect(isEmaPutStochasticConfirmed(3.6, 19.8)).toBe(false);
   });
 
-  it("20 EMA call accepts ROLLING DOWN or SO above 75", () => {
-    expect(isEmaCallStochasticConfirmed("ROLLING DOWN", 50)).toBe(true);
-    expect(isEmaCallStochasticConfirmed("STRONG", 80)).toBe(true);
-    expect(isEmaCallStochasticConfirmed("STRONG", 70)).toBe(false);
+  it("20 EMA call requires falling SO from overbought zone", () => {
+    expect(isEmaCallStochasticConfirmed(69, 82)).toBe(true);
+    expect(isEmaCallStochasticConfirmed(80, 85)).toBe(true);
+    expect(isEmaCallStochasticConfirmed(70, 68)).toBe(false);
+  });
+
+  it("INTU — falling SO fails turning up", () => {
+    expect(evaluateEmaSoTurningUp(3.6, 19.8)).toBe("FAIL");
+    expect(classifySoDirection(3.6, 19.8)).toBe("Falling");
+  });
+
+  it("SO below 25 alone does not approve Sell Put", () => {
+    expect(isEmaPutStochasticConfirmed(3.6, 19.8)).toBe(false);
+    expect(isEmaPutStochasticConfirmed(20, 22)).toBe(false);
+  });
+
+  it("SO above 75 alone does not approve Sell Call", () => {
+    expect(isEmaCallStochasticConfirmed(80, 78)).toBe(false);
   });
 });
 

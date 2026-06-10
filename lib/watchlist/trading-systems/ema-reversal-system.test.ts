@@ -87,26 +87,42 @@ describe("20 EMA system — stochastic confirmation", () => {
     expect(isCallEmaConfirmation(-2)).toBe(true);
   });
 
-  it("confirms Sell Put when in support zone and SO below 25", () => {
+  it("confirms Sell Put when SO is rising from oversold", () => {
     const result = computeEmaReversalSystem({
       ...PUT_EMA_SETUP,
       stochastic: 22,
-      previousStochastic: 21,
+      previousStochastic: 18,
     });
     expect(result.baseSrSignal).toBe("Sell Put");
+    expect(result.soTurningUp).toBe("PASS");
     if (result.emaScore >= 75) {
       expect(result.recommendation).toBe("Sell Put");
     }
   });
 
-  it("rejects Sell Put when STRONG and SO not below 25", () => {
+  it("rejects Sell Put when SO is not turning up", () => {
     const result = computeEmaReversalSystem({
       ...PUT_EMA_SETUP,
       stochastic: 30,
       previousStochastic: 28,
     });
     expect(result.recommendation).toBe("No Trade");
-    expect(result.reason).toContain("SO not rolling up");
+    expect(result.reason).toContain("SO not turning up");
+  });
+
+  it("INTU — falling SO blocks Sell Put even in support zone", () => {
+    const intu: TradingSystemsInput = {
+      ...PUT_EMA_SETUP,
+      ticker: "INTU",
+      stochastic: 3.6,
+      previousStochastic: 19.8,
+    };
+    const result = computeEmaReversalSystem(intu);
+    expect(result.baseSrSignal).toBe("Sell Put");
+    expect(result.soDirection).toBe("Falling");
+    expect(result.soTurningUp).toBe("FAIL");
+    expect(result.recommendation).toBe("No Trade");
+    expect(result.reason).toContain("SO not turning up");
   });
 
   it("confirms Sell Call when in resistance zone", () => {

@@ -60,6 +60,9 @@ describe("computeConfluence", () => {
         emaDifference: 1,
         emaDifferencePct: 0.5,
         momentumStatus: "STRONG",
+        soDirection: "Flat",
+        soTurningUp: "FAIL",
+        soTurningDown: "FAIL",
       },
       {
         recommendation: "Sell Put",
@@ -87,6 +90,9 @@ describe("computeConfluence", () => {
         emaDifference: 0,
         emaDifferencePct: 0,
         momentumStatus: "STRONG",
+        soDirection: "Flat",
+        soTurningUp: "FAIL",
+        soTurningDown: "FAIL",
       },
       {
         recommendation: "No Trade",

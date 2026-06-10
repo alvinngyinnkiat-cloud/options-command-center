@@ -175,7 +175,15 @@ export function TradingAnalysisExpandedRow({
                       : "—",
                   ],
                   ["Current SO", formatStochastic(model.soValue)],
-                  ["Momentum", score.tradingSystems.emaSystem.momentumStatus],
+                  ["SO Direction", score.tradingSystems.emaSystem.soDirection],
+                  [
+                    "SO Turning Up",
+                    score.tradingSystems.emaSystem.soTurningUp,
+                  ],
+                  [
+                    "SO Turning Down",
+                    score.tradingSystems.emaSystem.soTurningDown,
+                  ],
                   ["EMA Score", String(score.tradingSystems.emaSystem.emaScore)],
                   ["Decision", score.tradingSystems.emaSystem.recommendation],
                   ["Reason", score.tradingSystems.emaSystem.reason],

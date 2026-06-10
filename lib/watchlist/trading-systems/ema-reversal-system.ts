@@ -8,8 +8,11 @@ import {
   calculateAdjustedSupport,
 } from "@/lib/watchlist/support-resistance-atr";
 import {
+  classifySoDirection,
   classifyStochasticMomentum,
   emaSystemStochasticScore,
+  evaluateEmaSoTurningDown,
+  evaluateEmaSoTurningUp,
   isEmaCallStochasticConfirmed,
   isEmaPutStochasticConfirmed,
 } from "@/lib/watchlist/stochastic-momentum";
@@ -192,19 +195,36 @@ export function computeBaseSrSignal(input: TradingSystemsInput): BaseSrSignalRes
 function momentumScoreForEmaSystem(input: {
   recommendation: EmaReversalSystemResult["recommendation"];
   baseSrSignal: BaseSrSignal;
-  momentum: ReturnType<typeof classifyStochasticMomentum>;
+  currentSo: number;
+  previousSo: number | null;
 }): number {
   if (input.recommendation === "Sell Put") {
-    return emaSystemStochasticScore("Sell Put", input.momentum);
+    return emaSystemStochasticScore(
+      "Sell Put",
+      input.currentSo,
+      input.previousSo
+    );
   }
   if (input.recommendation === "Sell Call") {
-    return emaSystemStochasticScore("Sell Call", input.momentum);
+    return emaSystemStochasticScore(
+      "Sell Call",
+      input.currentSo,
+      input.previousSo
+    );
   }
   if (input.baseSrSignal === "Sell Put") {
-    return emaSystemStochasticScore("Sell Put", input.momentum);
+    return emaSystemStochasticScore(
+      "Sell Put",
+      input.currentSo,
+      input.previousSo
+    );
   }
   if (input.baseSrSignal === "Sell Call") {
-    return emaSystemStochasticScore("Sell Call", input.momentum);
+    return emaSystemStochasticScore(
+      "Sell Call",
+      input.currentSo,
+      input.previousSo
+    );
   }
   return 0;
 }
@@ -286,13 +306,25 @@ export function computeEmaReversalSystem(
     input.stochastic,
     input.previousStochastic
   );
+  const soDirection = classifySoDirection(
+    input.stochastic,
+    input.previousStochastic
+  );
+  const soTurningUp = evaluateEmaSoTurningUp(
+    input.stochastic,
+    input.previousStochastic
+  );
+  const soTurningDown = evaluateEmaSoTurningDown(
+    input.stochastic,
+    input.previousStochastic
+  );
   const putStochasticOk = isEmaPutStochasticConfirmed(
-    momentumStatus,
-    input.stochastic
+    input.stochastic,
+    input.previousStochastic
   );
   const callStochasticOk = isEmaCallStochasticConfirmed(
-    momentumStatus,
-    input.stochastic
+    input.stochastic,
+    input.previousStochastic
   );
 
   const putEmaOk = isPutEmaConfirmation(differencePct);
@@ -303,12 +335,10 @@ export function computeEmaReversalSystem(
 
   if (baseSrSignal === "Sell Put" && putEmaOk && putStochasticOk) {
     recommendation = "Sell Put";
-    reason =
-      "S/R base Sell Put, EMA timing confirmed, rolling up or SO oversold";
+    reason = "S/R base Sell Put, EMA timing confirmed, SO turning up";
   } else if (baseSrSignal === "Sell Call" && callEmaOk && callStochasticOk) {
     recommendation = "Sell Call";
-    reason =
-      "S/R base Sell Call, EMA timing confirmed, rolling down or SO overbought";
+    reason = "S/R base Sell Call, EMA timing confirmed, SO turning down";
   } else if (baseSrSignal === "No Trade") {
     reason = baseSrReason;
   } else {
@@ -320,7 +350,7 @@ export function computeEmaReversalSystem(
         );
       }
       if (!putStochasticOk) {
-        misses.push("SO not rolling up and SO not below 25");
+        misses.push("SO not turning up");
       }
     }
     if (baseSrSignal === "Sell Call") {
@@ -330,7 +360,7 @@ export function computeEmaReversalSystem(
         );
       }
       if (!callStochasticOk) {
-        misses.push("SO not rolling down and SO not above 75");
+        misses.push("SO not turning down");
       }
     }
     reason = misses.length > 0 ? misses.join("; ") : baseSrReason;
@@ -343,7 +373,8 @@ export function computeEmaReversalSystem(
   const momentumScore = momentumScoreForEmaSystem({
     recommendation,
     baseSrSignal,
-    momentum: momentumStatus,
+    currentSo: input.stochastic,
+    previousSo: input.previousStochastic,
   });
 
   const emaScore = computeEmaReversalScore({
@@ -370,6 +401,9 @@ export function computeEmaReversalSystem(
     emaDifference: difference,
     emaDifferencePct: differencePct,
     momentumStatus,
+    soDirection,
+    soTurningUp,
+    soTurningDown,
   };
 
   if (emaScore < EMA_SCORE_MIN) {

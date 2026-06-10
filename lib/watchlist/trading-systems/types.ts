@@ -1,4 +1,4 @@
-import type { StochasticMomentum } from "@/lib/watchlist/stochastic-momentum";
+import type { StochasticMomentum, SoConfirmationStatus, SoDirection } from "@/lib/watchlist/stochastic-momentum";
 
 /** Shared recommendation labels across both trading systems. */
 export type TradingSystemRecommendation =
@@ -62,6 +62,9 @@ export interface EmaReversalSystemResult {
   emaDifference: number;
   emaDifferencePct: number | null;
   momentumStatus: StochasticMomentum;
+  soDirection: SoDirection;
+  soTurningUp: SoConfirmationStatus;
+  soTurningDown: SoConfirmationStatus;
 }
 
 export interface MainTradingSystemResult {
