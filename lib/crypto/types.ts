@@ -14,6 +14,8 @@ export interface CryptoHoldingFormInput {
   totalInvestedSgd: number;
   currentValueSgd: number;
   notes: string | null;
+  /** ISO date (YYYY-MM-DD) — closed date when current value is zero. */
+  lastUpdated?: string;
 }
 
 export interface CryptoHoldingMetrics {

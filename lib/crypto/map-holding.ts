@@ -51,6 +51,34 @@ export function enrichAllCryptoHoldings(
     .sort((a, b) => b.currentValueSgd - a.currentValueSgd);
 }
 
+export function cryptoHoldingFormFromEnriched(
+  holding: EnrichedCryptoHolding
+): CryptoHoldingFormInput {
+  return {
+    assetLabel: holding.assetLabel,
+    ticker: holding.ticker,
+    totalInvestedSgd: holding.totalInvestedSgd,
+    currentValueSgd: holding.currentValueSgd,
+    notes: holding.notes,
+    lastUpdated: holding.lastUpdated,
+  };
+}
+
+/** Normalize form before persist — reopen/open uses today; closed keeps closed date. */
+export function prepareCryptoHoldingFormForSave(
+  input: CryptoHoldingFormInput,
+  existingLastUpdated?: string
+): CryptoHoldingFormInput {
+  const today = new Date().toISOString().split("T")[0];
+  if (input.currentValueSgd > 0) {
+    return { ...input, lastUpdated: today };
+  }
+  return {
+    ...input,
+    lastUpdated: input.lastUpdated ?? existingLastUpdated ?? today,
+  };
+}
+
 export function cryptoRowFromForm(
   input: CryptoHoldingFormInput,
   userId: string,
@@ -67,7 +95,7 @@ export function cryptoRowFromForm(
     total_invested_sgd: input.totalInvestedSgd,
     current_value_sgd: input.currentValueSgd,
     notes: input.notes,
-    last_updated: today,
+    last_updated: input.lastUpdated ?? today,
     created_at: existingCreatedAt ?? now,
     updated_at: now,
   };

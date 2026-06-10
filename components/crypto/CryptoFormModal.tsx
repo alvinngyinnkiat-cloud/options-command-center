@@ -8,6 +8,10 @@ import {
 import { Button } from "@/components/ui/Button";
 import { buildCryptoHoldingMetrics } from "@/lib/crypto/calculations";
 import { CRYPTO_ASSET_OPTIONS } from "@/lib/crypto/constants";
+import {
+  cryptoHoldingFormFromEnriched,
+  prepareCryptoHoldingFormForSave,
+} from "@/lib/crypto/map-holding";
 import type {
   CryptoAssetLabel,
   CryptoHoldingFormInput,
@@ -34,13 +38,7 @@ function emptyForm(): CryptoHoldingFormInput {
 }
 
 function formFromHolding(h: EnrichedCryptoHolding): CryptoHoldingFormInput {
-  return {
-    assetLabel: h.assetLabel,
-    ticker: h.ticker,
-    totalInvestedSgd: h.totalInvestedSgd,
-    currentValueSgd: h.currentValueSgd,
-    notes: h.notes,
-  };
+  return cryptoHoldingFormFromEnriched(h);
 }
 
 export function CryptoFormModal({
@@ -85,13 +83,17 @@ export function CryptoFormModal({
     e.preventDefault();
     setSaving(true);
     setError(null);
+    const payload = prepareCryptoHoldingFormForSave(
+      form,
+      holding?.lastUpdated
+    );
     const result = isEdit
       ? await updateCryptoHolding(
           holding!.id,
-          form,
+          payload,
           holding!.createdAt
         )
-      : await createCryptoHolding(form);
+      : await createCryptoHolding(payload);
     setSaving(false);
     if (!result.success) {
       setError(result.error);
