@@ -111,6 +111,7 @@ export function buildCryptoPortfolioManualState(input: {
   cryptoHoldingsValueSgd: number;
   cryptoCashSgd: number;
   totalContributionsSgd: number;
+  totalFeesPaidSgd?: number;
 }): CryptoPortfolioManualState {
   const totalCryptoPortfolioValueSgd =
     input.cryptoHoldingsValueSgd + input.cryptoCashSgd;
@@ -128,6 +129,7 @@ export function buildCryptoPortfolioManualState(input: {
       profitLossSgd,
       input.totalContributionsSgd
     ),
+    totalFeesPaidSgd: input.totalFeesPaidSgd ?? 0,
   };
 }
 

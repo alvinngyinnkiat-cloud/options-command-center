@@ -168,10 +168,9 @@ export function buildCryptoDeploymentPlan(
 export function buildCoinHoldingsTotal(
   holdings: EnrichedCryptoHolding[]
 ): number {
-  return coinHoldingsOnly(holdings).reduce(
-    (s, h) => s + h.currentValueSgd,
-    0
-  );
+  return coinHoldingsOnly(holdings)
+    .filter((h) => h.currentValueSgd > 0)
+    .reduce((s, h) => s + h.currentValueSgd, 0);
 }
 
 export function splitOpenClosedHoldings(

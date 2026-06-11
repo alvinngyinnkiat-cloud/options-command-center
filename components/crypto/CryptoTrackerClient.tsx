@@ -6,23 +6,31 @@ import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { splitOpenClosedHoldings } from "@/lib/crypto/allocation";
 import type { CryptoTrackerData, EnrichedCryptoHolding } from "@/lib/crypto/types";
-import { Plus } from "lucide-react";
-import { CryptoFormModal } from "./CryptoFormModal";
+import { Banknote, PlusCircle, ShoppingCart } from "lucide-react";
 import { CryptoHoldingsTable } from "./CryptoHoldingsTable";
+import { CryptoManualAdjustmentModal } from "./CryptoManualAdjustmentModal";
 import { CryptoManualPortfolioCard } from "./CryptoManualPortfolioCard";
 import { CryptoSummaryCards } from "./CryptoSummaryCards";
 import { CryptoAllocationChart } from "./CryptoAllocationChart";
 import { CryptoHoldingsByTier } from "./CryptoHoldingsByTier";
 import { CryptoDeploymentPlanner } from "./CryptoDeploymentPlanner";
+import {
+  CryptoTransactionModals,
+  type ModalKind,
+} from "./CryptoTransactionModals";
+import { CryptoTransactionHistoryTable } from "./CryptoTransactionHistoryTable";
 
 interface CryptoTrackerClientProps {
   initialData: CryptoTrackerData;
 }
 
 export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
-  const [formHolding, setFormHolding] = useState<
-    EnrichedCryptoHolding | null | undefined
-  >(undefined);
+  const [txModal, setTxModal] = useState<ModalKind | null>(null);
+  const [sellHolding, setSellHolding] = useState<EnrichedCryptoHolding | null>(
+    null
+  );
+  const [adjustHolding, setAdjustHolding] =
+    useState<EnrichedCryptoHolding | null>(null);
 
   const { open, closed } = useMemo(
     () => splitOpenClosedHoldings(initialData.holdings),
@@ -33,32 +41,50 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
     window.location.reload();
   }
 
+  function openSell(h: EnrichedCryptoHolding) {
+    setSellHolding(h);
+    setTxModal("sell");
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Crypto Trade Tracker"
-        description="Manual-only crypto tracking — enter SGD values directly. No live price feed."
+        description="Transaction-based crypto portfolio — deposits, buys, sells, and manual corrections."
         actions={
           <>
-            <Badge variant="outline">Manual Update</Badge>
+            <Badge variant="outline">V4 Transactions</Badge>
             <Badge
-              variant={initialData.dataSource === "supabase" ? "success" : "outline"}
+              variant={
+                initialData.dataSource === "supabase" ? "success" : "outline"
+              }
             >
               {initialData.dataSource === "supabase" ? "Saved" : "Mock data"}
             </Badge>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setFormHolding(null)}
-            >
-              <Plus className="h-4 w-4" />
-              Add Holding
-            </Button>
           </>
         }
       />
 
       <CryptoSummaryCards portfolioManual={initialData.portfolioManual} />
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" size="sm" onClick={() => setTxModal("deposit")}>
+          <Banknote className="h-4 w-4" />
+          Deposit Cash
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setTxModal("monthly_contribution")}
+        >
+          <PlusCircle className="h-4 w-4" />
+          Monthly Contribution
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setTxModal("buy")}>
+          <ShoppingCart className="h-4 w-4" />
+          Buy Coin
+        </Button>
+      </div>
 
       <CryptoManualPortfolioCard
         portfolioManual={initialData.portfolioManual}
@@ -82,9 +108,10 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
         <CryptoHoldingsTable
           holdings={open}
           variant="open"
-          onEdit={(h) => setFormHolding(h)}
+          onAdjust={(h) => setAdjustHolding(h)}
+          onSell={openSell}
           onRefresh={handleRefresh}
-          emptyMessage="No open positions. Add a holding or set Current SGD above zero."
+          emptyMessage="No open positions. Buy a coin or adjust a closed position with Current SGD above zero."
         />
       </section>
 
@@ -96,23 +123,44 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
           holdings={closed}
           variant="closed"
           onRefresh={handleRefresh}
-          emptyMessage="No closed positions. Set Current SGD to zero to close a position."
+          emptyMessage="No closed positions. Sell down to zero or set Current SGD to zero."
         />
       </section>
 
-      {formHolding !== undefined && (
-        <CryptoFormModal
-          holding={formHolding}
-          onClose={() => setFormHolding(undefined)}
+      <section>
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
+          Transaction History
+        </h2>
+        <CryptoTransactionHistoryTable
+          transactions={initialData.transactions}
+          onRefresh={handleRefresh}
+        />
+      </section>
+
+      <CryptoTransactionModals
+        kind={txModal}
+        holding={sellHolding}
+        availableCashSgd={initialData.portfolioManual.cryptoCashSgd}
+        onClose={() => {
+          setTxModal(null);
+          setSellHolding(null);
+        }}
+        onSaved={handleRefresh}
+      />
+
+      {adjustHolding && (
+        <CryptoManualAdjustmentModal
+          holding={adjustHolding}
+          onClose={() => setAdjustHolding(null)}
           onSaved={handleRefresh}
         />
       )}
 
       <p className="text-[11px] text-terminal-muted">
-        Manual Portfolio is the source of truth for cash and contributions.
-        Allocation chart uses four tiers (Top Holding, 2nd–5th, 6th–10th,
-        Others). Positions with Current SGD &gt; 0 appear under Open Positions;
-        zero-value positions move to Closed Positions automatically.
+        Deployment Planner uses Available Exchange Cash only (50/25/15/10).
+        Portfolio Value = Coin Holdings Total + Exchange Cash. P/L = Portfolio
+        Value − Total Contributions. Current SGD = 0 moves positions to Closed;
+        Current SGD &gt; 0 restores to Open.
       </p>
     </div>
   );

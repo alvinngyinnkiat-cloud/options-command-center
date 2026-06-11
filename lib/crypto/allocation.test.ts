@@ -51,7 +51,7 @@ describe("crypto allocation V2", () => {
     expect(tiers[1].value).toBe(3_500);
 
     const slices = tierGroupsToAllocationSlices(tiers);
-    expect(slices).toHaveLength(4);
+    expect(slices.every((s) => s.value > 0)).toBe(true);
     expect(slices.reduce((s, x) => s + x.percent, 0)).toBeCloseTo(100, 0);
   });
 

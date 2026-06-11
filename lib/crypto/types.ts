@@ -1,5 +1,7 @@
 import type { DataSource } from "@/lib/portfolio/types";
 
+import type { CryptoTransaction } from "@/types/database";
+
 import type {
   CryptoAllocationSlice,
   CryptoDeploymentBucket,
@@ -55,6 +57,7 @@ export interface CryptoPortfolioManualState {
   totalContributionsSgd: number;
   profitLossSgd: number;
   returnPct: number;
+  totalFeesPaidSgd: number;
 }
 
 export interface CryptoTrackerData {
@@ -64,7 +67,41 @@ export interface CryptoTrackerData {
   allocationSlices: CryptoAllocationSlice[];
   tierGroups: CryptoTierGroup[];
   deploymentPlan: CryptoDeploymentBucket[];
+  transactions: CryptoTransaction[];
   dataSource: DataSource;
+}
+
+export interface CryptoDepositInput {
+  transactionDate: string;
+  amountSgd: number;
+  notes: string | null;
+}
+
+export interface CryptoBuyInput {
+  transactionDate: string;
+  ticker: string;
+  coinName: string;
+  buyAmountSgd: number;
+  feeSgd: number;
+  notes: string | null;
+}
+
+export interface CryptoSellInput {
+  transactionDate: string;
+  holdingId: string;
+  sellAmountSgd: number;
+  feeSgd: number;
+  notes: string | null;
+}
+
+export interface CryptoManualAdjustmentInput {
+  transactionDate: string;
+  holdingId: string;
+  ticker: string;
+  coinName: string;
+  totalInvestedSgd: number;
+  currentValueSgd: number;
+  notes: string | null;
 }
 
 export type CryptoActionResult =

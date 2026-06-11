@@ -2,7 +2,22 @@
 
 import { cryptoRowFromForm } from "@/lib/crypto/map-holding";
 import { applyComputedCryptoTotalsToOverride } from "@/lib/crypto/sync-portfolio-totals";
-import type { CryptoActionResult, CryptoHoldingFormInput } from "@/lib/crypto/types";
+import type {
+  CryptoActionResult,
+  CryptoBuyInput,
+  CryptoDepositInput,
+  CryptoHoldingFormInput,
+  CryptoManualAdjustmentInput,
+  CryptoSellInput,
+} from "@/lib/crypto/types";
+import {
+  CryptoTransactionError,
+  processCryptoBuy,
+  processCryptoDeposit,
+  processCryptoManualAdjustment,
+  processCryptoManualCashUpdate,
+  processCryptoSell,
+} from "@/lib/crypto/transaction-service";
 import { MOCK_PORTFOLIO_OVERRIDE } from "@/lib/mock/portfolio";
 import { DEFAULT_USD_SGD_RATE } from "@/lib/portfolio/currency";
 import type { PortfolioOverrideInput } from "@/lib/portfolio/types";
@@ -13,6 +28,7 @@ import {
   persistCryptoHolding,
   removeCryptoHolding,
 } from "@/lib/supabase/queries/crypto-holdings";
+import { removeCryptoTransaction } from "@/lib/supabase/queries/crypto-transactions";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import {
   NotAuthenticatedError,
@@ -225,20 +241,227 @@ async function syncCryptoOverrideAfterHoldingChange(): Promise<
   }
 }
 
+async function getCurrentCryptoBalances(): Promise<{
+  cashSgd: number;
+  contributionsSgd: number;
+}> {
+  if (!isSupabaseConfigured()) {
+    return {
+      cashSgd: MOCK_PORTFOLIO_OVERRIDE.manualCryptoCashSgd ?? 0,
+      contributionsSgd:
+        MOCK_PORTFOLIO_OVERRIDE.manualCryptoContributionsSgd ?? 0,
+    };
+  }
+
+  const { supabase, userId } = await getPortfolioOverrideWriteContext();
+  const { data: existing } = await supabase
+    .from("portfolio_overrides")
+    .select("manual_crypto_cash_sgd, manual_crypto_contributions_sgd")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const row = existing as {
+    manual_crypto_cash_sgd: number | null;
+    manual_crypto_contributions_sgd: number | null;
+  } | null;
+
+  return {
+    cashSgd: row?.manual_crypto_cash_sgd ?? 0,
+    contributionsSgd: row?.manual_crypto_contributions_sgd ?? 0,
+  };
+}
+
+async function persistCryptoCashAndContributions(
+  cashSgd: number,
+  contributionsSgd: number
+): Promise<{ success: true } | { success: false; error: string }> {
+  return persistSyncedCryptoOverride(cashSgd, contributionsSgd);
+}
+
+function mapTransactionError(e: unknown): CryptoActionResult {
+  if (e instanceof CryptoTransactionError) {
+    return { success: false, error: e.message };
+  }
+  return {
+    success: false,
+    error: e instanceof Error ? e.message : "Crypto transaction failed.",
+  };
+}
+
 export async function saveCryptoManualTotals(input: {
   cryptoCashSgd: number;
   totalContributionsSgd: number;
+  notes?: string | null;
 }): Promise<CryptoActionResult> {
-  const syncResult = await persistSyncedCryptoOverride(
-    input.cryptoCashSgd,
-    input.totalContributionsSgd
-  );
+  try {
+    const userId = await requireUserId();
+    const current = await getCurrentCryptoBalances();
+    const today = new Date().toISOString().split("T")[0];
 
-  if (!syncResult.success) {
-    return { success: false, error: syncResult.error };
+    if (
+      current.cashSgd !== input.cryptoCashSgd ||
+      current.contributionsSgd !== input.totalContributionsSgd
+    ) {
+      await processCryptoManualCashUpdate({
+        userId,
+        transactionDate: today,
+        oldCashSgd: current.cashSgd,
+        newCashSgd: input.cryptoCashSgd,
+        oldContributionsSgd: current.contributionsSgd,
+        newContributionsSgd: input.totalContributionsSgd,
+        notes: input.notes ?? null,
+      });
+    }
+
+    const syncResult = await persistCryptoCashAndContributions(
+      input.cryptoCashSgd,
+      input.totalContributionsSgd
+    );
+
+    if (!syncResult.success) {
+      return { success: false, error: syncResult.error };
+    }
+
+    return finish();
+  } catch (e) {
+    return mapTransactionError(e);
   }
+}
 
-  return finish();
+export async function recordCryptoDeposit(
+  payload: CryptoDepositInput
+): Promise<CryptoActionResult> {
+  try {
+    const userId = await requireUserId();
+    const current = await getCurrentCryptoBalances();
+    const next = await processCryptoDeposit({
+      userId,
+      payload,
+      transactionType: "deposit",
+      cashSgd: current.cashSgd,
+      contributionsSgd: current.contributionsSgd,
+    });
+    const syncResult = await persistCryptoCashAndContributions(
+      next.cashSgd,
+      next.contributionsSgd
+    );
+    if (!syncResult.success) {
+      return { success: false, error: syncResult.error };
+    }
+    return finish();
+  } catch (e) {
+    return mapTransactionError(e);
+  }
+}
+
+export async function recordCryptoMonthlyContribution(
+  payload: CryptoDepositInput
+): Promise<CryptoActionResult> {
+  try {
+    const userId = await requireUserId();
+    const current = await getCurrentCryptoBalances();
+    const next = await processCryptoDeposit({
+      userId,
+      payload,
+      transactionType: "monthly_contribution",
+      cashSgd: current.cashSgd,
+      contributionsSgd: current.contributionsSgd,
+    });
+    const syncResult = await persistCryptoCashAndContributions(
+      next.cashSgd,
+      next.contributionsSgd
+    );
+    if (!syncResult.success) {
+      return { success: false, error: syncResult.error };
+    }
+    return finish();
+  } catch (e) {
+    return mapTransactionError(e);
+  }
+}
+
+export async function recordCryptoBuy(
+  payload: CryptoBuyInput
+): Promise<CryptoActionResult> {
+  try {
+    const userId = await requireUserId();
+    const current = await getCurrentCryptoBalances();
+    const nextCash = await processCryptoBuy({
+      userId,
+      payload,
+      cashSgd: current.cashSgd,
+    });
+    const syncResult = await persistCryptoCashAndContributions(
+      nextCash,
+      current.contributionsSgd
+    );
+    if (!syncResult.success) {
+      return { success: false, error: syncResult.error };
+    }
+    const holdingsSync = await syncCryptoOverrideAfterHoldingChange();
+    if (!holdingsSync.success) {
+      return { success: false, error: holdingsSync.error };
+    }
+    return finish();
+  } catch (e) {
+    return mapTransactionError(e);
+  }
+}
+
+export async function recordCryptoSell(
+  payload: CryptoSellInput
+): Promise<CryptoActionResult> {
+  try {
+    const userId = await requireUserId();
+    const current = await getCurrentCryptoBalances();
+    const nextCash = await processCryptoSell({
+      userId,
+      payload,
+      cashSgd: current.cashSgd,
+    });
+    const syncResult = await persistCryptoCashAndContributions(
+      nextCash,
+      current.contributionsSgd
+    );
+    if (!syncResult.success) {
+      return { success: false, error: syncResult.error };
+    }
+    const holdingsSync = await syncCryptoOverrideAfterHoldingChange();
+    if (!holdingsSync.success) {
+      return { success: false, error: holdingsSync.error };
+    }
+    return finish();
+  } catch (e) {
+    return mapTransactionError(e);
+  }
+}
+
+export async function applyCryptoManualAdjustment(
+  payload: CryptoManualAdjustmentInput
+): Promise<CryptoActionResult> {
+  try {
+    const userId = await requireUserId();
+    await processCryptoManualAdjustment({ userId, payload });
+    const syncResult = await syncCryptoOverrideAfterHoldingChange();
+    if (!syncResult.success) {
+      return { success: false, error: syncResult.error };
+    }
+    return finish();
+  } catch (e) {
+    return mapTransactionError(e);
+  }
+}
+
+export async function deleteCryptoTransaction(
+  id: string
+): Promise<CryptoActionResult> {
+  try {
+    const userId = await requireUserId();
+    await removeCryptoTransaction(id, userId);
+    return finish();
+  } catch (e) {
+    return mapTransactionError(e);
+  }
 }
 
 export async function createCryptoHolding(

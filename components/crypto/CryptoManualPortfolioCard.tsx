@@ -37,6 +37,7 @@ export function CryptoManualPortfolioCard({
   const [contributions, setContributions] = useState(
     String(portfolioManual.totalContributionsSgd || "")
   );
+  const [manualNotes, setManualNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +69,7 @@ export function CryptoManualPortfolioCard({
     const result = await saveCryptoManualTotals({
       cryptoCashSgd: cashVal,
       totalContributionsSgd: contribVal,
+      notes: manualNotes.trim() || null,
     });
     setSaving(false);
 
@@ -87,8 +89,8 @@ export function CryptoManualPortfolioCard({
           <Badge variant="outline">Manual Update</Badge>
         </div>
         <CardDescription>
-          Coin Holdings Total is calculated automatically from individual coin
-          values below. Edit exchange cash and contributions here.
+          Edit exchange cash and contributions only — does not overwrite
+          holdings. Changes create a Manual Cash Update transaction.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -143,6 +145,20 @@ export function CryptoManualPortfolioCard({
             onChange={(e) => setContributions(e.target.value)}
           />
         </div>
+
+        <label
+          htmlFor="manualCashNotes"
+          className="mb-1 block text-[10px] uppercase tracking-wider text-terminal-muted"
+        >
+          Notes (optional)
+        </label>
+        <textarea
+          id="manualCashNotes"
+          className={`${inputClass} min-h-[60px]`}
+          value={manualNotes}
+          onChange={(e) => setManualNotes(e.target.value)}
+          placeholder="Reason for manual cash / contribution update"
+        />
 
         <div className="rounded-md border border-terminal-border/60 bg-terminal-elevated/20 px-3 py-3 space-y-2 text-xs">
           <div className="flex justify-between gap-2">

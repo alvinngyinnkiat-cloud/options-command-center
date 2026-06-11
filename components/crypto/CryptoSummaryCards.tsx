@@ -12,7 +12,7 @@ export function CryptoSummaryCards({ portfolioManual }: CryptoSummaryCardsProps)
   const returnPct = pnlPercentStatProps(portfolioManual.returnPct, 1);
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
       <StatCard
         label="Coin Holdings Total"
         value={formatSGD(portfolioManual.cryptoHoldingsValueSgd)}
@@ -40,6 +40,10 @@ export function CryptoSummaryCards({ portfolioManual }: CryptoSummaryCardsProps)
         value={returnPct.value}
         valueClassName={returnPct.valueClassName}
         changeType={returnPct.changeType}
+      />
+      <StatCard
+        label="Total Fees Paid"
+        value={formatSGD(portfolioManual.totalFeesPaidSgd)}
       />
     </div>
   );

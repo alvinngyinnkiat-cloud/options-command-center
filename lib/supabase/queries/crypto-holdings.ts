@@ -1,9 +1,11 @@
 import { buildCryptoTrackerSummary, buildCryptoPortfolioManualFromTracker } from "@/lib/crypto/calculations";
 import {
   buildCryptoDeploymentPlan,
+  buildCoinHoldingsTotal,
   buildCryptoTierGroups,
   tierGroupsToAllocationSlices,
 } from "@/lib/crypto/allocation";
+import { calculateTotalFeesPaid } from "@/lib/crypto/transaction-types";
 import { splitCryptoTrackerValues, resolveCryptoCashSgd } from "@/lib/portfolio/capital-pools";
 import { enrichAllCryptoHoldings } from "@/lib/crypto/map-holding";
 import type { CryptoTrackerData } from "@/lib/crypto/types";
@@ -12,6 +14,8 @@ import {
   getMockCryptoHoldings,
   upsertMockCryptoHolding,
 } from "@/lib/mock/crypto-store";
+import { getMockCryptoTransactions } from "@/lib/mock/crypto-transaction-store";
+import { fetchCryptoTransactions } from "@/lib/supabase/queries/crypto-transactions";
 import { readSupabasePrimary } from "@/lib/supabase/data-access";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import {
@@ -25,35 +29,45 @@ function buildData(
   rows: CryptoHolding[],
   dataSource: "supabase" | "mock",
   override?: import("@/lib/portfolio/types").PortfolioOverrideInput | null,
-  pools?: { cryptoHoldingsSgd: number; cryptoCashSgd: number }
+  pools?: { cryptoHoldingsSgd: number; cryptoCashSgd: number },
+  transactions = dataSource === "mock"
+    ? getMockCryptoTransactions()
+    : ([] as import("@/types/database").CryptoTransaction[])
 ): CryptoTrackerData {
   const split = splitCryptoTrackerValues(rows);
-  const cryptoHoldingsSgd = pools?.cryptoHoldingsSgd ?? split.cryptoHoldingsSgd;
   const cryptoCashSgd =
     pools?.cryptoCashSgd ??
     resolveCryptoCashSgd(override ?? null, split.cryptoCashSgd);
-  const totalPortfolio = cryptoHoldingsSgd + cryptoCashSgd;
+  const totalPortfolio =
+    (pools?.cryptoHoldingsSgd ?? split.cryptoHoldingsSgd) + cryptoCashSgd;
   const holdings = enrichAllCryptoHoldings(rows, totalPortfolio);
+  const cryptoHoldingsSgd = buildCoinHoldingsTotal(holdings);
   const portfolioManual = buildCryptoPortfolioManualFromTracker({
     override: override ?? null,
     cryptoHoldingsValueSgd: cryptoHoldingsSgd,
     cryptoCashSgd,
     holdings,
   });
+  const totalFeesPaidSgd = calculateTotalFeesPaid(transactions);
 
   const tierGroups = buildCryptoTierGroups(
     holdings,
     cryptoCashSgd,
-    totalPortfolio
+    cryptoHoldingsSgd + cryptoCashSgd
   );
 
   return {
     holdings,
     summary: buildCryptoTrackerSummary(holdings),
-    portfolioManual,
+    portfolioManual: {
+      ...portfolioManual,
+      cryptoHoldingsValueSgd: cryptoHoldingsSgd,
+      totalFeesPaidSgd,
+    },
     allocationSlices: tierGroupsToAllocationSlices(tierGroups),
     tierGroups,
     deploymentPlan: buildCryptoDeploymentPlan(cryptoCashSgd),
+    transactions,
     dataSource,
   };
 }
@@ -62,15 +76,17 @@ export async function buildCryptoTrackerPageData(
   override: import("@/lib/portfolio/types").PortfolioOverrideInput | null,
   pools: { cryptoHoldingsSgd: number; cryptoCashSgd: number }
 ): Promise<CryptoTrackerData> {
+  const transactions = await fetchCryptoTransactions();
   const { value, dataSource } = await readSupabasePrimary({
     module: "buildCryptoTrackerPageData",
-    mock: () => buildData(getMockCryptoHoldings(), "mock", override, pools),
-    empty: () => buildData([], "supabase", override, pools),
+    mock: () =>
+      buildData(getMockCryptoHoldings(), "mock", override, pools, transactions),
+    empty: () => buildData([], "supabase", override, pools, transactions),
     read: async (userId) =>
-      buildData(await fetchCryptoRows(userId), "supabase", override, pools),
+      buildData(await fetchCryptoRows(userId), "supabase", override, pools, transactions),
   });
 
-  return { ...value, dataSource };
+  return { ...value, dataSource, transactions };
 }
 
 async function fetchCryptoRows(_userId: string): Promise<CryptoHolding[]> {
@@ -100,13 +116,15 @@ export async function getCryptoHoldingsRows(): Promise<CryptoHolding[]> {
 }
 
 export async function getCryptoTrackerData(): Promise<CryptoTrackerData> {
+  const transactions = await fetchCryptoTransactions();
   const { value, dataSource } = await readSupabasePrimary({
     module: "getCryptoTrackerData",
-    mock: () => buildData(getMockCryptoHoldings(), "mock"),
-    empty: () => buildData([], "supabase"),
-    read: async (userId) => buildData(await fetchCryptoRows(userId), "supabase"),
+    mock: () => buildData(getMockCryptoHoldings(), "mock", undefined, undefined, transactions),
+    empty: () => buildData([], "supabase", undefined, undefined, transactions),
+    read: async (userId) =>
+      buildData(await fetchCryptoRows(userId), "supabase", undefined, undefined, transactions),
   });
-  return { ...value, dataSource };
+  return { ...value, dataSource, transactions };
 }
 
 export async function persistCryptoHolding(

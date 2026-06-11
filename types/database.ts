@@ -795,6 +795,31 @@ export interface CryptoHolding {
   updated_at: string;
 }
 
+export type CryptoTransactionType =
+  | "deposit"
+  | "monthly_contribution"
+  | "buy"
+  | "sell"
+  | "manual_adjustment"
+  | "manual_cash_update";
+
+export interface CryptoTransaction {
+  id: string;
+  user_id: string;
+  holding_id: string | null;
+  transaction_type: CryptoTransactionType;
+  transaction_date: string;
+  ticker: string | null;
+  coin_name: string | null;
+  amount_sgd: number;
+  fee_sgd: number;
+  net_amount_sgd: number;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ClientProfileRecord {
   id: string;
   user_id: string;
@@ -1154,6 +1179,11 @@ export type CryptoHoldingInsert = Omit<
   "id" | "created_at" | "updated_at"
 > & { id?: string; created_at?: string; updated_at?: string };
 
+export type CryptoTransactionInsert = Omit<
+  CryptoTransaction,
+  "id" | "created_at" | "updated_at"
+> & { id?: string; created_at?: string; updated_at?: string };
+
 export type StockEtfHoldingInsert = Omit<
   StockEtfHolding,
   "id" | "created_at" | "updated_at"
@@ -1237,6 +1267,7 @@ export type SupportResistanceUpdate = Partial<SupportResistanceInsert>;
 export type TechnicalIndicatorUpdate = Partial<TechnicalIndicatorInsert>;
 export type OptionsTradeUpdate = Partial<OptionsTradeInsert>;
 export type CryptoHoldingUpdate = Partial<CryptoHoldingInsert>;
+export type CryptoTransactionUpdate = Partial<CryptoTransactionInsert>;
 export type StockEtfHoldingUpdate = Partial<StockEtfHoldingInsert>;
 export type StockEtfTransactionUpdate = Partial<StockEtfTransactionInsert>;
 export type StockEtfPositionAdjustmentUpdate =
