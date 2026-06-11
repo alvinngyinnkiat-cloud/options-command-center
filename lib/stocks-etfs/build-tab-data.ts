@@ -27,7 +27,7 @@ function buildSgStockRow(
     dividendTotals ?? new Map()
   );
   const dividendIncome =
-    holding.trackingMode === "manual"
+    holding.manualTotalDividend > 0
       ? holding.manualTotalDividend
       : dividendResolved.lifetimeNetDividends;
   const annualDividendIncome = dividendResolved.annualDividendIncome;

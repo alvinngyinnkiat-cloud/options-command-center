@@ -35,7 +35,6 @@ export function enrichStockEtfHolding(
 
   let currentValueNative = Number(row.current_value_native);
   if (
-    trackingMode === "transaction" &&
     !manualOverride &&
     shares != null &&
     shares > 0 &&
@@ -154,7 +153,7 @@ export function stockEtfRowFromForm(
     last_price_date: null,
     price_source: null,
     manual_value_override: true,
-    tracking_mode: options?.trackingMode ?? "manual",
+    tracking_mode: options?.trackingMode ?? "transaction",
     manual_total_dividend: input.manualTotalDividend,
     manual_total_fees: input.manualTotalFees,
     notes: input.notes,

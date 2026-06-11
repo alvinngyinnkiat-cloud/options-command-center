@@ -161,8 +161,8 @@ export interface StockEtfTrackerData {
   tabs: StockEtfTabData;
   cashBalances: Record<MarketCategory, number>;
   ledger: StockEtfLedgerEntry[];
+  transactions: import("@/lib/supabase/queries/stock-etf-positions").StockEtfTransactionWithTicker[];
   totalFeesPaid: number;
-  trackingModeDefault: StockEtfTrackingMode;
   ledgerAvailable: boolean;
   dataSource: DataSource;
 }

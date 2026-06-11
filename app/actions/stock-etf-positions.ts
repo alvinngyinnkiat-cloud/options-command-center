@@ -66,12 +66,18 @@ export async function adjustStockEtfPosition(
     if (input.shares < 0) {
       return { success: false, error: "Shares cannot be negative." };
     }
+    if (input.totalCost < 0 || input.currentValueNative < 0) {
+      return { success: false, error: "Values cannot be negative." };
+    }
 
     await insertStockEtfPositionAdjustment(userId, {
       holdingId: input.holdingId,
       shares: input.shares,
       averageCost: input.averageCost,
       totalCost: input.totalCost,
+      currentValueNative: input.currentValueNative,
+      manualTotalDividend: input.manualTotalDividend,
+      manualTotalFees: input.manualTotalFees,
       notes: input.notes,
       adjustmentReason: input.adjustmentReason,
     });

@@ -21,6 +21,9 @@ export interface StockEtfPositionAdjustInput {
   shares: number;
   averageCost: number;
   totalCost: number;
+  currentValueNative: number;
+  manualTotalDividend: number;
+  manualTotalFees: number;
   notes: string | null;
   adjustmentReason: string;
 }

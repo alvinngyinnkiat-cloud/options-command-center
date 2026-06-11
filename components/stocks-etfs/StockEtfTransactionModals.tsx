@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { recordStockEtfBuy } from "@/app/actions/stock-etf-cash";
+import { recordStockEtfBuy, recordStockEtfSell } from "@/app/actions/stock-etf-cash";
 import { Button } from "@/components/ui/Button";
-import { categoryLabel } from "@/lib/stocks-etfs/market-category";
 import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
 import { DEFAULT_USD_SGD_RATE } from "@/lib/portfolio/currency";
 import { formatNativeValue } from "@/lib/portfolio/format-holdings";
@@ -13,7 +12,7 @@ import { X } from "lucide-react";
 const inputClass =
   "w-full rounded border border-terminal-border bg-terminal-elevated px-3 py-2 text-sm font-mono";
 
-export type StockEtfModalKind = "buy";
+export type StockEtfModalKind = "buy" | "sell";
 
 interface StockEtfTransactionModalsProps {
   kind: StockEtfModalKind | null;
@@ -28,22 +27,36 @@ export function StockEtfTransactionModals({
   onClose,
   onSaved,
 }: StockEtfTransactionModalsProps) {
-  if (kind !== "buy") return null;
-
-  return (
-    <BuyModal
-      defaultMarketCategory={defaultMarketCategory}
-      onClose={onClose}
-      onSaved={onSaved}
-    />
-  );
+  if (kind === "buy") {
+    return (
+      <TradeModal
+        mode="buy"
+        defaultMarketCategory={defaultMarketCategory}
+        onClose={onClose}
+        onSaved={onSaved}
+      />
+    );
+  }
+  if (kind === "sell") {
+    return (
+      <TradeModal
+        mode="sell"
+        defaultMarketCategory={defaultMarketCategory}
+        onClose={onClose}
+        onSaved={onSaved}
+      />
+    );
+  }
+  return null;
 }
 
-function BuyModal({
+function TradeModal({
+  mode,
   defaultMarketCategory,
   onClose,
   onSaved,
 }: {
+  mode: "buy" | "sell";
   defaultMarketCategory: MarketCategory;
   onClose: () => void;
   onSaved: () => void;
@@ -64,8 +77,9 @@ function BuyModal({
   const sharesNum = parseFloat(shares) || 0;
   const priceNum = parseFloat(pricePerShare) || 0;
   const feeNum = parseFloat(fees) || 0;
-  const totalAmount = sharesNum * priceNum;
-  const totalCost = totalAmount + feeNum;
+  const grossAmount = sharesNum * priceNum;
+  const netBuyCost = grossAmount + feeNum;
+  const netSellProceeds = grossAmount - feeNum;
   const isUsMarket = marketCategory === "us_etf" || marketCategory === "us_stock";
   const currencyLabel = isUsMarket ? "USD" : "SGD";
 
@@ -73,7 +87,8 @@ function BuyModal({
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const result = await recordStockEtfBuy({
+
+    const payload = {
       marketCategory,
       transactionDate,
       ticker: ticker.toUpperCase(),
@@ -82,7 +97,13 @@ function BuyModal({
       fees: feeNum,
       fxRateToSgd: isUsMarket ? parseFloat(fxRate) || DEFAULT_USD_SGD_RATE : null,
       notes: notes.trim() || null,
-    });
+    };
+
+    const result =
+      mode === "buy"
+        ? await recordStockEtfBuy(payload)
+        : await recordStockEtfSell(payload);
+
     setSaving(false);
     if (!result.success) {
       setError(result.error);
@@ -93,11 +114,15 @@ function BuyModal({
   }
 
   return (
-    <ModalShell title="Buy Stock / ETF" onClose={onClose}>
+    <ModalShell
+      title={mode === "buy" ? "Buy Stock / ETF" : "Sell Stock / ETF"}
+      onClose={onClose}
+    >
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <p className="text-xs text-terminal-muted">
-          Position tracking only — records shares and cost. Trading Cash on the
-          Portfolio Dashboard is updated manually and is not validated here.
+          {mode === "buy"
+            ? "Record a buy — including past historical purchases. No trading cash validation."
+            : "Record a sell. Blocked only if shares sold exceed shares held."}
         </p>
         <MarketField value={marketCategory} onChange={setMarketCategory} />
         <DateField value={transactionDate} onChange={setTransactionDate} />
@@ -111,32 +136,57 @@ function BuyModal({
           />
         </label>
         <div className="grid grid-cols-2 gap-3">
-          <AmountField label="Shares" value={shares} onChange={setShares} step="any" min="0.0001" />
           <AmountField
-            label={`Buy Price (${currencyLabel})`}
+            label={mode === "buy" ? "Number of Shares" : "Shares Sold"}
+            value={shares}
+            onChange={setShares}
+            step="any"
+            min="0.0001"
+          />
+          <AmountField
+            label={`Price per Share (${currencyLabel})`}
             value={pricePerShare}
             onChange={setPricePerShare}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <AmountField label={`Fee (${currencyLabel})`} value={fees} onChange={setFees} />
+          <AmountField label={`Fees (${currencyLabel})`} value={fees} onChange={setFees} />
           {isUsMarket && (
             <AmountField label="FX Rate (SGD/USD)" value={fxRate} onChange={setFxRate} />
           )}
         </div>
         <p className="text-xs text-terminal-muted font-mono">
-          Total buy:{" "}
-          {isUsMarket
-            ? formatNativeValue(totalAmount, "USD")
-            : formatSGD(totalAmount)}{" "}
-          · Total cost incl. fee:{" "}
-          {isUsMarket
-            ? formatNativeValue(totalCost, "USD")
-            : formatSGD(totalCost)}
+          {mode === "buy" ? (
+            <>
+              Gross:{" "}
+              {isUsMarket
+                ? formatNativeValue(grossAmount, "USD")
+                : formatSGD(grossAmount)}{" "}
+              · Total cost:{" "}
+              {isUsMarket
+                ? formatNativeValue(netBuyCost, "USD")
+                : formatSGD(netBuyCost)}
+            </>
+          ) : (
+            <>
+              Gross:{" "}
+              {isUsMarket
+                ? formatNativeValue(grossAmount, "USD")
+                : formatSGD(grossAmount)}{" "}
+              · Net proceeds:{" "}
+              {isUsMarket
+                ? formatNativeValue(netSellProceeds, "USD")
+                : formatSGD(netSellProceeds)}
+            </>
+          )}
         </p>
         <NotesField value={notes} onChange={setNotes} />
         {error && <p className="text-xs text-loss">{error}</p>}
-        <ModalActions saving={saving} onClose={onClose} submitLabel="Buy" />
+        <ModalActions
+          saving={saving}
+          onClose={onClose}
+          submitLabel={mode === "buy" ? "Save Buy" : "Save Sell"}
+        />
       </form>
     </ModalShell>
   );

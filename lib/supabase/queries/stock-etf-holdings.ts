@@ -24,6 +24,7 @@ import type {
   StockEtfTrackerData,
 } from "@/lib/stocks-etfs/types";
 import {
+  listAllStockEtfTransactions,
   removeStockEtfPositionAdjustmentsForHolding,
   removeStockEtfTransactionsForHolding,
 } from "@/lib/supabase/queries/stock-etf-positions";
@@ -32,9 +33,6 @@ import {
   removeStockEtfLedgerEntriesForHolding,
   isStockEtfLedgerAvailable,
 } from "@/lib/supabase/queries/stock-etf-ledger";
-import {
-  getStockEtfTrackingModeDefault,
-} from "@/lib/supabase/queries/stock-etf-tracking-mode";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
   deleteMockStockEtfHolding,
@@ -69,12 +67,12 @@ async function buildFullData(
 ): Promise<StockEtfTrackerData> {
   const referenceDate = MOCK_REFERENCE_DATE;
   const referenceYear = Number(referenceDate.slice(0, 4));
-  const [tradesData, dividendRows, trackingModeDefault, ledgerAvailable] =
+  const [tradesData, dividendRows, ledgerAvailable, transactions] =
     await Promise.all([
       getOptionsTradesData(),
       listDividendRecordRows(userId),
-      getStockEtfTrackingModeDefault(),
       isStockEtfLedgerAvailable(),
+      listAllStockEtfTransactions(userId, rows),
     ]);
   const dividendSummary = buildDividendPortfolioSummary(
     dividendRows,
@@ -83,12 +81,26 @@ async function buildFullData(
   );
   const holdings = enrichAllStockEtfHoldings(rows, dividendSummary.byTicker);
   const sectorAllocation = buildSectorAllocation(holdings);
-  const ledger = await listStockEtfLedgerEntries();
+  let ledger: Awaited<ReturnType<typeof listStockEtfLedgerEntries>> = [];
+  if (ledgerAvailable) {
+    try {
+      ledger = await listStockEtfLedgerEntries();
+    } catch {
+      ledger = [];
+    }
+  }
   const cashBalances = { us_etf: 0, us_stock: 0, sg_stock: 0 };
-  const feesFor = (cat: "us_etf" | "us_stock" | "sg_stock") =>
-    calculateTotalFeesPaid(
-      ledger.filter((e) => e.market_category === cat)
+  const transactionFeesTotal = transactions.reduce((sum, tx) => sum + tx.fees, 0);
+  const feesFor = (cat: "us_etf" | "us_stock" | "sg_stock") => {
+    const tickersInCat = new Set(
+      holdings
+        .filter((h) => classifyHoldingCategory(h) === cat)
+        .map((h) => h.ticker)
     );
+    return transactions
+      .filter((tx) => tickersInCat.has(tx.ticker))
+      .reduce((sum, tx) => sum + tx.fees, 0);
+  };
   const tabs = buildStockEtfTabData(
     holdings,
     tradesData.trades,
@@ -107,8 +119,8 @@ async function buildFullData(
     tabs,
     cashBalances,
     ledger,
-    totalFeesPaid: calculateTotalFeesPaid(ledger),
-    trackingModeDefault,
+    transactions,
+    totalFeesPaid: transactionFeesTotal || calculateTotalFeesPaid(ledger),
     ledgerAvailable,
     dataSource,
   };

@@ -5,16 +5,11 @@ import { refreshStockMarketPricesAction } from "@/app/actions/stock-etf";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
-import type {
-  EnrichedStockEtfHolding,
-  StockEtfTrackerData,
-} from "@/lib/stocks-etfs/types";
+import type { StockEtfTrackerData } from "@/lib/stocks-etfs/types";
 import type { StockEtfTabId } from "./StockEtfCategoryTabs";
 import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/dividends/use-dividend-sync";
-import { Plus, RefreshCw, ShoppingCart } from "lucide-react";
+import { RefreshCw, ShoppingCart, TrendingDown } from "lucide-react";
 import { StockEtfCategoryTabs } from "./StockEtfCategoryTabs";
-import { StockEtfFormModal } from "./StockEtfFormModal";
-import { StockEtfTrackingModeToggle } from "./StockEtfTrackingModeToggle";
 import { StockEtfTransactionHistoryTable } from "./StockEtfTransactionHistoryTable";
 import {
   StockEtfTransactionModals,
@@ -35,9 +30,6 @@ export function StockEtfTrackerClient({
   const [activeTab, setActiveTab] = useState<StockEtfTabId>("us_etf");
   const [priceError, setPriceError] = useState<string | null>(null);
   const [isPricePending, startPriceTransition] = useTransition();
-  const [formHolding, setFormHolding] = useState<
-    EnrichedStockEtfHolding | null | undefined
-  >(undefined);
   const [txModal, setTxModal] = useState<StockEtfModalKind | null>(null);
 
   const handleDividendSync = useCallback((refresh: DividendDependentRefreshData) => {
@@ -62,17 +54,12 @@ export function StockEtfTrackerClient({
   }
 
   const { tabs } = data;
-  const isTransactionMode = data.trackingModeDefault === "transaction";
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Stock & ETF Tracker"
-        description={
-          isTransactionMode
-            ? "Transaction Accounting — buy, sell, and dividend history"
-            : "Manual Position mode — backfill historical snapshots without transaction history"
-        }
+        description="Record buys and sells to build position history — past and future. Use Manual Adjustment only for corrections."
         actions={
           <>
             <Badge
@@ -91,26 +78,22 @@ export function StockEtfTrackerClient({
               />
               {isPricePending ? "Updating…" : "Refresh Prices"}
             </Button>
-            {isTransactionMode && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setTxModal("buy")}
-              >
-                <ShoppingCart className="h-4 w-4" />
-                Buy
-              </Button>
-            )}
-            {!isTransactionMode && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setFormHolding(null)}
-              >
-                <Plus className="h-4 w-4" />
-                Add Position
-              </Button>
-            )}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setTxModal("buy")}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Buy
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setTxModal("sell")}
+            >
+              <TrendingDown className="h-4 w-4" />
+              Sell
+            </Button>
           </>
         }
       />
@@ -119,16 +102,11 @@ export function StockEtfTrackerClient({
         <p className="text-xs text-loss">{priceError}</p>
       )}
 
-      <StockEtfTrackingModeToggle data={data} onDataChange={setData} />
-
       <StockEtfCategoryTabs active={activeTab} onChange={setActiveTab} />
 
       {activeTab === "us_etf" && (
         <div className="space-y-4">
-          <UsEquitySummaryCards
-            title="US ETF"
-            summary={tabs.usEtf.summary}
-          />
+          <UsEquitySummaryCards title="US ETF" summary={tabs.usEtf.summary} />
           <section>
             <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
               US ETF Positions
@@ -144,10 +122,7 @@ export function StockEtfTrackerClient({
 
       {activeTab === "us_stock" && (
         <div className="space-y-4">
-          <UsEquitySummaryCards
-            title="US Stock"
-            summary={tabs.usStock.summary}
-          />
+          <UsEquitySummaryCards title="US Stock" summary={tabs.usStock.summary} />
           <section>
             <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
               US Stock Positions
@@ -169,31 +144,20 @@ export function StockEtfTrackerClient({
         />
       )}
 
-      {isTransactionMode ? (
-        <section>
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
-            Transaction History
-          </h2>
-          <StockEtfTransactionHistoryTable
-            ledger={data.ledger}
-            onRefresh={handleRefresh}
-          />
-        </section>
-      ) : (
-        <p className="rounded-lg border border-dashed border-terminal-border px-4 py-3 text-[11px] text-terminal-muted">
-          Transaction history and ledger are available in Transaction Accounting
-          mode. Manual positions do not require buy/sell history or the ledger
-          table.
-        </p>
-      )}
-
-      {formHolding !== undefined && (
-        <StockEtfFormModal
-          holding={formHolding}
-          onClose={() => setFormHolding(undefined)}
-          onSaved={handleRefresh}
-        />
-      )}
+      <section className="space-y-3">
+        <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
+          Transaction History
+        </h2>
+        {!data.ledgerAvailable && (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            Optional ledger table is unavailable. Buy/sell history below is
+            saved to{" "}
+            <code className="font-mono">stock_etf_transactions</code> and is
+            the source of truth.
+          </p>
+        )}
+        <StockEtfTransactionHistoryTable transactions={data.transactions} />
+      </section>
 
       <StockEtfTransactionModals
         kind={txModal}
@@ -203,9 +167,9 @@ export function StockEtfTrackerClient({
       />
 
       <p className="text-[11px] text-terminal-muted">
-        {isTransactionMode
-          ? "Transaction Accounting tracks buys, sells, and dividends. Trading Cash remains on the Portfolio Dashboard."
-          : "Manual Position mode stores snapshot totals only. Switch individual positions to Transaction Accounting when ready for full history."}
+        Enter historical and new trades via Buy/Sell. Trading Cash is not
+        validated here — the broker handles buying power. Dividends sync from
+        Dividend Tracker unless corrected via Manual Adjustment.
       </p>
     </div>
   );

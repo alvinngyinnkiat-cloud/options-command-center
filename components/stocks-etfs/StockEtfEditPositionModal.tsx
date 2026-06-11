@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { adjustStockEtfPosition } from "@/app/actions/stock-etf-positions";
 import { Button } from "@/components/ui/Button";
+import { calculateManualPositionMetrics } from "@/lib/stocks-etfs/manual-position";
 import type { EnrichedStockEtfHolding } from "@/lib/stocks-etfs/types";
 import { formatNativeValue } from "@/lib/portfolio/format-holdings";
 import { X } from "lucide-react";
@@ -22,23 +23,35 @@ export function StockEtfEditPositionModal({
   onSaved,
 }: StockEtfEditPositionModalProps) {
   const [shares, setShares] = useState(String(holding.sharesHeld ?? ""));
-  const [averageCost, setAverageCost] = useState(String(holding.averageCost ?? ""));
   const [totalCost, setTotalCost] = useState(
     String(holding.totalInvestedNative ?? "")
+  );
+  const [currentValue, setCurrentValue] = useState(
+    String(holding.currentValueNative ?? "")
+  );
+  const [totalDividend, setTotalDividend] = useState(
+    String(holding.manualTotalDividend ?? 0)
+  );
+  const [totalFees, setTotalFees] = useState(
+    String(holding.manualTotalFees ?? 0)
   );
   const [notes, setNotes] = useState(holding.notes ?? "");
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const previewTotal = useMemo(() => {
-    const s = parseFloat(shares);
-    const avg = parseFloat(averageCost);
-    if (Number.isFinite(s) && Number.isFinite(avg) && s > 0 && avg >= 0) {
-      return s * avg;
-    }
-    return null;
-  }, [shares, averageCost]);
+  const preview = useMemo(() => {
+    const capital = parseFloat(totalCost) || 0;
+    const current = parseFloat(currentValue) || 0;
+    const dividend = parseFloat(totalDividend) || 0;
+    const fees = parseFloat(totalFees) || 0;
+    return calculateManualPositionMetrics({
+      capitalInvested: capital,
+      currentValue: current,
+      totalDividend: dividend,
+      totalFees: fees,
+    });
+  }, [totalCost, currentValue, totalDividend, totalFees]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,26 +59,30 @@ export function StockEtfEditPositionModal({
     setError(null);
 
     const sharesNum = parseFloat(shares);
-    const avgNum = parseFloat(averageCost);
     const totalNum = parseFloat(totalCost);
+    const currentNum = parseFloat(currentValue);
+    const dividendNum = parseFloat(totalDividend) || 0;
+    const feesNum = parseFloat(totalFees) || 0;
+    const averageCost =
+      sharesNum > 0 ? totalNum / sharesNum : parseFloat(String(holding.averageCost ?? 0));
 
     if (!Number.isFinite(sharesNum) || sharesNum < 0) {
       setError("Enter valid shares.");
       setSaving(false);
       return;
     }
-    if (!Number.isFinite(avgNum) || avgNum < 0) {
-      setError("Enter valid average cost.");
+    if (!Number.isFinite(totalNum) || totalNum < 0) {
+      setError("Enter valid capital invested.");
       setSaving(false);
       return;
     }
-    if (!Number.isFinite(totalNum) || totalNum < 0) {
-      setError("Enter valid total cost.");
+    if (!Number.isFinite(currentNum) || currentNum < 0) {
+      setError("Enter valid current value.");
       setSaving(false);
       return;
     }
     if (!adjustmentReason.trim()) {
-      setError("Adjustment reason is required.");
+      setError("Correction reason is required.");
       setSaving(false);
       return;
     }
@@ -73,8 +90,11 @@ export function StockEtfEditPositionModal({
     const result = await adjustStockEtfPosition({
       holdingId: holding.id,
       shares: sharesNum,
-      averageCost: avgNum,
+      averageCost: Number.isFinite(averageCost) ? averageCost : 0,
       totalCost: totalNum,
+      currentValueNative: currentNum,
+      manualTotalDividend: dividendNum,
+      manualTotalFees: feesNum,
       notes: notes.trim() || null,
       adjustmentReason: adjustmentReason.trim(),
     });
@@ -88,32 +108,26 @@ export function StockEtfEditPositionModal({
     onClose();
   }
 
-  function syncTotalFromSharesAvg() {
-    if (previewTotal != null) setTotalCost(String(previewTotal));
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-lg border border-terminal-border bg-terminal-surface shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg border border-terminal-border bg-terminal-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-terminal-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-terminal-text">
-            Edit Position — {holding.ticker}
-          </h2>
+          <div>
+            <h2 className="text-sm font-semibold text-terminal-text">
+              Manual Adjustment — {holding.ticker}
+            </h2>
+            <p className="text-[11px] text-terminal-muted">
+              Corrections only — transaction history is preserved
+            </p>
+          </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 p-4">
-          <p className="text-xs text-terminal-muted">
-            Manual override for setup, transfers, splits, or corrections. Creates
-            an adjustment record — transaction history is preserved.
-          </p>
-
           <label className="block space-y-1">
-            <span className="text-[10px] uppercase text-terminal-muted">
-              Shares
-            </span>
+            <span className="text-[10px] uppercase text-terminal-muted">Shares</span>
             <input
               type="number"
               min="0"
@@ -121,30 +135,13 @@ export function StockEtfEditPositionModal({
               className={inputClass}
               value={shares}
               onChange={(e) => setShares(e.target.value)}
-              onBlur={syncTotalFromSharesAvg}
               required
             />
           </label>
 
           <label className="block space-y-1">
             <span className="text-[10px] uppercase text-terminal-muted">
-              Average Cost ({holding.currency})
-            </span>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              className={inputClass}
-              value={averageCost}
-              onChange={(e) => setAverageCost(e.target.value)}
-              onBlur={syncTotalFromSharesAvg}
-              required
-            />
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-[10px] uppercase text-terminal-muted">
-              Total Cost ({holding.currency})
+              Capital Invested ({holding.currency})
             </span>
             <input
               type="number"
@@ -155,13 +152,51 @@ export function StockEtfEditPositionModal({
               onChange={(e) => setTotalCost(e.target.value)}
               required
             />
-            {previewTotal != null && (
-              <p className="text-[10px] text-terminal-muted">
-                Shares × Avg ={" "}
-                {formatNativeValue(previewTotal, holding.currency)}
-              </p>
-            )}
           </label>
+
+          <label className="block space-y-1">
+            <span className="text-[10px] uppercase text-terminal-muted">
+              Current Value ({holding.currency})
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              className={inputClass}
+              value={currentValue}
+              onChange={(e) => setCurrentValue(e.target.value)}
+              required
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block space-y-1">
+              <span className="text-[10px] uppercase text-terminal-muted">
+                Total Dividend ({holding.currency})
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className={inputClass}
+                value={totalDividend}
+                onChange={(e) => setTotalDividend(e.target.value)}
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[10px] uppercase text-terminal-muted">
+                Total Fees ({holding.currency})
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className={inputClass}
+                value={totalFees}
+                onChange={(e) => setTotalFees(e.target.value)}
+              />
+            </label>
+          </div>
 
           <label className="block space-y-1">
             <span className="text-[10px] uppercase text-terminal-muted">Notes</span>
@@ -174,17 +209,28 @@ export function StockEtfEditPositionModal({
 
           <label className="block space-y-1">
             <span className="text-[10px] uppercase text-terminal-muted">
-              Adjustment Reason (required)
+              Correction Reason (required)
             </span>
             <input
               type="text"
               className={inputClass}
               value={adjustmentReason}
               onChange={(e) => setAdjustmentReason(e.target.value)}
-              placeholder="e.g. Broker transfer, stock split, import correction"
+              placeholder="e.g. Wrong P/L, broker import fix, split adjustment"
               required
             />
           </label>
+
+          <div className="rounded border border-terminal-border bg-terminal-elevated/30 px-3 py-2 text-xs space-y-1">
+            <p className="text-terminal-muted">
+              Asset P/L: {formatNativeValue(preview.assetPl, holding.currency)} · ROI{" "}
+              {preview.roiPct.toFixed(1)}%
+            </p>
+            <p className="text-terminal-muted">
+              P/L incl. dividend:{" "}
+              {formatNativeValue(preview.plIncludingDividend, holding.currency)}
+            </p>
+          </div>
 
           {error && <p className="text-xs text-loss">{error}</p>}
 

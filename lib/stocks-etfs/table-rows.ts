@@ -1,5 +1,4 @@
 import { calculateRoiPct } from "@/lib/ticker-positions/income-yield";
-import { calculateManualPositionMetrics } from "./manual-position";
 import type { EnrichedStockEtfHolding } from "./types";
 import type { SgStockRow } from "./types";
 import type { UsEquityPositionRow } from "./us-equity-positions";
@@ -26,9 +25,10 @@ function resolveDividendIncome(
   holding: EnrichedStockEtfHolding,
   externalDividend: number
 ): number {
-  return holding.trackingMode === "manual"
-    ? holding.manualTotalDividend
-    : externalDividend;
+  if (holding.manualTotalDividend > 0) {
+    return holding.manualTotalDividend;
+  }
+  return externalDividend;
 }
 
 export function buildStockEtfTableMetrics(
@@ -38,31 +38,15 @@ export function buildStockEtfTableMetrics(
   externalDividend: number
 ): Pick<StockEtfHoldingsTableRow, "dividend" | "fees" | "pl" | "roiPct" | "plWithDividend"> {
   const dividend = resolveDividendIncome(holding, externalDividend);
-  const fees =
-    holding.trackingMode === "manual" ? holding.manualTotalFees : 0;
-
-  if (holding.trackingMode === "manual") {
-    const metrics = calculateManualPositionMetrics({
-      currentValue,
-      capitalInvested: capital,
-      totalDividend: dividend,
-      totalFees: fees,
-    });
-    return {
-      dividend,
-      fees,
-      pl: metrics.assetPl,
-      roiPct: metrics.roiPct,
-      plWithDividend: metrics.plIncludingDividend,
-    };
-  }
-
+  const fees = holding.manualTotalFees;
   const pl = currentValue - capital;
+  const roiPct = calculateRoiPct(pl, capital);
+
   return {
     dividend,
     fees,
     pl,
-    roiPct: calculateRoiPct(pl, capital),
+    roiPct,
     plWithDividend: pl + dividend - fees,
   };
 }
