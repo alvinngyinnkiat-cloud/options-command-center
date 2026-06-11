@@ -17,8 +17,8 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import { MOCK_PORTFOLIO_OVERRIDE } from "@/lib/mock/portfolio";
 import {
-  deriveTradingCashFromPortfolio,
-  tradingCashFromPortfolioOverride,
+  portfolioTradingCashTotals,
+  tradingCashFromStoredBalances,
 } from "@/lib/stocks-etfs/trading-cash-sync";
 import {
   NotAuthenticatedError,
@@ -136,36 +136,42 @@ export async function getStockEtfCashSyncPreview(): Promise<
   | { error: string }
 > {
   try {
+    const userId = await requireUserId();
+
     if (!isSupabaseConfigured()) {
-      const derived = deriveTradingCashFromPortfolio(MOCK_PORTFOLIO_OVERRIDE);
+      const stored = tradingCashFromStoredBalances(
+        cashByCategory(await getStockEtfCashBalances(userId))
+      );
+      const portfolio = portfolioTradingCashTotals(MOCK_PORTFOLIO_OVERRIDE);
       return {
-        ...derived,
-        usEtfCashUsd: derived.us_etf,
-        usStockCashUsd: derived.us_stock,
-        sgStockCashSgd: derived.sg_stock,
-        tradingCashUsd: MOCK_PORTFOLIO_OVERRIDE.manualTradingCashUsd ?? 0,
-        tradingCashSgd: MOCK_PORTFOLIO_OVERRIDE.manualTradingCashSgd ?? 0,
+        usEtfCashUsd: stored.us_etf,
+        usStockCashUsd: stored.us_stock,
+        sgStockCashSgd: stored.sg_stock,
+        ...portfolio,
       };
     }
 
     const access = await resolveSupabaseServerAccess();
     if (!access) throw new NotAuthenticatedError("Authentication required.");
     const supabase = await getServerSupabaseClient(access);
-    const { data } = await supabase
-      .from("portfolio_overrides")
-      .select("manual_trading_cash_usd, manual_trading_cash_sgd")
-      .eq("user_id", access.userId)
-      .maybeSingle();
+    const [{ data }, storedRows] = await Promise.all([
+      supabase
+        .from("portfolio_overrides")
+        .select("manual_trading_cash_usd, manual_trading_cash_sgd")
+        .eq("user_id", access.userId)
+        .maybeSingle(),
+      getStockEtfCashBalances(access.userId),
+    ]);
 
     const row = data as PortfolioOverride | null;
-    const derived = tradingCashFromPortfolioOverride(row);
+    const stored = tradingCashFromStoredBalances(cashByCategory(storedRows));
+    const portfolio = portfolioTradingCashTotals(row);
 
     return {
-      usEtfCashUsd: derived.us_etf,
-      usStockCashUsd: derived.us_stock,
-      sgStockCashSgd: derived.sg_stock,
-      tradingCashUsd: Number(row?.manual_trading_cash_usd ?? 0),
-      tradingCashSgd: Number(row?.manual_trading_cash_sgd ?? 0),
+      usEtfCashUsd: stored.us_etf,
+      usStockCashUsd: stored.us_stock,
+      sgStockCashSgd: stored.sg_stock,
+      ...portfolio,
     };
   } catch (e) {
     return {

@@ -76,13 +76,27 @@ export interface SgStockRow {
 }
 
 export interface SgStockTabSummary {
-  totalMarketValue: number;
-  totalCapital: number;
-  totalDividendIncome: number;
+  /** Open position value (excludes trading cash). */
+  positionValue: number;
+  /** Open position value + SG trading cash. */
+  currentValue: number;
+  capitalInvested: number;
   totalPnl: number;
-  totalReturnPct: number;
-  cashBalance: number;
+  roiPct: number;
+  totalDividend: number;
+  plWithDividend: number;
+  tradingCash: number;
   totalFeesPaid: number;
+  /** @deprecated Use positionValue */
+  totalMarketValue: number;
+  /** @deprecated Use capitalInvested */
+  totalCapital: number;
+  /** @deprecated Use totalDividend */
+  totalDividendIncome: number;
+  /** @deprecated Use roiPct */
+  totalReturnPct: number;
+  /** @deprecated Use tradingCash */
+  cashBalance: number;
 }
 
 export interface StockEtfTabData {

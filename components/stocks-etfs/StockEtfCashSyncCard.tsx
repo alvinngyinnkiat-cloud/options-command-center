@@ -66,8 +66,9 @@ export function StockEtfCashSyncCard({ onSaved }: StockEtfCashSyncCardProps) {
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">Sync Trading Cash From Portfolio Dashboard</CardTitle>
         <CardDescription>
-          Pull Trading Cash from Manual Portfolio Breakdown into market buckets.
-          Does not overwrite holdings.
+          Set per-market trading cash from the Portfolio Dashboard reference
+          totals or your own amounts. Manual values here override stored
+          balances when you sync.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -83,7 +84,8 @@ export function StockEtfCashSyncCard({ onSaved }: StockEtfCashSyncCardProps) {
               Trading Cash SGD: {formatSGD(tradingCashSgd ?? 0)}
             </p>
             <p className="text-[10px] text-terminal-muted">
-              USD is split 50/50 between US ETF and US Stock. SGD maps to SG Stock.
+              Reference only — allocate USD and SGD across markets manually.
+              Stored balances prefill below.
             </p>
           </div>
         )}

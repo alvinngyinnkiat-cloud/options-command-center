@@ -35,8 +35,7 @@ function buildSgStockRow(
     dividendIncome
   );
   const unrealizedPnl = marketValue - capitalDeployed;
-  const netPositionPnl = marketValue - adjustedCostBasis;
-  const totalPnl = netPositionPnl + dividendIncome;
+  const totalPnl = unrealizedPnl;
   const unrealizedPnlPct =
     capitalDeployed > 0 ? (unrealizedPnl / capitalDeployed) * 100 : 0;
   const currentPrice =
@@ -70,21 +69,32 @@ function buildSgStockTab(
   const sgHoldings = filterHoldingsByCategory(holdings, "sg_stock");
   const rows = sgHoldings.map((h) => buildSgStockRow(h, dividendTotals));
   const openRows = rows.filter((r) => r.shares > 0);
-  const totalCapital = openRows.reduce(
+  const positionValue = openRows.reduce((s, r) => s + r.marketValue, 0);
+  const capitalInvested = openRows.reduce(
     (s, r) => s + r.holding.totalInvestedNative,
     0
   );
+  const totalDividend = openRows.reduce((s, r) => s + r.dividendIncome, 0);
   const totalPnl = openRows.reduce((s, r) => s + r.totalPnl, 0);
+  const roiPct = calculateRoiPct(totalPnl, capitalInvested);
+  const plWithDividend = totalPnl + totalDividend;
   return {
     rows,
     summary: {
-      totalMarketValue: openRows.reduce((s, r) => s + r.marketValue, 0),
-      totalCapital,
-      totalDividendIncome: openRows.reduce((s, r) => s + r.dividendIncome, 0),
+      positionValue,
+      currentValue: positionValue,
+      capitalInvested,
       totalPnl,
-      totalReturnPct: calculateRoiPct(totalPnl, totalCapital),
-      cashBalance: 0,
+      roiPct,
+      totalDividend,
+      plWithDividend,
+      tradingCash: 0,
       totalFeesPaid: 0,
+      totalMarketValue: positionValue,
+      totalCapital: capitalInvested,
+      totalDividendIncome: totalDividend,
+      totalReturnPct: roiPct,
+      cashBalance: 0,
     },
   };
 }

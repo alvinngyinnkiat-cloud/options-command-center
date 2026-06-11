@@ -55,7 +55,8 @@ function SummaryCard({
 
 export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelProps) {
   const totalPnl = pnlStatProps(summary.totalPnl);
-  const returnPct = pnlPercentStatProps(summary.totalReturnPct, 1);
+  const returnPct = pnlPercentStatProps(summary.roiPct, 1);
+  const plWithDividend = pnlStatProps(summary.plWithDividend);
   const { open, closed } = splitSgStockRows(rows);
 
   return (
@@ -66,45 +67,37 @@ export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelPro
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
           <SummaryCard
-            label="Trading Cash"
-            value={formatSGD(summary.cashBalance)}
-            sub="Available to deploy"
+            label="Current Value"
+            value={formatSGD(summary.currentValue)}
+            sub="Positions + trading cash"
           />
           <SummaryCard
-            label="Total Market Value"
-            value={formatSGD(summary.totalMarketValue)}
+            label="Capital Invested"
+            value={formatSGD(summary.capitalInvested)}
           />
           <SummaryCard
-            label="Total Capital"
-            value={formatSGD(summary.totalCapital)}
-          />
-          <SummaryCard
-            label="Total Dividend Income"
-            value={formatSGD(summary.totalDividendIncome)}
-          />
-          <SummaryCard
-            label="Total Fees Paid"
-            value={formatSGD(summary.totalFeesPaid)}
-            className="hidden sm:block"
-          />
-          <SummaryCard
-            label="Performance"
-            value={formatSignedSGD(summary.totalPnl)}
-            sub={`ROI ${returnPct.value}`}
-            valueClassName={totalPnl.valueClassName}
-            className="col-span-2 sm:hidden"
-          />
-          <SummaryCard
-            label="Total P/L"
+            label="P&L"
             value={formatSignedSGD(summary.totalPnl)}
             valueClassName={totalPnl.valueClassName}
-            className="hidden sm:block"
           />
           <SummaryCard
-            label="Total ROI"
+            label="ROI"
             value={returnPct.value}
             valueClassName={returnPct.valueClassName}
-            className="hidden sm:block"
+          />
+          <SummaryCard
+            label="Total Dividend"
+            value={formatSGD(summary.totalDividend)}
+          />
+          <SummaryCard
+            label="P&L With Dividend"
+            value={formatSignedSGD(summary.plWithDividend)}
+            valueClassName={plWithDividend.valueClassName}
+          />
+          <SummaryCard
+            label="Trading Cash"
+            value={formatSGD(summary.tradingCash)}
+            sub="Available to deploy"
           />
         </div>
       </section>

@@ -7,6 +7,7 @@ import { MoreHorizontal } from "lucide-react";
 import { StockEtfBuySellModal } from "./StockEtfBuySellModal";
 import { StockEtfEditPositionModal } from "./StockEtfEditPositionModal";
 import { StockEtfPositionHistoryModal } from "./StockEtfPositionHistoryModal";
+import { StockEtfDeletePositionModal } from "./StockEtfDeletePositionModal";
 
 type ActiveModal =
   | { type: "buy" }
@@ -14,6 +15,7 @@ type ActiveModal =
   | { type: "edit" }
   | { type: "transactions" }
   | { type: "adjustments" }
+  | { type: "delete" }
   | null;
 
 interface StockEtfPositionActionsMenuProps {
@@ -27,6 +29,7 @@ const MENU_ITEMS = [
   { type: "edit" as const, label: "Edit Position" },
   { type: "transactions" as const, label: "View Transactions" },
   { type: "adjustments" as const, label: "View Adjustment History" },
+  { type: "delete" as const, label: "Delete Position" },
 ];
 
 export function StockEtfPositionActionsMenu({
@@ -116,6 +119,13 @@ export function StockEtfPositionActionsMenu({
           holding={holding}
           mode="adjustments"
           onClose={() => setActive(null)}
+        />
+      )}
+      {active?.type === "delete" && (
+        <StockEtfDeletePositionModal
+          holding={holding}
+          onClose={() => setActive(null)}
+          onDeleted={onRefresh}
         />
       )}
     </>

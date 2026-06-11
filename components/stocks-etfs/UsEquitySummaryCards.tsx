@@ -55,7 +55,8 @@ export function UsEquitySummaryCards({
   summary,
 }: UsEquitySummaryCardsProps) {
   const totalPnl = pnlStatProps(summary.totalPnl);
-  const returnPct = pnlPercentStatProps(summary.totalReturnPct, 1);
+  const returnPct = pnlPercentStatProps(summary.roiPct, 1);
+  const plWithDividend = pnlStatProps(summary.plWithDividend);
 
   return (
     <section>
@@ -64,46 +65,37 @@ export function UsEquitySummaryCards({
       </h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
         <Card
-          label="Trading Cash"
-          value={formatTickerCurrency(summary.cashBalance)}
-          sub="Available to deploy"
+          label="Current Value"
+          value={formatTickerCurrency(summary.currentValue)}
+          sub="USD · open positions"
         />
         <Card
-          label="Total Market Value"
-          value={formatTickerCurrency(summary.totalMarketValue)}
-          sub="USD · open holdings"
+          label="Capital Invested"
+          value={formatTickerCurrency(summary.capitalInvested)}
         />
         <Card
-          label="Total Capital"
-          value={formatTickerCurrency(summary.totalCapital)}
-        />
-        <Card
-          label="Total Dividend Income"
-          value={formatTickerCurrency(summary.totalDividendIncome)}
-        />
-        <Card
-          label="Total Fees Paid"
-          value={formatTickerCurrency(summary.totalFeesPaid)}
-          className="hidden sm:block"
-        />
-        <Card
-          label="Performance"
-          value={totalPnl.value}
-          sub={`ROI ${returnPct.value}`}
-          valueClassName={totalPnl.valueClassName}
-          className="col-span-2 sm:hidden"
-        />
-        <Card
-          label="Total P/L"
+          label="P&L"
           value={totalPnl.value}
           valueClassName={totalPnl.valueClassName}
-          className="hidden sm:block"
         />
         <Card
-          label="Total ROI"
+          label="ROI"
           value={returnPct.value}
           valueClassName={returnPct.valueClassName}
-          className="hidden sm:block"
+        />
+        <Card
+          label="Total Dividend"
+          value={formatTickerCurrency(summary.totalDividend)}
+        />
+        <Card
+          label="P&L With Dividend"
+          value={plWithDividend.value}
+          valueClassName={plWithDividend.valueClassName}
+        />
+        <Card
+          label="Trading Cash"
+          value={formatTickerCurrency(summary.tradingCash)}
+          sub="Available to deploy"
         />
       </div>
     </section>

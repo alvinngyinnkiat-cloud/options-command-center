@@ -42,6 +42,24 @@ export function resetMockStockEtfPositionHistory(): void {
   mockAdjustments = [];
 }
 
+export function deleteMockStockEtfTransaction(id: string): boolean {
+  const before = mockTransactions.length;
+  mockTransactions = mockTransactions.filter((r) => r.id !== id);
+  return mockTransactions.length < before;
+}
+
+export function deleteMockStockEtfTransactionsForHolding(holdingId: string): number {
+  const before = mockTransactions.length;
+  mockTransactions = mockTransactions.filter((r) => r.holding_id !== holdingId);
+  return before - mockTransactions.length;
+}
+
+export function deleteMockStockEtfAdjustmentsForHolding(holdingId: string): number {
+  const before = mockAdjustments.length;
+  mockAdjustments = mockAdjustments.filter((r) => r.holding_id !== holdingId);
+  return before - mockAdjustments.length;
+}
+
 export function seedMockStockEtfTransaction(
   partial: Omit<StockEtfTransaction, "id" | "created_at" | "updated_at"> & {
     id?: string;

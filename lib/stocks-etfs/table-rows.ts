@@ -23,7 +23,7 @@ export function buildStockEtfTableMetrics(
   currentValue: number,
   dividend: number
 ): Pick<StockEtfHoldingsTableRow, "pl" | "roiPct"> {
-  const pl = currentValue + dividend - capital;
+  const pl = currentValue - capital;
   return {
     pl,
     roiPct: calculateRoiPct(pl, capital),

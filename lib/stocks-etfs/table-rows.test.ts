@@ -71,10 +71,10 @@ function mockUsRow(overrides: Partial<UsEquityPositionRow> = {}): UsEquityPositi
 }
 
 describe("stock etf table rows", () => {
-  it("computes P/L and ROI from capital, value, and dividend", () => {
+  it("computes P/L and ROI from capital and value (excludes dividend)", () => {
     expect(buildStockEtfTableMetrics(10_000, 11_000, 250)).toEqual({
       pl: 1_000,
-      roiPct: 12.5,
+      roiPct: 10,
     });
   });
 
@@ -86,7 +86,7 @@ describe("stock etf table rows", () => {
       currentValue: 11_000,
       dividend: 250,
       pl: 1_000,
-      roiPct: 12.5,
+      roiPct: 10,
       currency: "USD",
     });
   });

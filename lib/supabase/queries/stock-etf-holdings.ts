@@ -17,11 +17,9 @@ import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
 import { DEFAULT_USD_SGD_RATE } from "@/lib/portfolio/currency";
 import type { StockEtfHoldingFormInput } from "@/lib/stocks-etfs/types";
 import type { StockEtfTrackerData } from "@/lib/stocks-etfs/types";
-import { getStockEtfCashBalances, fetchPortfolioTradingCashSource } from "@/lib/supabase/queries/stock-etf-cash";
-import {
-  deriveTradingCashFromPortfolio,
-  resolveDisplayTradingCash,
-} from "@/lib/stocks-etfs/trading-cash-sync";
+import { getStockEtfCashBalances } from "@/lib/supabase/queries/stock-etf-cash";
+import { tradingCashFromStoredBalances } from "@/lib/stocks-etfs/trading-cash-sync";
+import { removeStockEtfLedgerEntriesForHolding } from "@/lib/supabase/queries/stock-etf-ledger";
 import { listStockEtfLedgerEntries } from "@/lib/supabase/queries/stock-etf-ledger";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
@@ -68,18 +66,11 @@ async function buildFullData(
   );
   const holdings = enrichAllStockEtfHoldings(rows, dividendSummary.byTicker);
   const sectorAllocation = buildSectorAllocation(holdings);
-  const [cashRows, ledger, portfolioTradingCash] = await Promise.all([
+  const [cashRows, ledger] = await Promise.all([
     getStockEtfCashBalances(userId),
     listStockEtfLedgerEntries(),
-    fetchPortfolioTradingCashSource(userId),
   ]);
-  const storedCash = cashByCategory(cashRows);
-  const portfolioCash = deriveTradingCashFromPortfolio(portfolioTradingCash);
-  const cashBalances = resolveDisplayTradingCash(
-    storedCash,
-    portfolioCash,
-    ledger.length > 0
-  );
+  const cashBalances = tradingCashFromStoredBalances(cashByCategory(cashRows));
   const feesFor = (cat: "us_etf" | "us_stock" | "sg_stock") =>
     calculateTotalFeesPaid(
       ledger.filter((e) => e.market_category === cat)
@@ -89,11 +80,16 @@ async function buildFullData(
     tradesData.trades,
     dividendSummary.byTicker
   );
+  tabs.usEtf.summary.tradingCash = cashBalances.us_etf;
   tabs.usEtf.summary.cashBalance = cashBalances.us_etf;
   tabs.usEtf.summary.totalFeesPaid = feesFor("us_etf");
+  tabs.usStock.summary.tradingCash = cashBalances.us_stock;
   tabs.usStock.summary.cashBalance = cashBalances.us_stock;
   tabs.usStock.summary.totalFeesPaid = feesFor("us_stock");
+  tabs.sgStock.summary.tradingCash = cashBalances.sg_stock;
   tabs.sgStock.summary.cashBalance = cashBalances.sg_stock;
+  tabs.sgStock.summary.currentValue =
+    tabs.sgStock.summary.positionValue + cashBalances.sg_stock;
   tabs.sgStock.summary.totalFeesPaid = feesFor("sg_stock");
 
   return {
@@ -174,11 +170,27 @@ export async function persistStockEtfHolding(
   );
 }
 
+export interface RemoveStockEtfHoldingOptions {
+  /** When true, also removes ledger entries linked to this holding. */
+  deleteLedgerEntries?: boolean;
+}
+
 export async function removeStockEtfHolding(
   id: string,
-  userId?: string
+  userId?: string,
+  options?: RemoveStockEtfHoldingOptions
 ): Promise<void> {
+  if (options?.deleteLedgerEntries) {
+    await removeStockEtfLedgerEntriesForHolding(id, userId);
+  }
+
   if (!isSupabaseConfigured()) {
+    const {
+      deleteMockStockEtfTransactionsForHolding,
+      deleteMockStockEtfAdjustmentsForHolding,
+    } = await import("@/lib/mock/stock-etf-position-store");
+    deleteMockStockEtfTransactionsForHolding(id);
+    deleteMockStockEtfAdjustmentsForHolding(id);
     deleteMockStockEtfHolding(id);
     return;
   }

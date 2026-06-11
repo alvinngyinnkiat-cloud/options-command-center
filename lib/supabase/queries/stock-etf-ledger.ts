@@ -131,3 +131,30 @@ export async function removeStockEtfLedgerEntry(
     }
   );
 }
+
+export async function removeStockEtfLedgerEntriesForHolding(
+  holdingId: string,
+  userId?: string
+): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    const { deleteMockStockEtfLedgerForHolding } = await import(
+      "@/lib/mock/stock-etf-cash-store"
+    );
+    deleteMockStockEtfLedgerForHolding(holdingId);
+    return;
+  }
+
+  await withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error } = await supabase
+        .from("stock_etf_ledger")
+        .delete()
+        .eq("holding_id", holdingId)
+        .eq("user_id", effectiveUserId);
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+    }
+  );
+}

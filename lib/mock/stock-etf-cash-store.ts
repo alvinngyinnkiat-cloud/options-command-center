@@ -1,19 +1,16 @@
 import { defaultCashBalances } from "@/lib/stocks-etfs/cash-balances";
-import { deriveTradingCashFromPortfolio } from "@/lib/stocks-etfs/trading-cash-sync";
 import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
-import { MOCK_PORTFOLIO_OVERRIDE } from "@/lib/mock/portfolio";
 import type { StockEtfCashBalance, StockEtfLedgerEntry } from "@/types/database";
 import { MOCK_USER_ID } from "@/lib/supabase/resolve-user";
 
-function seedMockCashFromPortfolio(): StockEtfCashBalance[] {
-  const derived = deriveTradingCashFromPortfolio(MOCK_PORTFOLIO_OVERRIDE);
+function seedMockCash(): StockEtfCashBalance[] {
   return defaultCashBalances(MOCK_USER_ID).map((row) => ({
     ...row,
-    cash_native: derived[row.market_category as MarketCategory],
+    cash_native: 0,
   }));
 }
 
-let mockCash: StockEtfCashBalance[] = seedMockCashFromPortfolio();
+let mockCash: StockEtfCashBalance[] = seedMockCash();
 let mockLedger: StockEtfLedgerEntry[] = [];
 
 export function getMockStockEtfCashBalances(): StockEtfCashBalance[] {
@@ -56,7 +53,13 @@ export function deleteMockStockEtfLedgerEntry(id: string): boolean {
   return mockLedger.length < before;
 }
 
+export function deleteMockStockEtfLedgerForHolding(holdingId: string): number {
+  const before = mockLedger.length;
+  mockLedger = mockLedger.filter((e) => e.holding_id !== holdingId);
+  return before - mockLedger.length;
+}
+
 export function resetMockStockEtfCash(): void {
-  mockCash = seedMockCashFromPortfolio();
+  mockCash = seedMockCash();
   mockLedger = [];
 }

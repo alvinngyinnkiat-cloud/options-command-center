@@ -56,17 +56,31 @@ export interface UsEquityPositionRow {
 }
 
 export interface UsEquityTabSummary {
-  totalMarketValue: number;
-  totalCapital: number;
-  totalDividendIncome: number;
+  /** Open position value (excludes trading cash). */
+  positionValue: number;
+  /** US tabs: same as positionValue. */
+  currentValue: number;
+  capitalInvested: number;
   totalPnl: number;
+  roiPct: number;
+  totalDividend: number;
+  plWithDividend: number;
+  tradingCash: number;
+  totalFeesPaid: number;
+  /** @deprecated Use positionValue */
+  totalMarketValue: number;
+  /** @deprecated Use capitalInvested */
+  totalCapital: number;
+  /** @deprecated Use totalDividend */
+  totalDividendIncome: number;
+  /** @deprecated Use roiPct */
   totalReturnPct: number;
+  /** @deprecated Use tradingCash */
+  cashBalance: number;
   /** Internal — premium metrics live in Options / Position Manager. */
   totalPremiumCollected: number;
   adjustedCostBasis: number;
   netPositionPnl: number;
-  cashBalance: number;
-  totalFeesPaid: number;
 }
 
 function isOpenTrade(trade: EnrichedTrade): boolean {
@@ -221,9 +235,16 @@ export function buildUsEquityPositionRow(
   };
 }
 
-function stockOnlyPnl(row: Pick<UsEquityPositionRow, "marketValue" | "dividendIncome" | "holding">): number {
+function openPositionPnl(
+  marketValue: number,
+  capital: number
+): number {
+  return marketValue - capital;
+}
+
+function stockOnlyPnl(row: Pick<UsEquityPositionRow, "marketValue" | "holding">): number {
   const capital = row.holding?.totalInvestedNative ?? 0;
-  return row.marketValue - capital + row.dividendIncome;
+  return openPositionPnl(row.marketValue, capital);
 }
 
 export function buildUsEquityTabData(
@@ -263,15 +284,31 @@ export function buildUsEquityTabData(
 
   const openRows = rows.filter((r) => r.shares > 0);
 
+  const positionValue = openRows.reduce((s, r) => s + r.marketValue, 0);
+  const capitalInvested = openRows.reduce(
+    (s, r) => s + (r.holding?.totalInvestedNative ?? 0),
+    0
+  );
+  const totalDividend = openRows.reduce((s, r) => s + r.dividendIncome, 0);
+  const totalPnl = openRows.reduce((s, r) => s + stockOnlyPnl(r), 0);
+  const plWithDividend = totalPnl + totalDividend;
+  const roiPct = calculateRoiPct(totalPnl, capitalInvested);
+
   const summary: UsEquityTabSummary = {
-    totalMarketValue: openRows.reduce((s, r) => s + r.marketValue, 0),
-    totalCapital: openRows.reduce(
-      (s, r) => s + (r.holding?.totalInvestedNative ?? 0),
-      0
-    ),
-    totalDividendIncome: openRows.reduce((s, r) => s + r.dividendIncome, 0),
-    totalPnl: openRows.reduce((s, r) => s + stockOnlyPnl(r), 0),
-    totalReturnPct: 0,
+    positionValue,
+    currentValue: positionValue,
+    capitalInvested,
+    totalPnl,
+    roiPct,
+    totalDividend,
+    plWithDividend,
+    tradingCash: 0,
+    totalFeesPaid: 0,
+    totalMarketValue: positionValue,
+    totalCapital: capitalInvested,
+    totalDividendIncome: totalDividend,
+    totalReturnPct: roiPct,
+    cashBalance: 0,
     totalPremiumCollected: rows.reduce(
       (s, r) => s + r.totalPremiumCollected,
       0
@@ -280,17 +317,8 @@ export function buildUsEquityTabData(
       (s, r) => s + r.holding!.totalInvestedNative,
       0
     ),
-    netPositionPnl: openRows.reduce(
-      (s, r) => s + (r.marketValue - (r.holding?.totalInvestedNative ?? 0)),
-      0
-    ),
-    cashBalance: 0,
-    totalFeesPaid: 0,
+    netPositionPnl: totalPnl,
   };
-  summary.totalReturnPct = calculateRoiPct(
-    summary.totalPnl,
-    summary.totalCapital
-  );
 
   return { rows, summary };
 }

@@ -78,11 +78,12 @@ export async function refreshStockMarketPricesAction(): Promise<StockEtfActionRe
 }
 
 export async function deleteStockEtfHolding(
-  id: string
+  id: string,
+  options?: { deleteLedgerEntries?: boolean }
 ): Promise<StockEtfActionResult> {
   try {
     const userId = await requireUserId();
-    await removeStockEtfHolding(id, userId);
+    await removeStockEtfHolding(id, userId, options);
     return finish();
   } catch (e) {
     return {
