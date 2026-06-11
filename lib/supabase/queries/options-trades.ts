@@ -226,7 +226,7 @@ export async function enrichOptionsTradeRow(
 export async function getOptionsTradesData(): Promise<TradeTrackerData> {
   const { value, dataSource } = await readSupabasePrimary({
     module: "getOptionsTradesData",
-    mock: () => enrichAll(getMockTrades(), "mock"),
+    mock: () => enrichAll([], "mock"),
     empty: (userId) => enrichAll([], "supabase", userId),
     read: async (userId) => enrichAll(await fetchTradeRows(userId), "supabase", userId),
   });

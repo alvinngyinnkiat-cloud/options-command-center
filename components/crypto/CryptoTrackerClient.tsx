@@ -54,13 +54,9 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
         actions={
           <>
             <Badge variant="outline">V4 Transactions</Badge>
-            <Badge
-              variant={
-                initialData.dataSource === "supabase" ? "success" : "outline"
-              }
-            >
-              {initialData.dataSource === "supabase" ? "Saved" : "Mock data"}
-            </Badge>
+            {initialData.dataSource === "supabase" && (
+              <Badge variant="success">Saved</Badge>
+            )}
           </>
         }
       />
@@ -111,7 +107,7 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
           onAdjust={(h) => setAdjustHolding(h)}
           onSell={openSell}
           onRefresh={handleRefresh}
-          emptyMessage="No open positions. Buy a coin or adjust a closed position with Current SGD above zero."
+          emptyMessage="No crypto positions recorded yet."
         />
       </section>
 
@@ -123,7 +119,7 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
           holdings={closed}
           variant="closed"
           onRefresh={handleRefresh}
-          emptyMessage="No closed positions. Sell down to zero or set Current SGD to zero."
+          emptyMessage="No crypto positions recorded yet."
         />
       </section>
 

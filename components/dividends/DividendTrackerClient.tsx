@@ -39,7 +39,7 @@ function UpcomingTable({
         <h3 className="text-xs font-medium uppercase tracking-wider text-terminal-muted mb-2">
           Upcoming Dividends
         </h3>
-        <p className="text-sm text-terminal-muted">No records.</p>
+        <p className="text-sm text-terminal-muted">No dividend records yet.</p>
       </div>
     );
   }
@@ -118,7 +118,7 @@ function ReceivedDividendsTable({
         <h3 className="text-xs font-medium uppercase tracking-wider text-terminal-muted mb-2">
           Received Dividends
         </h3>
-        <p className="text-sm text-terminal-muted">No records.</p>
+        <p className="text-sm text-terminal-muted">No dividend records yet.</p>
       </div>
     );
   }

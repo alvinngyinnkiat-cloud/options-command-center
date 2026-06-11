@@ -274,7 +274,7 @@ async function withAssetTrackers(
 export async function getPortfolioDashboardData(): Promise<PortfolioMetrics> {
   const { value: raw, dataSource } = await readSupabasePrimary({
     module: "getPortfolioDashboardData",
-    mock: async () => withAssetTrackers(getMockPortfolioRawWithHoldings()),
+    mock: async () => withAssetTrackers(emptyPortfolioRaw()),
     empty: async () => withAssetTrackers(emptyPortfolioRaw()),
     read: async (userId) => {
       const fetched = await fetchRawFromSupabase(userId);

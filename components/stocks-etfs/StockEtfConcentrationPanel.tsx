@@ -22,7 +22,7 @@ export function StockEtfConcentrationPanel({
           Top 5 Holdings
         </h3>
         {topHoldings.length === 0 ? (
-          <p className="text-xs text-terminal-muted">No holdings yet.</p>
+          <p className="text-xs text-terminal-muted">No holdings recorded yet.</p>
         ) : (
           <ul className="space-y-2">
             {topHoldings.map((h, i) => (

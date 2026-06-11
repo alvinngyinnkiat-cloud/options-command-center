@@ -37,7 +37,7 @@ export function StockEtfHoldingsTable({
 }: StockEtfHoldingsTableProps) {
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-terminal-muted">No {emptyLabel} positions yet.</p>
+      <p className="text-sm text-terminal-muted">No holdings recorded yet.</p>
     );
   }
 

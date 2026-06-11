@@ -624,7 +624,7 @@ function SummaryTable({
                 colSpan={11}
                 className="px-3 py-10 text-center text-terminal-muted"
               >
-                No trades to display.
+                No trades recorded yet.
               </td>
             </tr>
           )}
@@ -858,7 +858,7 @@ function DetailedTable({
                 colSpan={25}
                 className="px-3 py-10 text-center text-terminal-muted"
               >
-                No trades to display.
+                No trades recorded yet.
               </td>
             </tr>
           )}
@@ -890,7 +890,7 @@ function CardGrid({
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-terminal-border px-3 py-10 text-center text-xs text-terminal-muted">
-        No trades to display.
+        No trades recorded yet.
       </div>
     );
   }

@@ -15,12 +15,10 @@ import type { PassiveIncomeBreakdown } from "@/lib/goals/passive-income-breakdow
 import {
   appendMockGoalChange,
   deleteMockFinancialGoal,
-  ensureMockGoalsSeeded,
   getMockFinancialGoals,
   getMockGoalChanges,
   upsertMockFinancialGoal,
 } from "@/lib/mock/financial-goals-store";
-import { MOCK_GOALS_RAW } from "@/lib/mock/goals";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
 import { getEnrichedPortfolioMetrics } from "@/lib/portfolio/enrich-capital-pools";
 import { buildCategoryValuesSgd } from "@/lib/stocks-etfs/build-tab-data";
@@ -121,16 +119,14 @@ async function resolveLiveMetrics(userId: string): Promise<{
   const passiveIncomeMonthlySgd = passiveIncomeBreakdown.monthlySgd;
 
   const asOfDate =
-    latestSnapshot?.snapshotDate ??
-    MOCK_GOALS_RAW.asOfDate ??
-    MOCK_REFERENCE_DATE;
+    latestSnapshot?.snapshotDate ?? MOCK_REFERENCE_DATE;
 
   const goals = await listFinancialGoalRows(userId);
   const portfolioGoal = goals.find((g) => g.goal_type === "net_worth");
   const inceptionDate =
     portfolioGoal?.start_date ??
     goals.find((g) => g.start_date)?.start_date ??
-    MOCK_GOALS_RAW.inceptionDate;
+    MOCK_REFERENCE_DATE;
 
   return {
     portfolioCurrentSgd,
@@ -138,36 +134,10 @@ async function resolveLiveMetrics(userId: string): Promise<{
     passiveIncomeBreakdown,
     asOfDate,
     netContributions:
-      metrics.dataSource === "supabase"
-        ? metrics.netContributions
-        : MOCK_GOALS_RAW.netContributions,
+      metrics.dataSource === "supabase" ? metrics.netContributions : 0,
     averageMonthlyContribution: contributionTracker.averageMonthlyContribution,
     inceptionDate,
   };
-}
-
-async function seedDefaultGoals(userId: string): Promise<void> {
-  const { DEFAULT_GOAL_SEEDS } = await import("@/lib/goals/goal-models");
-  const now = new Date().toISOString();
-  for (const seed of DEFAULT_GOAL_SEEDS) {
-    const row: FinancialGoal = {
-      id: randomUUID(),
-      user_id: userId,
-      name: seed.name,
-      goal_type: seed.goalType,
-      target_amount: seed.targetAmount,
-      current_amount: 0,
-      target_date: seed.targetDate,
-      start_date: seed.startDate,
-      is_active: true,
-      is_archived: false,
-      assumed_yield_pct: seed.assumedYieldPct ?? null,
-      notes: seed.notes,
-      created_at: now,
-      updated_at: now,
-    };
-    await persistFinancialGoalRow(row, userId);
-  }
 }
 
 async function persistFinancialGoalRow(
@@ -256,7 +226,6 @@ export async function listFinancialGoalRows(
   userId: string
 ): Promise<FinancialGoal[]> {
   if (!isSupabaseConfigured()) {
-    ensureMockGoalsSeeded(userId);
     return getMockFinancialGoals(userId)
       .filter((g) => g.is_active)
       .map(normalizeGoalRow);
@@ -272,17 +241,6 @@ export async function listFinancialGoalRows(
         .order("created_at", { ascending: true });
 
       if (error) return [];
-
-      if (!data?.length) {
-        await seedDefaultGoals(queryUserId);
-        const { data: seeded } = await supabase
-          .from("financial_goals")
-          .select("*")
-          .eq("user_id", queryUserId)
-          .eq("is_active", true)
-          .order("created_at", { ascending: true });
-        return (seeded ?? []).map((r) => normalizeGoalRow(r as FinancialGoal));
-      }
 
       return (data as FinancialGoal[]).map(normalizeGoalRow);
     },

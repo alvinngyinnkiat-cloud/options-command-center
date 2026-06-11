@@ -62,8 +62,8 @@ export async function getClientProfitSharingData(
     module: "getClientProfitSharingData",
     mock: () =>
       buildClientProfitSharingData({
-        clients: getMockProfitSharingClients(),
-        allocations: getMockProfitSharingAllocations(),
+        clients: [],
+        allocations: [],
         trades: tradesData.trades,
         activeClientId,
         dataSource: "mock",
@@ -96,7 +96,7 @@ export async function getClientProfilesForSelect(): Promise<
 > {
   const { value } = await readSupabasePrimary({
     module: "getClientProfilesForSelect",
-    mock: () => getMockProfitSharingClients(),
+    mock: () => [],
     empty: () => [],
     read: async (userId) => (await fetchClientData(userId)).clients,
   });

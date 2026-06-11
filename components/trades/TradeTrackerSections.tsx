@@ -362,7 +362,7 @@ function SectionTable({
                   colSpan={10}
                   className="px-3 py-10 text-center text-terminal-muted"
                 >
-                  No trades to display.
+                  No trades recorded yet.
                 </td>
               </tr>
             )}

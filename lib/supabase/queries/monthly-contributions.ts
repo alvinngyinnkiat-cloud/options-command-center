@@ -51,7 +51,7 @@ async function fetchContributionRows(
 export async function getMonthlyContributionTrackerData(): Promise<MonthlyContributionTrackerData> {
   const { value, dataSource } = await readSupabasePrimary({
     module: "getMonthlyContributionTrackerData",
-    mock: () => buildTrackerData(getMockMonthlyContributions(), "mock"),
+    mock: () => buildTrackerData([], "mock"),
     empty: () => buildTrackerData([], "supabase"),
     read: async (userId) =>
       buildTrackerData(await fetchContributionRows(userId), "supabase"),

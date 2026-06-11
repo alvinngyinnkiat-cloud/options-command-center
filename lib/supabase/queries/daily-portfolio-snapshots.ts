@@ -6,13 +6,11 @@ import {
   buildMilestones,
   buildPerformanceMetrics,
   filterRealPortfolioSnapshots,
-  generateMockSnapshotHistory,
   selectLatestSnapshot,
 } from "@/lib/portfolio/snapshot-history";
 import { getSingaporeSnapshotDate } from "@/lib/portfolio/snapshot-date";
 import type { PortfolioHistoryData } from "@/lib/portfolio/daily-snapshot-types";
 import {
-  applyMockGeneratedSnapshotColumns,
   buildDailySnapshotPayload,
   mapDailySnapshotRow,
 } from "@/lib/portfolio/daily-snapshot";
@@ -294,50 +292,12 @@ export async function getPortfolioHistoryData(input: {
     input.capitalPools ?? (await buildPortfolioCapitalPools(input.metrics));
 
   if (!isSupabaseConfigured()) {
-    let rows = getMockDailyPortfolioSnapshots();
-    if (rows.length === 0) {
-      const generated = generateMockSnapshotHistory(
-        input.metrics.portfolioValue,
-        asOfDate
-      );
-      rows = generated.map((s) =>
-        applyMockGeneratedSnapshotColumns({
-          id: s.id,
-          user_id: input.userId,
-          snapshot_date: s.snapshotDate,
-          portfolio_value_sgd: s.portfolioValueSgd,
-          stock_options_value_sgd: s.stockOptionsValueSgd,
-          crypto_value_sgd: s.cryptoValueSgd,
-          usd_cash: s.usdCash,
-          sgd_cash: s.sgdCash,
-          usd_cash_sgd_equivalent: s.usdCashSgdEquivalent,
-          crypto_cash_sgd: s.cryptoCashSgd,
-          us_etf_value_sgd: 0,
-          us_stock_value_sgd: 0,
-          sg_stock_value_sgd: 0,
-          current_options_value_sgd: 0,
-          open_risk: s.openRisk,
-          available_risk_capacity: s.availableRiskCapacity,
-          personal_unrealized_pnl: s.personalUnrealizedPnl,
-          personal_realized_pnl: s.personalRealizedPnl,
-          client_pnl: s.clientPnl,
-          client_initial_capital_sgd: s.clientInitialCapitalSgd,
-          client_current_value_sgd: s.clientCurrentValueSgd,
-          portfolio_health_score: s.portfolioHealthScore,
-          notes: s.notes,
-          is_manual_entry: false,
-          entered_by: "system",
-          created_at: s.createdAt,
-          updated_at: s.createdAt,
-        })
-      );
-      setMockDailyPortfolioSnapshots(rows);
-    }
-
-    rows = getMockDailyPortfolioSnapshots();
-
-    const snapshots = rows.map(mapDailySnapshotRow);
-    return buildHistoryData(snapshots, "mock", asOfDate);
+    const rows = getMockDailyPortfolioSnapshots();
+    return buildHistoryData(
+      rows.map(mapDailySnapshotRow),
+      "mock",
+      asOfDate
+    );
   }
 
   const readUserId = await resolveSupabaseReadUserId(input.userId);

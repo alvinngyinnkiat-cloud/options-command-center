@@ -55,7 +55,7 @@ export function ClientProfilePanel({
       </div>
 
       {clients.length === 0 ? (
-        <p className="text-xs text-terminal-muted">No clients yet.</p>
+        <p className="text-xs text-terminal-muted">No client sharing records yet.</p>
       ) : (
         <div className="space-y-3">
           {clients.map((client) => (

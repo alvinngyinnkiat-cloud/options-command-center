@@ -123,7 +123,7 @@ export async function getStockEtfHoldingsRows(): Promise<StockEtfHolding[]> {
 export async function getStockEtfTrackerData(): Promise<StockEtfTrackerData> {
   const { value, dataSource } = await readSupabasePrimary({
     module: "getStockEtfTrackerData",
-    mock: () => buildFullData(getMockStockEtfHoldings(), "mock"),
+    mock: () => buildFullData([], "mock"),
     empty: (userId) => buildFullData([], "supabase", userId),
     read: async (userId) => {
       const rows = await fetchStockEtfRows(userId);

@@ -86,7 +86,7 @@ async function fetchJournalRows(_userId: string): Promise<{
 export async function getJournalTrackerData(): Promise<JournalTrackerData> {
   const { value, dataSource } = await readSupabasePrimary({
     module: "getJournalTrackerData",
-    mock: () => buildData(getMockJournalEntries(), getMockTrades(), "mock"),
+    mock: () => buildData([], [], "mock"),
     empty: () => buildData([], [], "supabase"),
     read: async (userId) => {
       const { journal, trades } = await fetchJournalRows(userId);

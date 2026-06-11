@@ -105,7 +105,7 @@ export function MonthlyContributionsTable({
                 colSpan={6}
                 className="px-3 py-10 text-center text-terminal-muted"
               >
-                No contributions recorded. Add your first month.
+                No contributions recorded yet.
               </td>
             </tr>
           )}

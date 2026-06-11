@@ -109,7 +109,7 @@ export function MonthlyContributionTracker({
           ))}
           {yearContributions.length === 0 && (
             <li className="text-xs text-terminal-muted py-2">
-              No contributions recorded for {currentYear}.
+              No contributions recorded yet.
             </li>
           )}
         </ul>

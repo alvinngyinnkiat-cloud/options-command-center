@@ -6,15 +6,9 @@ import {
   DEFAULT_PASSIVE_INCOME_TARGET_SGD,
   DEFAULT_PORTFOLIO_TARGET_SGD,
 } from "@/lib/goals/types";
-import { MOCK_GOALS_RAW } from "@/lib/mock/goals";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
 import { getEnrichedPortfolioMetrics } from "@/lib/portfolio/enrich-capital-pools";
 import { getMonthlyContributionTrackerData } from "@/lib/supabase/queries/monthly-contributions";
-import {
-  getPortfolioHistoryData,
-  getLatestDailySnapshot,
-} from "@/lib/supabase/queries/daily-portfolio-snapshots";
-import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
   getFinancialGoalsManagementData,
   listFinancialGoalRows,
@@ -68,6 +62,25 @@ function mapGoalsFromRows(
   };
 }
 
+async function buildEmptyGoalsDashboard(): Promise<GoalsDashboardData> {
+  const contributionTracker = await getMonthlyContributionTrackerData();
+  const raw = mapGoalsFromRows(
+    [],
+    0,
+    0,
+    EMPTY_PASSIVE_INCOME_BREAKDOWN,
+    0,
+    MOCK_REFERENCE_DATE,
+    MOCK_REFERENCE_DATE,
+    contributionTracker
+  );
+  return {
+    ...buildGoalsDashboardData(raw, isSupabaseConfigured() ? "supabase" : "mock"),
+    managedGoals: [],
+    changeHistory: [],
+  };
+}
+
 async function fetchGoalsFromSupabase(
   userId: string
 ): Promise<GoalsRawInput> {
@@ -80,7 +93,7 @@ async function fetchGoalsFromSupabase(
   const netContributionsSgd =
     enriched.metrics.dataSource === "supabase"
       ? enriched.metrics.netContributions
-      : MOCK_GOALS_RAW.netContributions;
+      : 0;
 
   return mapGoalsFromRows(
     await listFinancialGoalRows(userId),
@@ -94,68 +107,15 @@ async function fetchGoalsFromSupabase(
   );
 }
 
-async function buildMockGoalsDashboard(): Promise<GoalsDashboardData> {
-  const { metrics: portfolioMetrics, capitalPools } =
-    await getEnrichedPortfolioMetrics();
-  const tradesData = await getOptionsTradesData();
-  const history = await getPortfolioHistoryData({
-    userId: "mock-user",
-    metrics: portfolioMetrics,
-    trades: tradesData.trades,
-  });
-
-  const management = await getFinancialGoalsManagementData("mock-user");
-  const contributionTracker = await getMonthlyContributionTrackerData();
-
-  const latestValue =
-    history.latest?.portfolioValueSgd ?? capitalPools.myPortfolioValue;
-  const asOfDate =
-    history.latest?.snapshotDate ??
-    MOCK_GOALS_RAW.asOfDate ??
-    MOCK_REFERENCE_DATE;
-
-  const raw = mapGoalsFromRows(
-    await listFinancialGoalRows("mock-user"),
-    latestValue,
-    management.liveContext.passiveIncomeMonthlySgd,
-    management.liveContext.passiveIncomeBreakdown,
-    MOCK_GOALS_RAW.netContributions,
-    management.liveContext.inceptionDate,
-    asOfDate,
-    contributionTracker
-  );
-
-  return {
-    ...buildGoalsDashboardData({ ...raw, portfolioCurrent: latestValue, asOfDate }, "mock"),
-    managedGoals: management.goals,
-    changeHistory: management.changeHistory,
-  };
-}
-
 export async function getFinancialGoalsData(): Promise<GoalsDashboardData> {
   if (!isSupabaseConfigured()) {
-    return buildMockGoalsDashboard();
+    return buildEmptyGoalsDashboard();
   }
 
   try {
     const userId = await resolveAuthenticatedUserId();
     if (!userId) {
-      const contributionTracker = await getMonthlyContributionTrackerData();
-      const emptyRaw = mapGoalsFromRows(
-        [],
-        0,
-        0,
-        EMPTY_PASSIVE_INCOME_BREAKDOWN,
-        0,
-        MOCK_GOALS_RAW.inceptionDate,
-        MOCK_REFERENCE_DATE,
-        contributionTracker
-      );
-      return {
-        ...buildGoalsDashboardData(emptyRaw, "supabase"),
-        managedGoals: [],
-        changeHistory: [],
-      };
+      return buildEmptyGoalsDashboard();
     }
 
     const [raw, management] = await Promise.all([
@@ -169,6 +129,6 @@ export async function getFinancialGoalsData(): Promise<GoalsDashboardData> {
       changeHistory: management.changeHistory,
     };
   } catch {
-    return buildMockGoalsDashboard();
+    return buildEmptyGoalsDashboard();
   }
 }

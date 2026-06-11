@@ -42,7 +42,7 @@ export function UsEquityHoldingsTable({
   if (rows.length === 0) {
     return (
       <p className="text-sm text-terminal-muted">
-        No {label} positions yet.
+        No holdings recorded yet.
       </p>
     );
   }

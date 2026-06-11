@@ -79,8 +79,7 @@ export async function buildCryptoTrackerPageData(
   const transactions = await fetchCryptoTransactions();
   const { value, dataSource } = await readSupabasePrimary({
     module: "buildCryptoTrackerPageData",
-    mock: () =>
-      buildData(getMockCryptoHoldings(), "mock", override, pools, transactions),
+    mock: () => buildData([], "mock", override, pools, transactions),
     empty: () => buildData([], "supabase", override, pools, transactions),
     read: async (userId) =>
       buildData(await fetchCryptoRows(userId), "supabase", override, pools, transactions),
@@ -119,7 +118,7 @@ export async function getCryptoTrackerData(): Promise<CryptoTrackerData> {
   const transactions = await fetchCryptoTransactions();
   const { value, dataSource } = await readSupabasePrimary({
     module: "getCryptoTrackerData",
-    mock: () => buildData(getMockCryptoHoldings(), "mock", undefined, undefined, transactions),
+    mock: () => buildData([], "mock", undefined, undefined, transactions),
     empty: () => buildData([], "supabase", undefined, undefined, transactions),
     read: async (userId) =>
       buildData(await fetchCryptoRows(userId), "supabase", undefined, undefined, transactions),
