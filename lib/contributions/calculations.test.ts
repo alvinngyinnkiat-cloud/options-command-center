@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMonthlyContributionTrackerData,
+  calculateAllTimeContributions,
   calculateTotalContribution,
   calculateYtdBreakdown,
   calculateYtdContributions,
@@ -58,8 +59,13 @@ describe("monthly contribution calculations", () => {
     expect(data.ytdBreakdown.stockOptionsAmountSgd).toBe(7_000);
     expect(data.ytdBreakdown.cryptoAmountSgd).toBe(3_000);
     expect(data.ytdBreakdown.totalAmountSgd).toBe(10_000);
+    expect(data.allTimeContributions).toBe(20_000);
     expect(data.averageMonthlyContribution).toBeCloseTo(6_666.67, 0);
     expect(data.contributions).toHaveLength(3);
+  });
+
+  it("calculates all-time contribution total", () => {
+    expect(calculateAllTimeContributions(sample)).toBe(20_000);
   });
 
   it("calculates YTD breakdown with percentages", () => {

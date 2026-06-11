@@ -13,12 +13,14 @@ import { Pencil, Trash2 } from "lucide-react";
 
 interface MonthlyContributionsTableProps {
   contributions: MonthlyContributionRecord[];
+  emptyMessage?: string;
   onEdit: (contribution: MonthlyContributionRecord) => void;
   onDataChange: (data: MonthlyContributionTrackerData) => void;
 }
 
 export function MonthlyContributionsTable({
   contributions,
+  emptyMessage = "No contributions recorded yet.",
   onEdit,
   onDataChange,
 }: MonthlyContributionsTableProps) {
@@ -105,7 +107,7 @@ export function MonthlyContributionsTable({
                 colSpan={6}
                 className="px-3 py-10 text-center text-terminal-muted"
               >
-                No contributions recorded yet.
+                {emptyMessage}
               </td>
             </tr>
           )}

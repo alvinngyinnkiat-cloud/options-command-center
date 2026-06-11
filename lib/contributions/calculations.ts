@@ -43,6 +43,30 @@ export function calculateYtdContributions(
     .reduce((sum, c) => sum + c.totalAmountSgd, 0);
 }
 
+export function calculateAllTimeContributions(
+  contributions: MonthlyContributionRecord[]
+): number {
+  return contributions.reduce((sum, c) => sum + c.totalAmountSgd, 0);
+}
+
+export function buildContributionYearOptions(
+  contributions: MonthlyContributionRecord[],
+  defaultYear: number
+): number[] {
+  const years = new Set<number>([
+    defaultYear,
+    new Date().getFullYear(),
+    ...contributions.map((c) => c.contributionYear),
+  ]);
+  const min = Math.min(2024, ...years);
+  const max = Math.max(2027, ...years);
+  const options: number[] = [];
+  for (let year = min; year <= max; year++) {
+    options.push(year);
+  }
+  return options.sort((a, b) => b - a);
+}
+
 export function calculateYtdBreakdown(
   contributions: MonthlyContributionRecord[],
   year: number
@@ -139,6 +163,7 @@ export function buildMonthlyContributionTrackerData(
     contributions: sorted,
     ytdContributions: ytdBreakdown.totalAmountSgd,
     ytdBreakdown,
+    allTimeContributions: calculateAllTimeContributions(sorted),
     averageMonthlyContribution: calculateAverageMonthlyContribution(sorted),
     currentYear,
     dataSource,

@@ -41,6 +41,7 @@ export interface MonthlyContributionTrackerData {
   contributions: MonthlyContributionRecord[];
   ytdContributions: number;
   ytdBreakdown: YtdContributionBreakdown;
+  allTimeContributions: number;
   averageMonthlyContribution: number;
   currentYear: number;
   dataSource: DataSource;

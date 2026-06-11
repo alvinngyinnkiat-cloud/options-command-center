@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
@@ -12,12 +12,16 @@ import {
 } from "@/components/ui/Card";
 import { MetricCardsGrid } from "@/components/ui/MetricCardsGrid";
 import { StatCard } from "@/components/ui/StatCard";
+import {
+  buildContributionYearOptions,
+  calculateYtdBreakdown,
+} from "@/lib/contributions/calculations";
 import type {
   MonthlyContributionRecord,
   MonthlyContributionTrackerData,
 } from "@/lib/contributions/types";
 import { formatSGD } from "@/lib/utils";
-import { PiggyBank, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { MonthlyContributionChart } from "./MonthlyContributionChart";
 import { MonthlyContributionFormModal } from "./MonthlyContributionFormModal";
 import { MonthlyContributionsTable } from "./MonthlyContributionsTable";
@@ -27,46 +31,77 @@ interface MonthlyContributionTrackerPanelProps {
   onDataChange?: (data: MonthlyContributionTrackerData) => void;
 }
 
+const yearSelectClass =
+  "h-9 rounded-md border border-terminal-border bg-terminal-surface px-2 font-mono text-sm text-terminal-text focus:outline-none focus:ring-1 focus:ring-accent/50";
+
 export function MonthlyContributionTrackerPanel({
   initialData,
   onDataChange,
 }: MonthlyContributionTrackerPanelProps) {
   const [data, setData] = useState(initialData);
+  const [selectedYear, setSelectedYear] = useState(initialData.currentYear);
   const [formContribution, setFormContribution] = useState<
     MonthlyContributionRecord | null | undefined
   >(undefined);
+
+  const yearOptions = useMemo(
+    () => buildContributionYearOptions(data.contributions, data.currentYear),
+    [data.contributions, data.currentYear]
+  );
+
+  const yearBreakdown = useMemo(
+    () => calculateYtdBreakdown(data.contributions, selectedYear),
+    [data.contributions, selectedYear]
+  );
+
+  const yearContributions = useMemo(
+    () => data.contributions.filter((c) => c.contributionYear === selectedYear),
+    [data.contributions, selectedYear]
+  );
 
   function handleDataChange(next: MonthlyContributionTrackerData) {
     setData(next);
     onDataChange?.(next);
   }
 
-  const { ytdBreakdown } = data;
-
   return (
     <div className="space-y-4">
       <Card variant="bordered">
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent/15 border border-accent/20">
-                <PiggyBank className="h-4 w-4 text-accent" />
-              </div>
-              <div>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <CardTitle>Monthly Contribution Tracker</CardTitle>
-                <CardDescription>
-                  Stocks &amp; Options and Crypto only — US ETF, US Stock, SG
-                  Stock, options cash, and crypto deposits combined into two
-                  buckets
-                </CardDescription>
+                <Badge
+                  variant={data.dataSource === "supabase" ? "success" : "outline"}
+                >
+                  {data.dataSource === "supabase" ? "Live data" : "Mock data"}
+                </Badge>
               </div>
+              <CardDescription className="mt-1">
+                Stocks &amp; Options and Crypto only — US ETF, US Stock, SG
+                Stock, options cash, and crypto deposits combined into two
+                buckets
+              </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge
-                variant={data.dataSource === "supabase" ? "success" : "outline"}
-              >
-                {data.dataSource === "supabase" ? "Live data" : "Mock data"}
-              </Badge>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <label className="flex items-center gap-2 text-xs text-terminal-muted">
+                <span className="uppercase tracking-wider whitespace-nowrap">
+                  Year:
+                </span>
+                <select
+                  className={yearSelectClass}
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  aria-label="Contribution year"
+                >
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Button
                 variant="primary"
                 size="sm"
@@ -79,38 +114,32 @@ export function MonthlyContributionTrackerPanel({
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div>
-            <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
-              YTD Summary ({data.currentYear})
-            </h3>
-            <MetricCardsGrid>
-              <StatCard
-                label="Stocks & Options"
-                value={formatSGD(ytdBreakdown.stockOptionsAmountSgd)}
-                change={`${ytdBreakdown.stockOptionsPct.toFixed(1)}% of total`}
-                changeType="neutral"
-              />
-              <StatCard
-                label="Crypto"
-                value={formatSGD(ytdBreakdown.cryptoAmountSgd)}
-                change={`${ytdBreakdown.cryptoPct.toFixed(1)}% of total`}
-                changeType="neutral"
-              />
-              <StatCard
-                label="Total Contributions"
-                value={formatSGD(ytdBreakdown.totalAmountSgd)}
-                change={`Avg. ${formatSGD(data.averageMonthlyContribution)}/mo`}
-                changeType="neutral"
-              />
-            </MetricCardsGrid>
-          </div>
+          <MetricCardsGrid>
+            <StatCard
+              label="Stocks & Options Contribution"
+              value={formatSGD(yearBreakdown.stockOptionsAmountSgd)}
+            />
+            <StatCard
+              label="Crypto Contribution"
+              value={formatSGD(yearBreakdown.cryptoAmountSgd)}
+            />
+            <StatCard
+              label="Total Contribution YTD"
+              value={formatSGD(yearBreakdown.totalAmountSgd)}
+            />
+            <StatCard
+              label="Total Contribution"
+              value={formatSGD(data.allTimeContributions)}
+            />
+          </MetricCardsGrid>
 
           <div>
             <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
-              Monthly Entries
+              Monthly Entries ({selectedYear})
             </h3>
             <MonthlyContributionsTable
-              contributions={data.contributions}
+              contributions={yearContributions}
+              emptyMessage={`No contributions recorded for ${selectedYear}.`}
               onEdit={(c) => setFormContribution(c)}
               onDataChange={handleDataChange}
             />
@@ -120,13 +149,13 @@ export function MonthlyContributionTrackerPanel({
 
       <MonthlyContributionChart
         contributions={data.contributions}
-        currentYear={data.currentYear}
+        currentYear={selectedYear}
       />
 
       {formContribution !== undefined && (
         <MonthlyContributionFormModal
           contribution={formContribution}
-          defaultYear={data.currentYear}
+          defaultYear={selectedYear}
           onClose={() => setFormContribution(undefined)}
           onSaved={handleDataChange}
         />
