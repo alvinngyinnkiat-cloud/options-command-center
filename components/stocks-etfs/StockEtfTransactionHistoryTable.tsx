@@ -31,8 +31,12 @@ export function StockEtfTransactionHistoryTable({
   async function handleDelete(id: string) {
     if (!confirm("Delete this ledger entry?")) return;
     setRemovingId(id);
-    await deleteStockEtfLedgerEntry(id);
+    const result = await deleteStockEtfLedgerEntry(id);
     setRemovingId(null);
+    if (!result.success) {
+      alert(result.error);
+      return;
+    }
     onRefresh();
   }
 

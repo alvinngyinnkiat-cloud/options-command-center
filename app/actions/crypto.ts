@@ -68,6 +68,7 @@ async function finish(): Promise<CryptoActionResult> {
   );
   revalidatePath("/crypto");
   revalidatePath("/");
+  revalidatePath("/goals");
   revalidatePath("/data-health");
   return { success: true, data };
 }
@@ -212,28 +213,17 @@ async function persistSyncedCryptoOverride(
 async function syncCryptoOverrideAfterHoldingChange(): Promise<
   { success: true } | { success: false; error: string }
 > {
-  const cashSgd = MOCK_PORTFOLIO_OVERRIDE.manualCryptoCashSgd ?? 0;
-  const contributionsSgd =
-    MOCK_PORTFOLIO_OVERRIDE.manualCryptoContributionsSgd ?? 0;
-
   if (!isSupabaseConfigured()) {
+    const cashSgd = MOCK_PORTFOLIO_OVERRIDE.manualCryptoCashSgd ?? 0;
+    const contributionsSgd =
+      MOCK_PORTFOLIO_OVERRIDE.manualCryptoContributionsSgd ?? 0;
     await syncCryptoOverrideFromRows(cashSgd, contributionsSgd);
     return { success: true };
   }
 
   try {
-    const { supabase, userId } = await getPortfolioOverrideWriteContext();
-    const { data: existing } = await supabase
-      .from("portfolio_overrides")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const row = existing as PortfolioOverride | null;
-    return persistSyncedCryptoOverride(
-      row?.manual_crypto_cash_sgd ?? 0,
-      row?.manual_crypto_contributions_sgd ?? 0
-    );
+    const { cashSgd, contributionsSgd } = await getCurrentCryptoBalances();
+    return persistSyncedCryptoOverride(cashSgd, contributionsSgd);
   } catch (e) {
     return {
       success: false,

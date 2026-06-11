@@ -8,7 +8,7 @@ import { readSupabasePrimary } from "@/lib/supabase/data-access";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import {
   MOCK_USER_ID,
-  warnMissingDevUserIdForWrite,
+  assertSupabaseWriteAccess,
   withSupabaseQuery,
 } from "@/lib/supabase/resolve-user";
 import type {
@@ -97,21 +97,11 @@ export async function insertStockEtfLedgerEntry(
       const { error } = await supabase
         .from("stock_etf_ledger")
         .insert(payload as never);
-      if (error) {
-        // Optional audit table — primary history is stock_etf_transactions.
-        if (
-          error.message.includes("stock_etf_ledger") ||
-          error.code === "PGRST205"
-        ) {
-          return payload;
-        }
-        throw new Error(error.message);
-      }
+      if (error) throw new Error(error.message);
       return payload;
     },
     () => {
-      warnMissingDevUserIdForWrite();
-      return insertMockStockEtfLedgerEntry({ ...row, user_id: MOCK_USER_ID });
+      assertSupabaseWriteAccess();
     }
   );
 }
@@ -135,8 +125,7 @@ export async function removeStockEtfLedgerEntry(
       if (error) throw new Error(error.message);
     },
     () => {
-      warnMissingDevUserIdForWrite();
-      deleteMockStockEtfLedgerEntry(id);
+      assertSupabaseWriteAccess();
     }
   );
 }
@@ -163,7 +152,7 @@ export async function removeStockEtfLedgerEntriesForHolding(
       if (error) throw new Error(error.message);
     },
     () => {
-      warnMissingDevUserIdForWrite();
+      assertSupabaseWriteAccess();
     }
   );
 }

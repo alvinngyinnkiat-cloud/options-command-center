@@ -33,6 +33,8 @@ export function MonthlyContributionsTable({
     setRemovingId(null);
     if (result.success) {
       onDataChange(result.data);
+    } else {
+      alert(result.error);
     }
   }
 

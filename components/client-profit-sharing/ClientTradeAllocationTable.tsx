@@ -24,8 +24,12 @@ export function ClientTradeAllocationTable({
     if (!activeClientId) return;
     setPendingId(tradeId);
     startTransition(async () => {
-      await toggleTradeInClientPool(activeClientId, tradeId, !current);
+      const result = await toggleTradeInClientPool(activeClientId, tradeId, !current);
       setPendingId(null);
+      if (!result.success) {
+        alert(result.error);
+        return;
+      }
       onRefresh();
     });
   }

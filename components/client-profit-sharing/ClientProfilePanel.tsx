@@ -37,8 +37,12 @@ export function ClientProfilePanel({
     const amount = parseFloat(payAmount);
     if (!amount || amount <= 0) return;
     setPaying(true);
-    await payClient(active.id, amount);
+    const result = await payClient(active.id, amount);
     setPaying(false);
+    if (!result.success) {
+      alert(result.error);
+      return;
+    }
     setPayAmount("");
     onRefresh();
   }

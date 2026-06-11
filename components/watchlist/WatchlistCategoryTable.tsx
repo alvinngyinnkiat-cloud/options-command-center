@@ -86,6 +86,8 @@ export function WatchlistCategoryTable({
     setRemovingId(null);
     if (result.success) {
       onRowsChange(result.rows, result.dataSource);
+    } else {
+      alert(result.error);
     }
   }
 

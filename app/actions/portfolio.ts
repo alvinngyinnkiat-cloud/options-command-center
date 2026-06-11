@@ -104,6 +104,7 @@ export async function saveManualTradingCash(input: {
 
     revalidatePath("/");
     revalidatePath("/risk");
+    revalidatePath("/goals");
     const { getEnrichedPortfolioMetrics } = await import(
       "@/lib/portfolio/enrich-capital-pools"
     );
@@ -166,6 +167,7 @@ export async function saveManualCryptoCash(input: {
 
     revalidatePath("/");
     revalidatePath("/risk");
+    revalidatePath("/goals");
     const { getEnrichedPortfolioMetrics } = await import(
       "@/lib/portfolio/enrich-capital-pools"
     );
@@ -280,6 +282,7 @@ export async function savePortfolioOverride(
     }
 
     revalidatePath("/");
+    revalidatePath("/goals");
     const enriched = await getEnrichedPortfolioMetrics();
     return {
       success: true,
@@ -333,6 +336,7 @@ export async function saveManualClientPortfolio(input: {
 
     revalidatePath("/");
     revalidatePath("/risk");
+    revalidatePath("/goals");
     const { getEnrichedPortfolioMetrics } = await import(
       "@/lib/portfolio/enrich-capital-pools"
     );

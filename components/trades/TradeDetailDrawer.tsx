@@ -100,6 +100,7 @@ export function TradeDetailDrawer({
   const [feesCommission, setFeesCommission] = useState("0");
   const [busy, setBusy] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const calc = trade.calculations;
 
   const closePreview = useMemo(() => {
@@ -119,10 +120,15 @@ export function TradeDetailDrawer({
     trade.contracts,
   ]);
 
-  async function runAction(fn: () => Promise<unknown>) {
+  async function runAction(fn: () => Promise<{ success: boolean; error?: string }>) {
     setBusy(true);
-    await fn();
+    setActionError(null);
+    const result = await fn();
     setBusy(false);
+    if (!result.success) {
+      setActionError(result.error ?? "Action failed.");
+      return;
+    }
     onRefresh();
   }
 
@@ -151,6 +157,11 @@ export function TradeDetailDrawer({
         </div>
 
         <div className="space-y-4 p-4">
+          {actionError && (
+            <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+              {actionError}
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             <Badge variant={statusVariant(trade.status)}>{trade.statusLabel}</Badge>
             <Badge variant={actionVariant(trade.suggestedAction)}>

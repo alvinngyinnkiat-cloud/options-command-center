@@ -210,6 +210,8 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
     if (result.success) {
       setData(result.data);
       notifyDividendDataUpdated();
+    } else {
+      alert(result.error);
     }
   }
 
@@ -219,6 +221,8 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
     if (result.success) {
       setData(result.data);
       notifyDividendDataUpdated();
+    } else {
+      alert(result.error);
     }
   }
 

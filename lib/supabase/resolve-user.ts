@@ -50,6 +50,11 @@ export function warnMissingDevUserIdForWrite(): void {
   console.warn(SUPABASE_AUTH_SESSION_REQUIRED_MESSAGE);
 }
 
+/** Throws when Supabase is configured but no session or dev write credentials exist. */
+export function assertSupabaseWriteAccess(): never {
+  throw new NotAuthenticatedError(SUPABASE_AUTH_SESSION_REQUIRED_MESSAGE);
+}
+
 export async function resolveAuthenticatedUserId(): Promise<string | undefined> {
   const sessionUser = await resolveSessionUserId();
   if (sessionUser) return sessionUser;

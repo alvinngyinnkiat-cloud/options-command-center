@@ -12,8 +12,7 @@ import { readSupabasePrimary } from "@/lib/supabase/data-access";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import {
   MOCK_USER_ID,
-  NotAuthenticatedError,
-  warnMissingDevUserIdForWrite,
+  assertSupabaseWriteAccess,
   withSupabaseQuery,
 } from "@/lib/supabase/resolve-user";
 import type {
@@ -124,11 +123,7 @@ export async function persistProfitSharingClient(
       return { ...row, user_id: effectiveUserId };
     },
     async () => {
-      warnMissingDevUserIdForWrite();
-      const { upsertMockProfitSharingClient } = await import(
-        "@/lib/mock/client-profit-sharing-store"
-      );
-      return upsertMockProfitSharingClient({ ...row, user_id: MOCK_USER_ID });
+      assertSupabaseWriteAccess();
     }
   );
 }
@@ -156,7 +151,7 @@ export async function removeProfitSharingClient(
       if (error) throw new Error(error.message);
     },
     () => {
-      warnMissingDevUserIdForWrite();
+      assertSupabaseWriteAccess();
     }
   );
 }
@@ -228,11 +223,7 @@ export async function persistTradeAllocation(
       return payload;
     },
     async () => {
-      warnMissingDevUserIdForWrite();
-      const { setMockTradeAllocation } = await import(
-        "@/lib/mock/client-profit-sharing-store"
-      );
-      return setMockTradeAllocation({ ...row, user_id: MOCK_USER_ID });
+      assertSupabaseWriteAccess();
     }
   );
 }
@@ -255,8 +246,7 @@ export async function removeTradeAllocation(
         .eq("user_id", effectiveUserId);
     },
     () => {
-      warnMissingDevUserIdForWrite();
-      removeMockTradeAllocation(tradeId);
+      assertSupabaseWriteAccess();
     }
   );
 }
@@ -290,7 +280,7 @@ export async function syncClientTradeAllocation(
       await persistTradeAllocation(allocation, effectiveUserId);
     },
     () => {
-      warnMissingDevUserIdForWrite();
+      assertSupabaseWriteAccess();
     }
   );
 }
@@ -354,8 +344,7 @@ export async function markAllocationPaid(
       return updated;
     },
     () => {
-      warnMissingDevUserIdForWrite();
-      throw new NotAuthenticatedError();
+      assertSupabaseWriteAccess();
     }
   );
 }
@@ -402,8 +391,7 @@ export async function recordClientPayment(
       return updated;
     },
     () => {
-      warnMissingDevUserIdForWrite();
-      throw new NotAuthenticatedError();
+      assertSupabaseWriteAccess();
     }
   );
 }

@@ -84,6 +84,7 @@ export function GoalSettingsPanel({
     const result = await archiveFinancialGoal(goal.id, true);
     setBusyId(null);
     if (result.success) onDataChange(result.data);
+    else alert(result.error);
   }
 
   async function handleRestore(goal: ManagedFinancialGoal) {
@@ -91,6 +92,7 @@ export function GoalSettingsPanel({
     const result = await archiveFinancialGoal(goal.id, false);
     setBusyId(null);
     if (result.success) onDataChange(result.data);
+    else alert(result.error);
   }
 
   async function handleDelete(goal: ManagedFinancialGoal) {
@@ -105,6 +107,7 @@ export function GoalSettingsPanel({
     const result = await deleteFinancialGoal(goal.id);
     setBusyId(null);
     if (result.success) onDataChange(result.data);
+    else alert(result.error);
   }
 
   return (

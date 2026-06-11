@@ -27,7 +27,10 @@ import {
   removeStockEtfPositionAdjustmentsForHolding,
   removeStockEtfTransactionsForHolding,
 } from "@/lib/supabase/queries/stock-etf-positions";
-import { listStockEtfLedgerEntries } from "@/lib/supabase/queries/stock-etf-ledger";
+import {
+  listStockEtfLedgerEntries,
+  removeStockEtfLedgerEntriesForHolding,
+} from "@/lib/supabase/queries/stock-etf-ledger";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
   deleteMockStockEtfHolding,
@@ -184,6 +187,7 @@ export async function removeStockEtfHolding(
   if (deleteHistory) {
     await removeStockEtfTransactionsForHolding(id, userId);
     await removeStockEtfPositionAdjustmentsForHolding(id, userId);
+    await removeStockEtfLedgerEntriesForHolding(id, userId);
   }
 
   if (!isSupabaseConfigured()) {
