@@ -1,8 +1,14 @@
-export type StockEtfTransactionType = "buy" | "sell";
+export type StockEtfTransactionType =
+  | "buy"
+  | "sell"
+  | "opening_balance"
+  | "dividend";
+
+export type StockEtfUserTransactionType = "buy" | "sell";
 
 export interface StockEtfTransactionInput {
   holdingId: string;
-  transactionType: StockEtfTransactionType;
+  transactionType: StockEtfUserTransactionType;
   transactionDate: string;
   shares: number;
   pricePerShare: number;

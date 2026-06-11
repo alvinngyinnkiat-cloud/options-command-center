@@ -30,7 +30,11 @@ import {
 import {
   listStockEtfLedgerEntries,
   removeStockEtfLedgerEntriesForHolding,
+  isStockEtfLedgerAvailable,
 } from "@/lib/supabase/queries/stock-etf-ledger";
+import {
+  getStockEtfTrackingModeDefault,
+} from "@/lib/supabase/queries/stock-etf-tracking-mode";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
   deleteMockStockEtfHolding,
@@ -65,10 +69,13 @@ async function buildFullData(
 ): Promise<StockEtfTrackerData> {
   const referenceDate = MOCK_REFERENCE_DATE;
   const referenceYear = Number(referenceDate.slice(0, 4));
-  const [tradesData, dividendRows] = await Promise.all([
-    getOptionsTradesData(),
-    listDividendRecordRows(userId),
-  ]);
+  const [tradesData, dividendRows, trackingModeDefault, ledgerAvailable] =
+    await Promise.all([
+      getOptionsTradesData(),
+      listDividendRecordRows(userId),
+      getStockEtfTrackingModeDefault(),
+      isStockEtfLedgerAvailable(),
+    ]);
   const dividendSummary = buildDividendPortfolioSummary(
     dividendRows,
     referenceDate,
@@ -101,6 +108,8 @@ async function buildFullData(
     cashBalances,
     ledger,
     totalFeesPaid: calculateTotalFeesPaid(ledger),
+    trackingModeDefault,
+    ledgerAvailable,
     dataSource,
   };
 }
@@ -260,8 +269,12 @@ export async function ensureStockEtfHoldingForBuy(
     fxRateToSgd: input.fxRateToSgd ?? DEFAULT_USD_SGD_RATE,
     sharesHeld: 0,
     averageCost: 0,
+    manualTotalDividend: 0,
+    manualTotalFees: 0,
     notes: null,
   };
-  const row = stockEtfRowFromForm(form, userId);
+  const row = stockEtfRowFromForm(form, userId, undefined, undefined, {
+    trackingMode: "transaction",
+  });
   return persistStockEtfHolding(row, userId);
 }

@@ -26,7 +26,10 @@ function buildSgStockRow(
     holding.ticker,
     dividendTotals ?? new Map()
   );
-  const dividendIncome = dividendResolved.lifetimeNetDividends;
+  const dividendIncome =
+    holding.trackingMode === "manual"
+      ? holding.manualTotalDividend
+      : dividendResolved.lifetimeNetDividends;
   const annualDividendIncome = dividendResolved.annualDividendIncome;
   const dividendYield =
     marketValue > 0 ? (annualDividendIncome / marketValue) * 100 : null;
@@ -154,6 +157,9 @@ export function mapEnrichedToDbRow(
     last_price_date: null,
     price_source: null,
     manual_value_override: false,
+    tracking_mode: holding.trackingMode,
+    manual_total_dividend: holding.manualTotalDividend,
+    manual_total_fees: holding.manualTotalFees,
     notes: holding.notes,
     last_updated: holding.lastUpdated,
     created_at: holding.createdAt,

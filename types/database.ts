@@ -613,6 +613,7 @@ export interface PortfolioOverride {
   manual_crypto_holdings_sgd: number | null;
   manual_crypto_contributions_sgd: number | null;
   manual_client_portfolio_sgd: number;
+  stock_etf_tracking_mode: string;
   override_reason: string | null;
   override_updated_at: string | null;
   created_at: string;
@@ -896,13 +897,20 @@ export interface StockEtfHolding {
   last_price_date: string | null;
   price_source: string | null;
   manual_value_override: boolean;
+  tracking_mode: string;
+  manual_total_dividend: number;
+  manual_total_fees: number;
   notes: string | null;
   last_updated: string;
   created_at: string;
   updated_at: string;
 }
 
-export type StockEtfTransactionType = "buy" | "sell";
+export type StockEtfTransactionType =
+  | "buy"
+  | "sell"
+  | "opening_balance"
+  | "dividend";
 
 export interface StockEtfTransaction {
   id: string;

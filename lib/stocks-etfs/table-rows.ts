@@ -1,4 +1,5 @@
 import { calculateRoiPct } from "@/lib/ticker-positions/income-yield";
+import { calculateManualPositionMetrics } from "./manual-position";
 import type { EnrichedStockEtfHolding } from "./types";
 import type { SgStockRow } from "./types";
 import type { UsEquityPositionRow } from "./us-equity-positions";
@@ -12,21 +13,57 @@ export interface StockEtfHoldingsTableRow {
   currentValue: number;
   /** Lifetime dividends received for the ticker. */
   dividend: number;
-  /** Unrealized capital gain/loss: current value − capital. */
+  fees: number;
+  /** Unrealized capital gain/loss: current value − capital (manual) or same (transaction). */
   pl: number;
   roiPct: number;
+  /** P/L including dividend and fees (manual mode formula). */
+  plWithDividend: number;
   currency: "USD" | "SGD";
 }
 
+function resolveDividendIncome(
+  holding: EnrichedStockEtfHolding,
+  externalDividend: number
+): number {
+  return holding.trackingMode === "manual"
+    ? holding.manualTotalDividend
+    : externalDividend;
+}
+
 export function buildStockEtfTableMetrics(
+  holding: EnrichedStockEtfHolding,
   capital: number,
   currentValue: number,
-  dividend: number
-): Pick<StockEtfHoldingsTableRow, "pl" | "roiPct"> {
+  externalDividend: number
+): Pick<StockEtfHoldingsTableRow, "dividend" | "fees" | "pl" | "roiPct" | "plWithDividend"> {
+  const dividend = resolveDividendIncome(holding, externalDividend);
+  const fees =
+    holding.trackingMode === "manual" ? holding.manualTotalFees : 0;
+
+  if (holding.trackingMode === "manual") {
+    const metrics = calculateManualPositionMetrics({
+      currentValue,
+      capitalInvested: capital,
+      totalDividend: dividend,
+      totalFees: fees,
+    });
+    return {
+      dividend,
+      fees,
+      pl: metrics.assetPl,
+      roiPct: metrics.roiPct,
+      plWithDividend: metrics.plIncludingDividend,
+    };
+  }
+
   const pl = currentValue - capital;
   return {
+    dividend,
+    fees,
     pl,
     roiPct: calculateRoiPct(pl, capital),
+    plWithDividend: pl + dividend - fees,
   };
 }
 
@@ -37,11 +74,11 @@ export function usEquityRowToTableRow(
 
   const capital = row.holding.totalInvestedNative;
   const currentValue = row.marketValue;
-  const dividend = row.dividendIncome;
-  const { pl, roiPct } = buildStockEtfTableMetrics(
+  const { dividend, fees, pl, roiPct, plWithDividend } = buildStockEtfTableMetrics(
+    row.holding,
     capital,
     currentValue,
-    dividend
+    row.dividendIncome
   );
 
   return {
@@ -52,8 +89,10 @@ export function usEquityRowToTableRow(
     capital,
     currentValue,
     dividend,
+    fees,
     pl,
     roiPct,
+    plWithDividend,
     currency: "USD",
   };
 }
@@ -61,11 +100,11 @@ export function usEquityRowToTableRow(
 export function sgStockRowToTableRow(row: SgStockRow): StockEtfHoldingsTableRow {
   const capital = row.holding.totalInvestedNative;
   const currentValue = row.marketValue;
-  const dividend = row.dividendIncome;
-  const { pl, roiPct } = buildStockEtfTableMetrics(
+  const { dividend, fees, pl, roiPct, plWithDividend } = buildStockEtfTableMetrics(
+    row.holding,
     capital,
     currentValue,
-    dividend
+    row.dividendIncome
   );
 
   return {
@@ -76,8 +115,10 @@ export function sgStockRowToTableRow(row: SgStockRow): StockEtfHoldingsTableRow 
     capital,
     currentValue,
     dividend,
+    fees,
     pl,
     roiPct,
+    plWithDividend,
     currency: "SGD",
   };
 }

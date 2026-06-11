@@ -8,8 +8,10 @@ import {
   deriveCurrentValueNative,
 } from "@/lib/stocks-etfs/recalculate-position";
 import { toSgdAmount } from "@/lib/stocks-etfs/calculations";
-import { insertStockEtfLedgerEntry } from "@/lib/supabase/queries/stock-etf-ledger";
+import { tryInsertStockEtfLedgerEntry } from "@/lib/supabase/queries/stock-etf-ledger";
 import { enrichStockEtfHolding } from "@/lib/stocks-etfs/map-holding";
+import { buildMigrationTransactions } from "@/lib/stocks-etfs/migrate-holding";
+import { resolveHoldingTrackingMode } from "@/lib/stocks-etfs/tracking-mode";
 import { classifyHoldingCategory } from "@/lib/stocks-etfs/market-category";
 import {
   addMockStockEtfAdjustment,
@@ -173,6 +175,12 @@ export async function insertStockEtfTransaction(
   const holding = await fetchHoldingById(input.holdingId, userId);
   if (!holding) throw new Error("Holding not found.");
 
+  if (resolveHoldingTrackingMode(holding) === "manual") {
+    throw new Error(
+      "This position uses Manual Position mode. Switch to Transaction Accounting before recording buys or sells."
+    );
+  }
+
   if (input.transactionType === "sell") {
     const currentShares = Number(holding.shares_held ?? 0);
     if (input.shares > currentShares + 0.0001) {
@@ -234,7 +242,7 @@ export async function insertStockEtfTransaction(
   const updated = applyPositionToHolding(holding, position, currentValueNative);
   await persistHoldingRow(updated);
 
-  await insertStockEtfLedgerEntry(userId, {
+  await tryInsertStockEtfLedgerEntry(userId, {
     holdingId: input.holdingId,
     marketCategory,
     transactionType: input.transactionType,
@@ -262,6 +270,12 @@ export async function insertStockEtfPositionAdjustment(
 ): Promise<void> {
   const holding = await fetchHoldingById(input.holdingId, userId);
   if (!holding) throw new Error("Holding not found.");
+
+  if (resolveHoldingTrackingMode(holding) === "manual") {
+    throw new Error(
+      "Manual Position mode uses the position form for edits. Switch to Transaction Accounting for adjustment history."
+    );
+  }
 
   const today = new Date().toISOString().split("T")[0];
   const adjustment: StockEtfPositionAdjustment = {
@@ -320,7 +334,7 @@ export async function insertStockEtfPositionAdjustment(
 
   const enriched = enrichStockEtfHolding(holding, 0);
   const marketCategory = classifyHoldingCategory(enriched);
-  await insertStockEtfLedgerEntry(userId, {
+  await tryInsertStockEtfLedgerEntry(userId, {
     holdingId: input.holdingId,
     marketCategory,
     transactionType: "manual_adjustment",
@@ -340,6 +354,81 @@ export async function insertStockEtfPositionAdjustment(
       adjustmentReason: input.adjustmentReason.trim(),
     },
   });
+}
+
+export async function migrateHoldingToTransactionMode(
+  holdingId: string,
+  userId: string
+): Promise<{ ledgerWarning?: string }> {
+  const holding = await fetchHoldingById(holdingId, userId);
+  if (!holding) throw new Error("Holding not found.");
+  if (resolveHoldingTrackingMode(holding) === "transaction") {
+    return {};
+  }
+
+  const existingTx = await fetchTransactionsForHolding(holdingId);
+  if (existingTx.length > 0) {
+    throw new Error(
+      "Transaction history already exists. Remove existing transactions before migrating."
+    );
+  }
+
+  const migrationTx = buildMigrationTransactions(holding, userId);
+
+  for (const tx of migrationTx) {
+    if (!isSupabaseConfigured()) {
+      addMockStockEtfTransaction(tx);
+    } else {
+      await withSupabaseQuery(
+        async ({ userId: effectiveUserId, supabase }) => {
+          const { error } = await supabase.from("stock_etf_transactions").insert({
+            ...tx,
+            user_id: effectiveUserId,
+          } as never);
+          if (error) throw new Error(error.message);
+        },
+        () => {
+          addMockStockEtfTransaction({ ...tx, user_id: MOCK_USER_ID });
+        }
+      );
+    }
+  }
+
+  const allTx = await fetchTransactionsForHolding(holdingId);
+  const position = calculatePositionFromTransactions(allTx);
+  const currentValueNative = Number(holding.current_value_native);
+
+  const updated: StockEtfHolding = {
+    ...applyPositionToHolding(holding, position, currentValueNative),
+    tracking_mode: "transaction",
+    manual_value_override: true,
+    updated_at: new Date().toISOString(),
+  };
+  await persistHoldingRow(updated);
+
+  let ledgerWarning: string | undefined;
+  const opening = migrationTx.find((t) => t.transaction_type === "opening_balance");
+  if (opening) {
+    const enriched = enrichStockEtfHolding(updated, 0);
+    const marketCategory = classifyHoldingCategory(enriched);
+    const ledgerResult = await tryInsertStockEtfLedgerEntry(userId, {
+      holdingId,
+      marketCategory,
+      transactionType: "buy",
+      transactionDate: opening.transaction_date,
+      ticker: holding.ticker,
+      shares: Number(opening.shares),
+      amountNative: Number(opening.total_amount),
+      feeNative: Number(opening.fees),
+      currency: holding.currency as CurrencyCode,
+      fxRateToSgd: Number(holding.fx_rate_to_sgd),
+      notes: opening.notes,
+      metadata: { migratedFrom: "manual" },
+    });
+    if (!ledgerResult.ok) ledgerWarning = ledgerResult.warning;
+  }
+
+  return { ledgerWarning };
 }
 
 export async function removeStockEtfTransactionsForHolding(

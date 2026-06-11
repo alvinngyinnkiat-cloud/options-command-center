@@ -184,6 +184,7 @@ async function persistSyncedCryptoOverride(
       manual_crypto_holdings_sgd: synced.manualCryptoHoldingsSgd,
       manual_crypto_contributions_sgd: synced.manualCryptoContributionsSgd,
       manual_client_portfolio_sgd: synced.manualClientPortfolioSgd,
+      stock_etf_tracking_mode: row?.stock_etf_tracking_mode ?? "manual",
       override_reason: synced.overrideReason,
       override_updated_at: synced.overrideUpdatedAt ?? new Date().toISOString(),
       created_at: row?.created_at ?? new Date().toISOString(),

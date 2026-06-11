@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_USD_SGD_RATE } from "@/lib/portfolio/currency";
 import { STOCK_ETF_SECTORS } from "@/lib/stocks-etfs/constants";
-import { buildStockEtfHoldingMetrics } from "@/lib/stocks-etfs/calculations";
+import { calculateManualPositionMetrics } from "@/lib/stocks-etfs/manual-position";
 import type {
   EnrichedStockEtfHolding,
   StockEtfHoldingFormInput,
@@ -36,6 +36,8 @@ function emptyForm(): StockEtfHoldingFormInput {
     fxRateToSgd: DEFAULT_USD_SGD_RATE,
     sharesHeld: null,
     averageCost: null,
+    manualTotalDividend: 0,
+    manualTotalFees: 0,
     notes: null,
   };
 }
@@ -51,6 +53,8 @@ function formFromHolding(h: EnrichedStockEtfHolding): StockEtfHoldingFormInput {
     fxRateToSgd: h.fxRateToSgd,
     sharesHeld: h.sharesHeld,
     averageCost: h.averageCost,
+    manualTotalDividend: h.manualTotalDividend,
+    manualTotalFees: h.manualTotalFees,
     notes: h.notes,
   };
 }
@@ -61,6 +65,7 @@ export function StockEtfFormModal({
   onSaved,
 }: StockEtfFormModalProps) {
   const isEdit = Boolean(holding);
+  const isManual = !holding || holding.trackingMode === "manual";
   const [form, setForm] = useState<StockEtfHoldingFormInput>(
     holding ? formFromHolding(holding) : emptyForm()
   );
@@ -68,16 +73,14 @@ export function StockEtfFormModal({
   const [saving, setSaving] = useState(false);
 
   const preview = useMemo(() => {
-    const investedSgd =
-      form.currency === "SGD"
-        ? form.totalInvestedNative
-        : form.totalInvestedNative * form.fxRateToSgd;
-    const currentSgd =
-      form.currency === "SGD"
-        ? form.currentValueNative
-        : form.currentValueNative * form.fxRateToSgd;
-    return buildStockEtfHoldingMetrics(investedSgd, currentSgd, currentSgd);
-  }, [form]);
+    if (!isManual) return null;
+    return calculateManualPositionMetrics({
+      currentValue: form.currentValueNative,
+      capitalInvested: form.totalInvestedNative,
+      totalDividend: form.manualTotalDividend,
+      totalFees: form.manualTotalFees,
+    });
+  }, [form, isManual]);
 
   function set<K extends keyof StockEtfHoldingFormInput>(
     key: K,
@@ -90,6 +93,10 @@ export function StockEtfFormModal({
     e.preventDefault();
     if (!form.ticker.trim()) {
       setError("Ticker is required.");
+      return;
+    }
+    if (isManual && (form.sharesHeld == null || form.sharesHeld <= 0)) {
+      setError("Shares are required in Manual Position mode.");
       return;
     }
     setSaving(true);
@@ -108,13 +115,37 @@ export function StockEtfFormModal({
     onClose();
   }
 
+  if (!isManual) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="w-full max-w-md rounded-lg border border-terminal-border bg-terminal-surface p-5 shadow-xl">
+          <p className="text-sm text-terminal-text">
+            This position uses Transaction Accounting mode. Edit via buy/sell
+            transactions or use &ldquo;Switch to Transaction Mode&rdquo; from a
+            manual position first.
+          </p>
+          <div className="mt-4 flex justify-end">
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-terminal-border bg-terminal-surface p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-terminal-text">
-            {isEdit ? "Edit Holding" : "Add Stock / ETF"}
-          </h2>
+          <div>
+            <h2 className="text-sm font-semibold text-terminal-text">
+              {isEdit ? "Edit Manual Position" : "Add Manual Position"}
+            </h2>
+            <p className="text-[11px] text-terminal-muted">
+              Manual Position mode — no buy/sell history required
+            </p>
+          </div>
           <button type="button" onClick={onClose} aria-label="Close">
             <X className="h-4 w-4 text-terminal-muted" />
           </button>
@@ -177,6 +208,23 @@ export function StockEtfFormModal({
             </label>
           </div>
 
+          <label className="block space-y-1">
+            <span className="text-[10px] uppercase text-terminal-muted">Shares</span>
+            <input
+              type="number"
+              step="0.0001"
+              required
+              className={inputClass}
+              value={form.sharesHeld ?? ""}
+              onChange={(e) =>
+                set(
+                  "sharesHeld",
+                  e.target.value ? parseFloat(e.target.value) : null
+                )
+              }
+            />
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1">
               <span className="text-[10px] uppercase text-terminal-muted">
@@ -208,6 +256,37 @@ export function StockEtfFormModal({
             </label>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <label className="space-y-1">
+              <span className="text-[10px] uppercase text-terminal-muted">
+                Total Dividend ({form.currency})
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                className={inputClass}
+                value={form.manualTotalDividend || ""}
+                onChange={(e) =>
+                  set("manualTotalDividend", parseFloat(e.target.value) || 0)
+                }
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] uppercase text-terminal-muted">
+                Total Fees ({form.currency})
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                className={inputClass}
+                value={form.manualTotalFees || ""}
+                onChange={(e) =>
+                  set("manualTotalFees", parseFloat(e.target.value) || 0)
+                }
+              />
+            </label>
+          </div>
+
           {form.currency === "USD" && (
             <label className="space-y-1">
               <span className="text-[10px] uppercase text-terminal-muted">
@@ -225,51 +304,6 @@ export function StockEtfFormModal({
             </label>
           )}
 
-          <p className="rounded border border-terminal-border bg-terminal-elevated/30 px-3 py-2 text-[11px] text-terminal-muted">
-            Dividend income is managed in{" "}
-            <a href="/dividends" className="text-accent hover:underline">
-              Dividend Tracker
-            </a>{" "}
-            and syncs automatically to this view.
-          </p>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="space-y-1">
-              <span className="text-[10px] uppercase text-terminal-muted">
-                Shares Held (optional)
-              </span>
-              <input
-                type="number"
-                step="0.0001"
-                className={inputClass}
-                value={form.sharesHeld ?? ""}
-                onChange={(e) =>
-                  set(
-                    "sharesHeld",
-                    e.target.value ? parseFloat(e.target.value) : null
-                  )
-                }
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="text-[10px] uppercase text-terminal-muted">
-                Avg Cost (optional)
-              </span>
-              <input
-                type="number"
-                step="0.0001"
-                className={inputClass}
-                value={form.averageCost ?? ""}
-                onChange={(e) =>
-                  set(
-                    "averageCost",
-                    e.target.value ? parseFloat(e.target.value) : null
-                  )
-                }
-              />
-            </label>
-          </div>
-
           <label className="block space-y-1">
             <span className="text-[10px] uppercase text-terminal-muted">Notes</span>
             <textarea
@@ -279,12 +313,17 @@ export function StockEtfFormModal({
             />
           </label>
 
-          <div className="rounded border border-terminal-border bg-terminal-elevated/30 px-3 py-2 text-xs">
-            <p className="text-terminal-muted">
-              Preview (SGD): P/L {formatSignedSGD(preview.profitLossSgd)} · Return{" "}
-              {preview.returnPct.toFixed(1)}% · Value {formatSGD(preview.currentValueSgd)}
-            </p>
-          </div>
+          {preview && (
+            <div className="rounded border border-terminal-border bg-terminal-elevated/30 px-3 py-2 text-xs space-y-1">
+              <p className="text-terminal-muted">
+                Asset P/L: {formatSignedSGD(preview.assetPl)} · ROI{" "}
+                {preview.roiPct.toFixed(1)}%
+              </p>
+              <p className="text-terminal-muted">
+                P/L incl. dividend: {formatSignedSGD(preview.plIncludingDividend)}
+              </p>
+            </div>
+          )}
 
           {error && <p className="text-xs text-loss">{error}</p>}
 
@@ -293,7 +332,7 @@ export function StockEtfFormModal({
               Cancel
             </Button>
             <Button type="submit" variant="primary" size="sm" disabled={saving}>
-              {saving ? "Saving…" : isEdit ? "Update" : "Add Holding"}
+              {saving ? "Saving…" : isEdit ? "Update" : "Add Position"}
             </Button>
           </div>
         </form>

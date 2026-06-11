@@ -14,6 +14,7 @@ import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/di
 import { Plus, RefreshCw, ShoppingCart } from "lucide-react";
 import { StockEtfCategoryTabs } from "./StockEtfCategoryTabs";
 import { StockEtfFormModal } from "./StockEtfFormModal";
+import { StockEtfTrackingModeToggle } from "./StockEtfTrackingModeToggle";
 import { StockEtfTransactionHistoryTable } from "./StockEtfTransactionHistoryTable";
 import {
   StockEtfTransactionModals,
@@ -61,12 +62,17 @@ export function StockEtfTrackerClient({
   }
 
   const { tabs } = data;
+  const isTransactionMode = data.trackingModeDefault === "transaction";
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Stock & ETF Tracker"
-        description="Position tracking for US ETF · US Stock · SG Stock — buys, sells, dividends, and fees"
+        description={
+          isTransactionMode
+            ? "Transaction Accounting — buy, sell, and dividend history"
+            : "Manual Position mode — backfill historical snapshots without transaction history"
+        }
         actions={
           <>
             <Badge
@@ -85,22 +91,26 @@ export function StockEtfTrackerClient({
               />
               {isPricePending ? "Updating…" : "Refresh Prices"}
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setTxModal("buy")}
-            >
-              <ShoppingCart className="h-4 w-4" />
-              Buy
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setFormHolding(null)}
-            >
-              <Plus className="h-4 w-4" />
-              Manual Adjust
-            </Button>
+            {isTransactionMode && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setTxModal("buy")}
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Buy
+              </Button>
+            )}
+            {!isTransactionMode && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setFormHolding(null)}
+              >
+                <Plus className="h-4 w-4" />
+                Add Position
+              </Button>
+            )}
           </>
         }
       />
@@ -108,6 +118,8 @@ export function StockEtfTrackerClient({
       {priceError && (
         <p className="text-xs text-loss">{priceError}</p>
       )}
+
+      <StockEtfTrackingModeToggle data={data} onDataChange={setData} />
 
       <StockEtfCategoryTabs active={activeTab} onChange={setActiveTab} />
 
@@ -157,15 +169,23 @@ export function StockEtfTrackerClient({
         />
       )}
 
-      <section>
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
-          Transaction History
-        </h2>
-        <StockEtfTransactionHistoryTable
-          ledger={data.ledger}
-          onRefresh={handleRefresh}
-        />
-      </section>
+      {isTransactionMode ? (
+        <section>
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
+            Transaction History
+          </h2>
+          <StockEtfTransactionHistoryTable
+            ledger={data.ledger}
+            onRefresh={handleRefresh}
+          />
+        </section>
+      ) : (
+        <p className="rounded-lg border border-dashed border-terminal-border px-4 py-3 text-[11px] text-terminal-muted">
+          Transaction history and ledger are available in Transaction Accounting
+          mode. Manual positions do not require buy/sell history or the ledger
+          table.
+        </p>
+      )}
 
       {formHolding !== undefined && (
         <StockEtfFormModal
@@ -183,8 +203,9 @@ export function StockEtfTrackerClient({
       />
 
       <p className="text-[11px] text-terminal-muted">
-        Position tracking only — Trading Cash is a portfolio asset updated on the
-        Portfolio Dashboard. Dividend income syncs from Dividend Tracker.
+        {isTransactionMode
+          ? "Transaction Accounting tracks buys, sells, and dividends. Trading Cash remains on the Portfolio Dashboard."
+          : "Manual Position mode stores snapshot totals only. Switch individual positions to Transaction Accounting when ready for full history."}
       </p>
     </div>
   );

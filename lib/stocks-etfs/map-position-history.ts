@@ -13,7 +13,7 @@ export function mapStockEtfTransaction(
   return {
     id: row.id,
     holdingId: row.holding_id,
-    transactionType: row.transaction_type,
+    transactionType: row.transaction_type as EnrichedStockEtfTransaction["transactionType"],
     transactionDate: row.transaction_date,
     shares: Number(row.shares),
     pricePerShare: Number(row.price_per_share),

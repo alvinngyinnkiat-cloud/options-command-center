@@ -43,6 +43,56 @@ export async function listStockEtfLedgerEntries(): Promise<StockEtfLedgerEntry[]
   return value;
 }
 
+export async function isStockEtfLedgerAvailable(): Promise<boolean> {
+  if (!isSupabaseConfigured()) return true;
+
+  try {
+    return await withSupabaseQuery(
+      async ({ supabase }) => {
+        const { error } = await supabase
+          .from("stock_etf_ledger")
+          .select("id")
+          .limit(1);
+        if (!error) return true;
+        if (
+          error.code === "PGRST205" ||
+          error.message.includes("stock_etf_ledger")
+        ) {
+          return false;
+        }
+        throw new Error(error.message);
+      },
+      () => true
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function tryInsertStockEtfLedgerEntry(
+  userId: string,
+  input: Parameters<typeof insertStockEtfLedgerEntry>[1]
+): Promise<{ ok: true } | { ok: false; warning: string }> {
+  try {
+    await insertStockEtfLedgerEntry(userId, input);
+    return { ok: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Ledger insert failed";
+    if (
+      message.includes("PGRST205") ||
+      message.includes("stock_etf_ledger") ||
+      message.includes("Could not find")
+    ) {
+      return {
+        ok: false,
+        warning:
+          "Ledger table is not available. Transactions are saved; audit log is skipped.",
+      };
+    }
+    throw e;
+  }
+}
+
 export async function insertStockEtfLedgerEntry(
   userId: string,
   input: {

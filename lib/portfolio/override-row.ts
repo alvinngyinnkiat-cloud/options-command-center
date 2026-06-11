@@ -68,6 +68,10 @@ export function mergePortfolioOverrideRow(
       updates.manual_client_portfolio_sgd ??
       existing?.manual_client_portfolio_sgd ??
       0,
+    stock_etf_tracking_mode:
+      updates.stock_etf_tracking_mode ??
+      existing?.stock_etf_tracking_mode ??
+      "manual",
     override_reason:
       updates.override_reason ?? existing?.override_reason ?? null,
     override_updated_at: updates.override_updated_at ?? now,

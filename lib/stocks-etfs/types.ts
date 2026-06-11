@@ -7,6 +7,9 @@ import type {
   UsEquityPositionRow,
   UsEquityTabSummary,
 } from "./us-equity-positions";
+import type { StockEtfTrackingMode } from "./tracking-mode";
+
+export type { StockEtfTrackingMode };
 
 export type { UsEquityPositionRow, UsEquityTabSummary };
 
@@ -23,6 +26,8 @@ export interface StockEtfHoldingFormInput {
   fxRateToSgd: number;
   sharesHeld: number | null;
   averageCost: number | null;
+  manualTotalDividend: number;
+  manualTotalFees: number;
   notes: string | null;
 }
 
@@ -53,6 +58,9 @@ export interface EnrichedStockEtfHolding {
   dividendYield: number | null;
   annualDividendIncome: number | null;
   notes: string | null;
+  trackingMode: StockEtfTrackingMode;
+  manualTotalDividend: number;
+  manualTotalFees: number;
   lastUpdated: string;
   createdAt: string;
   updatedAt: string;
@@ -154,6 +162,8 @@ export interface StockEtfTrackerData {
   cashBalances: Record<MarketCategory, number>;
   ledger: StockEtfLedgerEntry[];
   totalFeesPaid: number;
+  trackingModeDefault: StockEtfTrackingMode;
+  ledgerAvailable: boolean;
   dataSource: DataSource;
 }
 

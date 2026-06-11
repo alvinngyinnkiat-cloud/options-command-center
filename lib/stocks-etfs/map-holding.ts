@@ -1,6 +1,10 @@
 import { resolveTickerDividendIncome } from "@/lib/dividends/calculations";
 import type { TickerDividendTotals } from "@/lib/dividends/types";
 import { toSgdAmount, buildStockEtfHoldingMetrics } from "./calculations";
+import {
+  resolveHoldingTrackingMode,
+  type StockEtfTrackingMode,
+} from "./tracking-mode";
 import type {
   EnrichedStockEtfHolding,
   StockEtfHoldingFormInput,
@@ -8,22 +12,30 @@ import type {
 } from "./types";
 import type { StockEtfHolding, CurrencyCode } from "@/types/database";
 
+function readManualTotalDividend(row: StockEtfHolding): number {
+  return Number((row as StockEtfHolding).manual_total_dividend ?? 0);
+}
+
+function readManualTotalFees(row: StockEtfHolding): number {
+  return Number((row as StockEtfHolding).manual_total_fees ?? 0);
+}
+
 export function enrichStockEtfHolding(
   row: StockEtfHolding,
   totalPortfolioValueSgd: number,
   dividendTotals?: Map<string, TickerDividendTotals>
 ): EnrichedStockEtfHolding {
+  const trackingMode = resolveHoldingTrackingMode(row);
   const shares = row.shares_held != null ? Number(row.shares_held) : null;
   const lastPrice =
     row.last_market_price_native != null
       ? Number(row.last_market_price_native)
       : null;
-  const manualOverride = Boolean(
-    (row as { manual_value_override?: boolean }).manual_value_override
-  );
+  const manualOverride = Boolean(row.manual_value_override);
 
   let currentValueNative = Number(row.current_value_native);
   if (
+    trackingMode === "transaction" &&
     !manualOverride &&
     shares != null &&
     shares > 0 &&
@@ -44,10 +56,17 @@ export function enrichStockEtfHolding(
     currentValueSgd,
     totalPortfolioValueSgd
   );
+
+  const manualTotalDividend = readManualTotalDividend(row);
+  const manualTotalFees = readManualTotalFees(row);
   const dividendResolved = resolveTickerDividendIncome(
     row.ticker,
     dividendTotals ?? new Map()
   );
+  const dividendForYield =
+    trackingMode === "manual"
+      ? manualTotalDividend
+      : dividendResolved.lifetimeNetDividends;
   const annualDividendIncome = dividendResolved.annualDividendIncome;
   const dividendYield =
     currentValueNative > 0
@@ -72,6 +91,9 @@ export function enrichStockEtfHolding(
     averageCost: row.average_cost != null ? Number(row.average_cost) : null,
     dividendYield,
     annualDividendIncome,
+    trackingMode,
+    manualTotalDividend,
+    manualTotalFees,
     notes: row.notes,
     lastUpdated: row.last_updated,
     createdAt: row.created_at,
@@ -96,7 +118,10 @@ export function stockEtfRowFromForm(
   input: StockEtfHoldingFormInput,
   userId: string,
   existingId?: string,
-  existingCreatedAt?: string
+  existingCreatedAt?: string,
+  options?: {
+    trackingMode?: StockEtfTrackingMode;
+  }
 ): StockEtfHolding {
   const now = new Date().toISOString();
   const today = now.split("T")[0];
@@ -128,7 +153,10 @@ export function stockEtfRowFromForm(
     last_market_price_native: null,
     last_price_date: null,
     price_source: null,
-    manual_value_override: false,
+    manual_value_override: true,
+    tracking_mode: options?.trackingMode ?? "manual",
+    manual_total_dividend: input.manualTotalDividend,
+    manual_total_fees: input.manualTotalFees,
     notes: input.notes,
     last_updated: today,
     created_at: existingCreatedAt ?? now,

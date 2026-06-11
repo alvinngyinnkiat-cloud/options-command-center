@@ -26,6 +26,9 @@ function mockHolding(overrides: Partial<{ totalInvestedNative: number; currentVa
     dividendYield: null,
     annualDividendIncome: null,
     notes: null,
+    trackingMode: "transaction" as const,
+    manualTotalDividend: 0,
+    manualTotalFees: 0,
     lastUpdated: "2026-01-01",
     createdAt: "2026-01-01",
     updatedAt: "2026-01-01",
@@ -72,9 +75,13 @@ function mockUsRow(overrides: Partial<UsEquityPositionRow> = {}): UsEquityPositi
 
 describe("stock etf table rows", () => {
   it("computes P/L and ROI from capital and value (excludes dividend)", () => {
-    expect(buildStockEtfTableMetrics(10_000, 11_000, 250)).toEqual({
+    const holding = mockHolding();
+    expect(
+      buildStockEtfTableMetrics(holding, 10_000, 11_000, 250)
+    ).toMatchObject({
       pl: 1_000,
       roiPct: 10,
+      dividend: 250,
     });
   });
 
