@@ -17,6 +17,10 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import { MOCK_PORTFOLIO_OVERRIDE } from "@/lib/mock/portfolio";
 import {
+  deriveTradingCashFromPortfolio,
+  tradingCashFromPortfolioOverride,
+} from "@/lib/stocks-etfs/trading-cash-sync";
+import {
   NotAuthenticatedError,
   requireUserId,
   resolveSupabaseServerAccess,
@@ -126,17 +130,21 @@ export async function getStockEtfCashSyncPreview(): Promise<
       usEtfCashUsd: number;
       usStockCashUsd: number;
       sgStockCashSgd: number;
+      tradingCashUsd: number;
+      tradingCashSgd: number;
     }
   | { error: string }
 > {
   try {
     if (!isSupabaseConfigured()) {
-      const usd = MOCK_PORTFOLIO_OVERRIDE.manualTradingCashUsd ?? 0;
-      const sg = MOCK_PORTFOLIO_OVERRIDE.manualSgCashValueSgd ?? 0;
+      const derived = deriveTradingCashFromPortfolio(MOCK_PORTFOLIO_OVERRIDE);
       return {
-        usEtfCashUsd: usd / 2,
-        usStockCashUsd: usd / 2,
-        sgStockCashSgd: sg,
+        ...derived,
+        usEtfCashUsd: derived.us_etf,
+        usStockCashUsd: derived.us_stock,
+        sgStockCashSgd: derived.sg_stock,
+        tradingCashUsd: MOCK_PORTFOLIO_OVERRIDE.manualTradingCashUsd ?? 0,
+        tradingCashSgd: MOCK_PORTFOLIO_OVERRIDE.manualTradingCashSgd ?? 0,
       };
     }
 
@@ -145,22 +153,19 @@ export async function getStockEtfCashSyncPreview(): Promise<
     const supabase = await getServerSupabaseClient(access);
     const { data } = await supabase
       .from("portfolio_overrides")
-      .select(
-        "manual_trading_cash_usd, manual_sg_cash_value_sgd, manual_sg_stocks_cash_value_sgd"
-      )
+      .select("manual_trading_cash_usd, manual_trading_cash_sgd")
       .eq("user_id", access.userId)
       .maybeSingle();
 
     const row = data as PortfolioOverride | null;
-    const usd = Number(row?.manual_trading_cash_usd ?? 0);
-    const sg =
-      Number(row?.manual_sg_cash_value_sgd ?? 0) ||
-      Number(row?.manual_sg_stocks_cash_value_sgd ?? 0);
+    const derived = tradingCashFromPortfolioOverride(row);
 
     return {
-      usEtfCashUsd: usd / 2,
-      usStockCashUsd: usd / 2,
-      sgStockCashSgd: sg,
+      usEtfCashUsd: derived.us_etf,
+      usStockCashUsd: derived.us_stock,
+      sgStockCashSgd: derived.sg_stock,
+      tradingCashUsd: Number(row?.manual_trading_cash_usd ?? 0),
+      tradingCashSgd: Number(row?.manual_trading_cash_sgd ?? 0),
     };
   } catch (e) {
     return {

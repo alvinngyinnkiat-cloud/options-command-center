@@ -112,8 +112,8 @@ function ContributionModal({
     <ModalShell title="Monthly Contribution" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <p className="text-xs text-terminal-muted">
-          Increases market cash balance. Does not change holdings until you record
-          a buy.
+          Increases {categoryLabel(marketCategory)} Trading Cash. Does not change
+          holdings until you record a buy.
         </p>
         <MarketField value={marketCategory} onChange={setMarketCategory} />
         <DateField value={transactionDate} onChange={setTransactionDate} />
@@ -215,7 +215,7 @@ function BuyModal({
     <ModalShell title="Buy Stock / ETF" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <p className="text-xs text-terminal-muted">
-          {categoryLabel(marketCategory)} cash:{" "}
+          {categoryLabel(marketCategory)} Trading Cash:{" "}
           {isUsMarket
             ? formatNativeValue(availableCash, "USD")
             : formatSGD(availableCash)}

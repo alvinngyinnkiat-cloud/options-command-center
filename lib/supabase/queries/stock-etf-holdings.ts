@@ -17,7 +17,11 @@ import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
 import { DEFAULT_USD_SGD_RATE } from "@/lib/portfolio/currency";
 import type { StockEtfHoldingFormInput } from "@/lib/stocks-etfs/types";
 import type { StockEtfTrackerData } from "@/lib/stocks-etfs/types";
-import { getStockEtfCashBalances } from "@/lib/supabase/queries/stock-etf-cash";
+import { getStockEtfCashBalances, fetchPortfolioTradingCashSource } from "@/lib/supabase/queries/stock-etf-cash";
+import {
+  deriveTradingCashFromPortfolio,
+  resolveDisplayTradingCash,
+} from "@/lib/stocks-etfs/trading-cash-sync";
 import { listStockEtfLedgerEntries } from "@/lib/supabase/queries/stock-etf-ledger";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
@@ -64,11 +68,18 @@ async function buildFullData(
   );
   const holdings = enrichAllStockEtfHoldings(rows, dividendSummary.byTicker);
   const sectorAllocation = buildSectorAllocation(holdings);
-  const [cashRows, ledger] = await Promise.all([
+  const [cashRows, ledger, portfolioTradingCash] = await Promise.all([
     getStockEtfCashBalances(userId),
     listStockEtfLedgerEntries(),
+    fetchPortfolioTradingCashSource(userId),
   ]);
-  const cashBalances = cashByCategory(cashRows);
+  const storedCash = cashByCategory(cashRows);
+  const portfolioCash = deriveTradingCashFromPortfolio(portfolioTradingCash);
+  const cashBalances = resolveDisplayTradingCash(
+    storedCash,
+    portfolioCash,
+    ledger.length > 0
+  );
   const feesFor = (cat: "us_etf" | "us_stock" | "sg_stock") =>
     calculateTotalFeesPaid(
       ledger.filter((e) => e.market_category === cat)

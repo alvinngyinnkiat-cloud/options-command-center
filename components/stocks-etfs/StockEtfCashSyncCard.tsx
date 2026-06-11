@@ -24,6 +24,8 @@ export function StockEtfCashSyncCard({ onSaved }: StockEtfCashSyncCardProps) {
   const [usEtf, setUsEtf] = useState("");
   const [usStock, setUsStock] = useState("");
   const [sgStock, setSgStock] = useState("");
+  const [tradingCashUsd, setTradingCashUsd] = useState<number | null>(null);
+  const [tradingCashSgd, setTradingCashSgd] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -37,6 +39,8 @@ export function StockEtfCashSyncCard({ onSaved }: StockEtfCashSyncCardProps) {
       setUsEtf(String(preview.usEtfCashUsd));
       setUsStock(String(preview.usStockCashUsd));
       setSgStock(String(preview.sgStockCashSgd));
+      setTradingCashUsd(preview.tradingCashUsd);
+      setTradingCashSgd(preview.tradingCashSgd);
     });
   }, []);
 
@@ -60,17 +64,33 @@ export function StockEtfCashSyncCard({ onSaved }: StockEtfCashSyncCardProps) {
   return (
     <Card variant="bordered">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Sync Cash From Manual Portfolio</CardTitle>
+        <CardTitle className="text-sm">Sync Trading Cash From Portfolio Dashboard</CardTitle>
         <CardDescription>
-          Update market cash balances from manual portfolio breakdown. Does not
-          overwrite holdings.
+          Pull Trading Cash from Manual Portfolio Breakdown into market buckets.
+          Does not overwrite holdings.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {(tradingCashUsd != null || tradingCashSgd != null) && (
+          <div className="rounded-md border border-terminal-border/60 bg-terminal-elevated/30 px-3 py-2 text-xs space-y-1">
+            <p className="text-terminal-muted uppercase tracking-wider text-[10px]">
+              Portfolio Dashboard source
+            </p>
+            <p className="font-mono text-terminal-text">
+              Trading Cash USD: {formatNativeValue(tradingCashUsd ?? 0, "USD")}
+            </p>
+            <p className="font-mono text-terminal-text">
+              Trading Cash SGD: {formatSGD(tradingCashSgd ?? 0)}
+            </p>
+            <p className="text-[10px] text-terminal-muted">
+              USD is split 50/50 between US ETF and US Stock. SGD maps to SG Stock.
+            </p>
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="space-y-1 text-xs">
             <span className="text-terminal-muted uppercase tracking-wider">
-              US ETF Cash (USD)
+              US ETF Trading Cash (USD)
             </span>
             <input
               type="number"
@@ -83,7 +103,7 @@ export function StockEtfCashSyncCard({ onSaved }: StockEtfCashSyncCardProps) {
           </label>
           <label className="space-y-1 text-xs">
             <span className="text-terminal-muted uppercase tracking-wider">
-              US Stock Cash (USD)
+              US Stock Trading Cash (USD)
             </span>
             <input
               type="number"
@@ -96,7 +116,7 @@ export function StockEtfCashSyncCard({ onSaved }: StockEtfCashSyncCardProps) {
           </label>
           <label className="space-y-1 text-xs">
             <span className="text-terminal-muted uppercase tracking-wider">
-              SG Stock Cash (SGD)
+              SG Stock Trading Cash (SGD)
             </span>
             <input
               type="number"
@@ -116,12 +136,8 @@ export function StockEtfCashSyncCard({ onSaved }: StockEtfCashSyncCardProps) {
         />
         {error && <p className="text-xs text-loss">{error}</p>}
         <Button variant="secondary" size="sm" disabled={saving} onClick={handleSync}>
-          {saving ? "Syncing…" : "Sync Cash From Manual Portfolio"}
+          {saving ? "Syncing…" : "Sync Trading Cash From Portfolio Dashboard"}
         </Button>
-        <p className="text-[10px] text-terminal-muted">
-          Preview prefills from manual trading cash (USD split 50/50) and SG cash.
-          Edit before confirming.
-        </p>
       </CardContent>
     </Card>
   );

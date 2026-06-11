@@ -14,7 +14,9 @@ import {
   warnMissingDevUserIdForWrite,
   withSupabaseQuery,
 } from "@/lib/supabase/resolve-user";
-import type { StockEtfCashBalance } from "@/types/database";
+import type { PortfolioTradingCashSource } from "@/lib/stocks-etfs/trading-cash-sync";
+import { MOCK_PORTFOLIO_OVERRIDE } from "@/lib/mock/portfolio";
+import type { PortfolioOverride, StockEtfCashBalance } from "@/types/database";
 
 async function fetchCashRows(userId: string): Promise<StockEtfCashBalance[]> {
   return withSupabaseQuery(
@@ -91,4 +93,35 @@ export async function updateStockEtfCashForCategory(
     cash_native: Math.max(0, cashNative),
     currency: MARKET_CASH_CURRENCY[marketCategory],
   });
+}
+
+export async function fetchPortfolioTradingCashSource(
+  userId: string
+): Promise<PortfolioTradingCashSource> {
+  if (!isSupabaseConfigured()) {
+    return {
+      manualTradingCashUsd: MOCK_PORTFOLIO_OVERRIDE.manualTradingCashUsd,
+      manualTradingCashSgd: MOCK_PORTFOLIO_OVERRIDE.manualTradingCashSgd,
+    };
+  }
+
+  return withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { data } = await supabase
+        .from("portfolio_overrides")
+        .select("manual_trading_cash_usd, manual_trading_cash_sgd")
+        .eq("user_id", effectiveUserId)
+        .maybeSingle();
+
+      const row = data as PortfolioOverride | null;
+      return {
+        manualTradingCashUsd: row?.manual_trading_cash_usd ?? null,
+        manualTradingCashSgd: row?.manual_trading_cash_sgd ?? null,
+      };
+    },
+    () => ({
+      manualTradingCashUsd: MOCK_PORTFOLIO_OVERRIDE.manualTradingCashUsd,
+      manualTradingCashSgd: MOCK_PORTFOLIO_OVERRIDE.manualTradingCashSgd,
+    })
+  );
 }

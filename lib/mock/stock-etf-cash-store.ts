@@ -1,8 +1,19 @@
 import { defaultCashBalances } from "@/lib/stocks-etfs/cash-balances";
+import { deriveTradingCashFromPortfolio } from "@/lib/stocks-etfs/trading-cash-sync";
+import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
+import { MOCK_PORTFOLIO_OVERRIDE } from "@/lib/mock/portfolio";
 import type { StockEtfCashBalance, StockEtfLedgerEntry } from "@/types/database";
 import { MOCK_USER_ID } from "@/lib/supabase/resolve-user";
 
-let mockCash: StockEtfCashBalance[] = defaultCashBalances(MOCK_USER_ID);
+function seedMockCashFromPortfolio(): StockEtfCashBalance[] {
+  const derived = deriveTradingCashFromPortfolio(MOCK_PORTFOLIO_OVERRIDE);
+  return defaultCashBalances(MOCK_USER_ID).map((row) => ({
+    ...row,
+    cash_native: derived[row.market_category as MarketCategory],
+  }));
+}
+
+let mockCash: StockEtfCashBalance[] = seedMockCashFromPortfolio();
 let mockLedger: StockEtfLedgerEntry[] = [];
 
 export function getMockStockEtfCashBalances(): StockEtfCashBalance[] {
@@ -46,6 +57,6 @@ export function deleteMockStockEtfLedgerEntry(id: string): boolean {
 }
 
 export function resetMockStockEtfCash(): void {
-  mockCash = defaultCashBalances(MOCK_USER_ID);
+  mockCash = seedMockCashFromPortfolio();
   mockLedger = [];
 }

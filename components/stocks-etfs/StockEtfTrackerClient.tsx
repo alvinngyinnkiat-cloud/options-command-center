@@ -195,9 +195,9 @@ export function StockEtfTrackerClient({
       />
 
       <p className="text-[11px] text-terminal-muted">
-        Cash balances fund buys; sells return proceeds net of fees. Manual
-        portfolio sync updates cash only. Dividend income syncs from Dividend
-        Tracker.
+        Trading Cash funds buys; sells return proceeds net of fees. Sync from
+        Portfolio Dashboard to align with Manual Portfolio Breakdown. Dividend
+        income syncs from Dividend Tracker.
       </p>
     </div>
   );

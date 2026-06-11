@@ -66,8 +66,9 @@ export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelPro
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
           <SummaryCard
-            label="Cash Balance"
+            label="Trading Cash"
             value={formatSGD(summary.cashBalance)}
+            sub="Available to deploy"
           />
           <SummaryCard
             label="Total Market Value"

@@ -64,9 +64,9 @@ export function UsEquitySummaryCards({
       </h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
         <Card
-          label="Cash Balance"
+          label="Trading Cash"
           value={formatTickerCurrency(summary.cashBalance)}
-          sub="USD · available to deploy"
+          sub="Available to deploy"
         />
         <Card
           label="Total Market Value"
