@@ -14,12 +14,13 @@ import {
 } from "@/lib/crypto/map-holding";
 import type { CryptoHoldingFormInput, EnrichedCryptoHolding } from "@/lib/crypto/types";
 import { formatSGD } from "@/lib/utils";
-import { Pencil, Trash2, TrendingDown } from "lucide-react";
+import { Pencil, RotateCcw, Trash2, TrendingDown } from "lucide-react";
 
 interface CryptoHoldingsTableProps {
   holdings: EnrichedCryptoHolding[];
   variant: "open" | "closed";
   onAdjust?: (holding: EnrichedCryptoHolding) => void;
+  onRestore?: (holding: EnrichedCryptoHolding) => void;
   onSell?: (holding: EnrichedCryptoHolding) => void;
   onRefresh: () => void;
   emptyMessage: string;
@@ -32,6 +33,7 @@ export function CryptoHoldingsTable({
   holdings,
   variant,
   onAdjust,
+  onRestore,
   onSell,
   onRefresh,
   emptyMessage,
@@ -65,6 +67,10 @@ export function CryptoHoldingsTable({
   function startEdit(h: EnrichedCryptoHolding) {
     if (isOpen && onAdjust) {
       onAdjust(h);
+      return;
+    }
+    if (!isOpen && onRestore) {
+      onRestore(h);
       return;
     }
     setEditingId(h.id);
@@ -134,6 +140,7 @@ export function CryptoHoldingsTable({
             saving={savingId === h.id}
             removing={removingId === h.id}
             onStartEdit={() => startEdit(h)}
+            onRestore={onRestore ? () => onRestore(h) : undefined}
             onSave={() => handleSave(h)}
             onCancel={cancelEdit}
             onDelete={() => handleDelete(h.id)}
@@ -148,14 +155,13 @@ export function CryptoHoldingsTable({
           <thead>
             <tr className="border-b border-terminal-border bg-terminal-elevated/80 text-left uppercase tracking-wider text-terminal-muted">
               <th className="px-3 py-2.5 font-medium">Ticker</th>
-              <th className="px-3 py-2.5 font-medium text-right">Invested SGD</th>
-              <th className="px-3 py-2.5 font-medium text-right">Current SGD</th>
-              <th className="px-3 py-2.5 font-medium text-right">P/L SGD</th>
-              <th className="px-3 py-2.5 font-medium text-right">Return %</th>
+              <th className="px-3 py-2.5 font-medium text-right">Capital Invested</th>
+              <th className="px-3 py-2.5 font-medium text-right">Current Value</th>
+              <th className="px-3 py-2.5 font-medium text-right">P&L</th>
+              <th className="px-3 py-2.5 font-medium text-right">ROI</th>
               {!isOpen && (
                 <th className="px-3 py-2.5 font-medium">Closed Date</th>
               )}
-              <th className="px-3 py-2.5 font-medium">Notes</th>
               {showActions && (
                 <th className="px-3 py-2.5 font-medium">Actions</th>
               )}
@@ -252,19 +258,6 @@ export function CryptoHoldingsTable({
                       )}
                     </td>
                   )}
-                  <td className="px-3 py-2.5 text-terminal-muted max-w-[200px] break-words">
-                    {editing ? (
-                      <textarea
-                        className={`${inputClass} min-h-[48px]`}
-                        value={editForm.notes ?? ""}
-                        onChange={(e) =>
-                          patchEditForm({ notes: e.target.value || null })
-                        }
-                      />
-                    ) : (
-                      h.notes ?? "—"
-                    )}
-                  </td>
                   {showActions && (
                     <td className="px-3 py-2.5">
                       <RowActions
@@ -273,7 +266,9 @@ export function CryptoHoldingsTable({
                         removing={removingId === h.id}
                         ticker={h.ticker}
                         showSell={isOpen && Boolean(onSell)}
+                        showRestore={!isOpen && Boolean(onRestore)}
                         onEdit={() => startEdit(h)}
+                        onRestore={onRestore ? () => onRestore(h) : undefined}
                         onSave={() => handleSave(h)}
                         onCancel={cancelEdit}
                         onDelete={() => handleDelete(h.id)}
@@ -301,6 +296,7 @@ function MobileRow({
   saving,
   removing,
   onStartEdit,
+  onRestore,
   onSave,
   onCancel,
   onDelete,
@@ -316,6 +312,7 @@ function MobileRow({
   saving: boolean;
   removing: boolean;
   onStartEdit: () => void;
+  onRestore?: () => void;
   onSave: () => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -337,7 +334,9 @@ function MobileRow({
             removing={removing}
             ticker={h.ticker}
             showSell={isOpen && Boolean(onSell)}
+            showRestore={!isOpen && Boolean(onRestore)}
             onEdit={onStartEdit}
+            onRestore={onRestore}
             onSave={onSave}
             onCancel={onCancel}
             onDelete={onDelete}
@@ -384,16 +383,16 @@ function MobileRow({
         </dl>
       ) : (
         <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-          <Field label="Invested SGD" value={formatSGD(h.totalInvestedSgd)} />
-          <Field label="Current SGD" value={formatSGD(h.currentValueSgd)} />
+          <Field label="Capital Invested" value={formatSGD(h.totalInvestedSgd)} />
+          <Field label="Current Value" value={formatSGD(h.currentValueSgd)} />
           <div>
-            <dt className="text-terminal-muted">P/L SGD</dt>
+            <dt className="text-terminal-muted">P&L</dt>
             <dd className="font-mono tabular-nums">
               <PnlValue value={preview.profitLossSgd} currency="SGD" />
             </dd>
           </div>
           <div>
-            <dt className="text-terminal-muted">Return %</dt>
+            <dt className="text-terminal-muted">ROI</dt>
             <dd className="font-mono tabular-nums">
               <PnlPercentValue value={preview.returnPct} />
             </dd>
@@ -414,7 +413,9 @@ function RowActions({
   removing,
   ticker,
   showSell,
+  showRestore,
   onEdit,
+  onRestore,
   onSave,
   onCancel,
   onDelete,
@@ -425,7 +426,9 @@ function RowActions({
   removing: boolean;
   ticker: string;
   showSell?: boolean;
+  showRestore?: boolean;
   onEdit: () => void;
+  onRestore?: () => void;
   onSave: () => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -456,9 +459,21 @@ function RowActions({
 
   return (
     <div className="flex gap-1 shrink-0">
-      <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${ticker}`}>
-        <Pencil className="h-3.5 w-3.5" />
-      </Button>
+      {showRestore && onRestore ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRestore}
+          aria-label={`Restore ${ticker}`}
+          title="Restore position"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+      ) : (
+        <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${ticker}`}>
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      )}
       {showSell && onSell && (
         <Button variant="ghost" size="sm" onClick={onSell} aria-label={`Sell ${ticker}`}>
           <TrendingDown className="h-3.5 w-3.5" />

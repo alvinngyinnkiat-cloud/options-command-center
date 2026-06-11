@@ -14,16 +14,18 @@ export function CryptoSummaryCards({ portfolioManual }: CryptoSummaryCardsProps)
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
       <StatCard
-        label="Coin Holdings Total"
+        label="Current Value"
         value={formatSGD(portfolioManual.cryptoHoldingsValueSgd)}
+        change="Open positions only"
       />
       <StatCard
         label="Available Exchange Cash"
         value={formatSGD(portfolioManual.cryptoCashSgd)}
       />
       <StatCard
-        label="Current Crypto Portfolio Value"
+        label="Portfolio Value"
         value={formatSGD(portfolioManual.totalCryptoPortfolioValueSgd)}
+        change="Current Value + cash"
       />
       <StatCard
         label="Total Contributions / Cost SGD"

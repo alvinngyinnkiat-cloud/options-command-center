@@ -800,6 +800,7 @@ export type CryptoTransactionType =
   | "monthly_contribution"
   | "buy"
   | "sell"
+  | "fee"
   | "manual_adjustment"
   | "manual_cash_update";
 

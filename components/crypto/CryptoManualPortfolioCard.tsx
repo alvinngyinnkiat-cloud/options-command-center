@@ -97,13 +97,13 @@ export function CryptoManualPortfolioCard({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-md border border-terminal-border/60 bg-terminal-elevated/20 px-3 py-3">
             <p className="text-[10px] uppercase tracking-wider text-terminal-muted">
-              Coin Holdings Total (SGD)
+              Current Value (SGD)
             </p>
             <p className="mt-1 font-mono text-lg font-semibold text-terminal-text">
               {formatSGD(coinHoldingsTotal)}
             </p>
             <p className="mt-1 text-[10px] text-terminal-muted">
-              Auto-calculated — sum of all individual coin current values
+              Auto-calculated — open position values only
             </p>
           </div>
           <div>
@@ -162,9 +162,7 @@ export function CryptoManualPortfolioCard({
 
         <div className="rounded-md border border-terminal-border/60 bg-terminal-elevated/20 px-3 py-3 space-y-2 text-xs">
           <div className="flex justify-between gap-2">
-            <span className="text-terminal-muted">
-              Current Crypto Portfolio Value (SGD)
-            </span>
+            <span className="text-terminal-muted">Portfolio Value (SGD)</span>
             <span className="font-mono text-terminal-text">
               {formatSGD(preview.totalCryptoPortfolioValueSgd)}
             </span>
@@ -181,7 +179,7 @@ export function CryptoManualPortfolioCard({
             </span>
           </div>
           <p className="text-[10px] text-terminal-muted pt-1 border-t border-terminal-border/40">
-            Portfolio Value = Coin Holdings Total + Exchange Cash · P/L =
+            Portfolio Value = Current Value + Exchange Cash · P/L =
             Portfolio Value − Contributions
           </p>
         </div>

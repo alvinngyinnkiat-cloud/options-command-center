@@ -6,6 +6,7 @@ import type {
   CryptoActionResult,
   CryptoBuyInput,
   CryptoDepositInput,
+  CryptoFeeInput,
   CryptoHoldingFormInput,
   CryptoManualAdjustmentInput,
   CryptoSellInput,
@@ -14,6 +15,7 @@ import {
   CryptoTransactionError,
   processCryptoBuy,
   processCryptoDeposit,
+  processCryptoFee,
   processCryptoManualAdjustment,
   processCryptoManualCashUpdate,
   processCryptoSell,
@@ -429,6 +431,30 @@ export async function recordCryptoSell(
     const holdingsSync = await syncCryptoOverrideAfterHoldingChange();
     if (!holdingsSync.success) {
       return { success: false, error: holdingsSync.error };
+    }
+    return finish();
+  } catch (e) {
+    return mapTransactionError(e);
+  }
+}
+
+export async function recordCryptoFee(
+  payload: CryptoFeeInput
+): Promise<CryptoActionResult> {
+  try {
+    const userId = await requireUserId();
+    const current = await getCurrentCryptoBalances();
+    const nextCash = await processCryptoFee({
+      userId,
+      payload,
+      cashSgd: current.cashSgd,
+    });
+    const syncResult = await persistCryptoCashAndContributions(
+      nextCash,
+      current.contributionsSgd
+    );
+    if (!syncResult.success) {
+      return { success: false, error: syncResult.error };
     }
     return finish();
   } catch (e) {

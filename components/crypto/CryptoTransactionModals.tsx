@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   recordCryptoBuy,
   recordCryptoDeposit,
+  recordCryptoFee,
   recordCryptoMonthlyContribution,
   recordCryptoSell,
 } from "@/app/actions/crypto";
@@ -15,7 +16,7 @@ import { X } from "lucide-react";
 const inputClass =
   "w-full rounded border border-terminal-border bg-terminal-elevated px-3 py-2 text-sm font-mono";
 
-type ModalKind = "deposit" | "monthly_contribution" | "buy" | "sell";
+type ModalKind = "deposit" | "monthly_contribution" | "buy" | "sell" | "fee";
 
 interface CryptoTransactionModalsProps {
   kind: ModalKind | null;
@@ -47,6 +48,16 @@ export function CryptoTransactionModals({
   if (kind === "buy") {
     return (
       <BuyModal
+        availableCashSgd={availableCashSgd}
+        onClose={onClose}
+        onSaved={onSaved}
+      />
+    );
+  }
+
+  if (kind === "fee") {
+    return (
+      <FeeModal
         availableCashSgd={availableCashSgd}
         onClose={onClose}
         onSaved={onSaved}
@@ -254,6 +265,57 @@ function SellModal({
         <NotesField value={notes} onChange={setNotes} />
         {error && <p className="text-xs text-loss">{error}</p>}
         <ModalActions saving={saving} onClose={onClose} submitLabel="Sell" />
+      </form>
+    </ModalShell>
+  );
+}
+
+function FeeModal({
+  availableCashSgd,
+  onClose,
+  onSaved,
+}: {
+  availableCashSgd: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const today = new Date().toISOString().split("T")[0];
+  const [transactionDate, setTransactionDate] = useState(today);
+  const [fee, setFee] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    const result = await recordCryptoFee({
+      transactionDate,
+      feeSgd: parseFloat(fee) || 0,
+      notes: notes.trim() || null,
+    });
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <ModalShell title="Record Fee" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4 p-4">
+        <p className="text-xs text-terminal-muted">
+          Deducts from Available Exchange Cash. Available:{" "}
+          {formatSGD(availableCashSgd)}
+        </p>
+        <DateField value={transactionDate} onChange={setTransactionDate} />
+        <AmountField value={fee} onChange={setFee} label="Fee SGD" />
+        <NotesField value={notes} onChange={setNotes} />
+        {error && <p className="text-xs text-loss">{error}</p>}
+        <ModalActions saving={saving} onClose={onClose} submitLabel="Record Fee" />
       </form>
     </ModalShell>
   );

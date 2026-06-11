@@ -104,6 +104,12 @@ export interface CryptoManualAdjustmentInput {
   notes: string | null;
 }
 
+export interface CryptoFeeInput {
+  transactionDate: string;
+  feeSgd: number;
+  notes: string | null;
+}
+
 export type CryptoActionResult =
   | { success: true; data: CryptoTrackerData }
   | { success: false; error: string };

@@ -6,6 +6,7 @@ export const CRYPTO_TRANSACTION_LABELS: Record<CryptoTransactionType, string> = 
   monthly_contribution: "Monthly Contribution",
   buy: "Buy",
   sell: "Sell",
+  fee: "Fee",
   manual_adjustment: "Manual Adjustment",
   manual_cash_update: "Manual Cash Update",
 };
@@ -36,6 +37,8 @@ export function calculateTransactionNetAmount(input: {
       return -(amountSgd + feeSgd);
     case "sell":
       return amountSgd - feeSgd;
+    case "fee":
+      return -feeSgd;
     case "manual_adjustment":
     case "manual_cash_update":
       return 0;

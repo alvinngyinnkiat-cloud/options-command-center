@@ -3,6 +3,7 @@ import {
   applyBuyToHolding,
   applySellToHolding,
   validateBuyTransaction,
+  validateFeeTransaction,
   validateSellTransaction,
   CryptoTransactionError,
 } from "./transaction-engine";
@@ -33,6 +34,12 @@ describe("crypto transaction engine", () => {
     expect(() =>
       validateSellTransaction({ sellAmountSgd: 200, currentValueSgd: 100 })
     ).toThrow("Sell Amount Exceeds Position Value");
+  });
+
+  it("blocks fee when cash insufficient", () => {
+    expect(() =>
+      validateFeeTransaction({ feeSgd: 50, availableCashSgd: 20 })
+    ).toThrow("Insufficient Exchange Cash");
   });
 
   it("buy increases invested and current; fee adds to cost basis", () => {
@@ -69,6 +76,13 @@ describe("crypto transaction engine", () => {
         feeSgd: 5,
       })
     ).toBe(95);
+    expect(
+      calculateTransactionNetAmount({
+        transactionType: "fee",
+        amountSgd: 10,
+        feeSgd: 10,
+      })
+    ).toBe(-10);
     expect(
       calculateTotalFeesPaid([{ fee_sgd: 5 }, { fee_sgd: 2.5 }])
     ).toBe(7.5);

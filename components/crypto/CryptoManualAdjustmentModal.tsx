@@ -68,7 +68,9 @@ export function CryptoManualAdjustmentModal({
       <div className="w-full max-w-lg rounded-lg border border-terminal-border bg-terminal-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-terminal-border px-4 py-3">
           <h2 className="text-sm font-semibold text-terminal-text">
-            Manual Adjustment — {holding.ticker}
+            {holding.currentValueSgd === 0
+              ? `Restore Position — ${holding.ticker}`
+              : `Manual Adjustment — ${holding.ticker}`}
           </h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="h-4 w-4" />

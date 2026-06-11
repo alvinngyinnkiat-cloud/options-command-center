@@ -34,6 +34,18 @@ export function validateSellTransaction(input: {
   }
 }
 
+export function validateFeeTransaction(input: {
+  feeSgd: number;
+  availableCashSgd: number;
+}): void {
+  if (input.feeSgd <= 0) {
+    throw new CryptoTransactionError("Fee must be greater than zero");
+  }
+  if (input.feeSgd > input.availableCashSgd) {
+    throw new CryptoTransactionError("Insufficient Exchange Cash");
+  }
+}
+
 export function applyBuyToHolding(
   holding: Pick<CryptoHolding, "total_invested_sgd" | "current_value_sgd">,
   buyAmountSgd: number,

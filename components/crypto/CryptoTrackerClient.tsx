@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { splitOpenClosedHoldings } from "@/lib/crypto/allocation";
 import type { CryptoTrackerData, EnrichedCryptoHolding } from "@/lib/crypto/types";
-import { Banknote, PlusCircle, ShoppingCart } from "lucide-react";
+import { Banknote, Coins, PlusCircle, ShoppingCart } from "lucide-react";
 import { CryptoHoldingsTable } from "./CryptoHoldingsTable";
 import { CryptoManualAdjustmentModal } from "./CryptoManualAdjustmentModal";
 import { CryptoManualPortfolioCard } from "./CryptoManualPortfolioCard";
@@ -53,7 +53,7 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
         description="Transaction-based crypto portfolio — deposits, buys, sells, and manual corrections."
         actions={
           <>
-            <Badge variant="outline">V4 Transactions</Badge>
+            <Badge variant="outline">V2 Transactions</Badge>
             {initialData.dataSource === "supabase" && (
               <Badge variant="success">Saved</Badge>
             )}
@@ -79,6 +79,10 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
         <Button variant="secondary" size="sm" onClick={() => setTxModal("buy")}>
           <ShoppingCart className="h-4 w-4" />
           Buy Coin
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setTxModal("fee")}>
+          <Coins className="h-4 w-4" />
+          Record Fee
         </Button>
       </div>
 
@@ -118,8 +122,9 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
         <CryptoHoldingsTable
           holdings={closed}
           variant="closed"
+          onRestore={(h) => setAdjustHolding(h)}
           onRefresh={handleRefresh}
-          emptyMessage="No crypto positions recorded yet."
+          emptyMessage="No closed crypto positions."
         />
       </section>
 
@@ -153,10 +158,9 @@ export function CryptoTrackerClient({ initialData }: CryptoTrackerClientProps) {
       )}
 
       <p className="text-[11px] text-terminal-muted">
-        Deployment Planner uses Available Exchange Cash only (50/25/15/10).
-        Portfolio Value = Coin Holdings Total + Exchange Cash. P/L = Portfolio
-        Value − Total Contributions. Current SGD = 0 moves positions to Closed;
-        Current SGD &gt; 0 restores to Open.
+        Current Value = open position values only. Portfolio Value = Current Value
+        + Available Exchange Cash. Deployment Planner uses exchange cash only
+        (50/25/15/10). Set Current Value &gt; 0 to restore a closed position.
       </p>
     </div>
   );

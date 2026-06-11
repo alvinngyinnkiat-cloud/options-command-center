@@ -5,6 +5,7 @@ import {
   createEmptyHoldingRow,
   CryptoTransactionError,
   validateBuyTransaction,
+  validateFeeTransaction,
   validateSellTransaction,
 } from "./transaction-engine";
 import {
@@ -16,6 +17,7 @@ import {
 import type {
   CryptoBuyInput,
   CryptoDepositInput,
+  CryptoFeeInput,
   CryptoManualAdjustmentInput,
   CryptoSellInput,
 } from "./types";
@@ -202,6 +204,28 @@ export async function processCryptoSell(input: {
   });
 
   return applyCashDelta(input.cashSgd, proceeds);
+}
+
+export async function processCryptoFee(input: {
+  userId: string;
+  payload: CryptoFeeInput;
+  cashSgd: number;
+}): Promise<number> {
+  validateFeeTransaction({
+    feeSgd: input.payload.feeSgd,
+    availableCashSgd: input.cashSgd,
+  });
+
+  await recordTransaction({
+    userId: input.userId,
+    transactionType: "fee",
+    transactionDate: input.payload.transactionDate,
+    amountSgd: input.payload.feeSgd,
+    feeSgd: input.payload.feeSgd,
+    notes: input.payload.notes,
+  });
+
+  return applyCashDelta(input.cashSgd, -input.payload.feeSgd);
 }
 
 export async function processCryptoManualAdjustment(input: {
