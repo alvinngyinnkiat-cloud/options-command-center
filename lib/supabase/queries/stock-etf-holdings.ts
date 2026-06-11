@@ -1,5 +1,5 @@
 import { buildStockEtfTabData } from "@/lib/stocks-etfs/build-tab-data";
-import { cashByCategory, calculateTotalFeesPaid } from "@/lib/stocks-etfs/cash-balances";
+import { calculateTotalFeesPaid } from "@/lib/stocks-etfs/cash-balances";
 import { buildDividendPortfolioSummary } from "@/lib/dividends/calculations";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
 import { listDividendRecordRows } from "@/lib/supabase/queries/dividend-records";
@@ -11,14 +11,18 @@ import {
   buildConcentrationWarnings,
   buildTopHoldings,
 } from "@/lib/stocks-etfs/concentration";
-import { enrichAllStockEtfHoldings, enrichStockEtfHolding, stockEtfRowFromForm } from "@/lib/stocks-etfs/map-holding";
+import {
+  enrichAllStockEtfHoldings,
+  enrichStockEtfHolding,
+  stockEtfRowFromForm,
+} from "@/lib/stocks-etfs/map-holding";
 import { classifyHoldingCategory } from "@/lib/stocks-etfs/market-category";
 import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
 import { DEFAULT_USD_SGD_RATE } from "@/lib/portfolio/currency";
-import type { StockEtfHoldingFormInput } from "@/lib/stocks-etfs/types";
-import type { StockEtfTrackerData } from "@/lib/stocks-etfs/types";
-import { getStockEtfCashBalances } from "@/lib/supabase/queries/stock-etf-cash";
-import { tradingCashFromStoredBalances } from "@/lib/stocks-etfs/trading-cash-sync";
+import type {
+  StockEtfHoldingFormInput,
+  StockEtfTrackerData,
+} from "@/lib/stocks-etfs/types";
 import {
   removeStockEtfPositionAdjustmentsForHolding,
   removeStockEtfTransactionsForHolding,
@@ -69,11 +73,8 @@ async function buildFullData(
   );
   const holdings = enrichAllStockEtfHoldings(rows, dividendSummary.byTicker);
   const sectorAllocation = buildSectorAllocation(holdings);
-  const [cashRows, ledger] = await Promise.all([
-    getStockEtfCashBalances(userId),
-    listStockEtfLedgerEntries(),
-  ]);
-  const cashBalances = tradingCashFromStoredBalances(cashByCategory(cashRows));
+  const ledger = await listStockEtfLedgerEntries();
+  const cashBalances = { us_etf: 0, us_stock: 0, sg_stock: 0 };
   const feesFor = (cat: "us_etf" | "us_stock" | "sg_stock") =>
     calculateTotalFeesPaid(
       ledger.filter((e) => e.market_category === cat)
@@ -83,16 +84,8 @@ async function buildFullData(
     tradesData.trades,
     dividendSummary.byTicker
   );
-  tabs.usEtf.summary.tradingCash = cashBalances.us_etf;
-  tabs.usEtf.summary.cashBalance = cashBalances.us_etf;
   tabs.usEtf.summary.totalFeesPaid = feesFor("us_etf");
-  tabs.usStock.summary.tradingCash = cashBalances.us_stock;
-  tabs.usStock.summary.cashBalance = cashBalances.us_stock;
   tabs.usStock.summary.totalFeesPaid = feesFor("us_stock");
-  tabs.sgStock.summary.tradingCash = cashBalances.sg_stock;
-  tabs.sgStock.summary.cashBalance = cashBalances.sg_stock;
-  tabs.sgStock.summary.currentValue =
-    tabs.sgStock.summary.positionValue + cashBalances.sg_stock;
   tabs.sgStock.summary.totalFeesPaid = feesFor("sg_stock");
 
   return {

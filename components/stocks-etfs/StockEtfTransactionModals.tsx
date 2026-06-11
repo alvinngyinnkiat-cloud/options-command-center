@@ -1,10 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  recordStockEtfBuy,
-  recordStockEtfMonthlyContribution,
-} from "@/app/actions/stock-etf-cash";
+import { useState } from "react";
+import { recordStockEtfBuy } from "@/app/actions/stock-etf-cash";
 import { Button } from "@/components/ui/Button";
 import { categoryLabel } from "@/lib/stocks-etfs/market-category";
 import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
@@ -16,11 +13,10 @@ import { X } from "lucide-react";
 const inputClass =
   "w-full rounded border border-terminal-border bg-terminal-elevated px-3 py-2 text-sm font-mono";
 
-export type StockEtfModalKind = "monthly_contribution" | "buy";
+export type StockEtfModalKind = "buy";
 
 interface StockEtfTransactionModalsProps {
   kind: StockEtfModalKind | null;
-  cashBalances: Record<MarketCategory, number>;
   defaultMarketCategory?: MarketCategory;
   onClose: () => void;
   onSaved: () => void;
@@ -28,26 +24,14 @@ interface StockEtfTransactionModalsProps {
 
 export function StockEtfTransactionModals({
   kind,
-  cashBalances,
   defaultMarketCategory = "us_etf",
   onClose,
   onSaved,
 }: StockEtfTransactionModalsProps) {
-  if (!kind) return null;
-
-  if (kind === "monthly_contribution") {
-    return (
-      <ContributionModal
-        defaultMarketCategory={defaultMarketCategory}
-        onClose={onClose}
-        onSaved={onSaved}
-      />
-    );
-  }
+  if (kind !== "buy") return null;
 
   return (
     <BuyModal
-      cashBalances={cashBalances}
       defaultMarketCategory={defaultMarketCategory}
       onClose={onClose}
       onSaved={onSaved}
@@ -55,113 +39,11 @@ export function StockEtfTransactionModals({
   );
 }
 
-function ContributionModal({
-  defaultMarketCategory,
-  onClose,
-  onSaved,
-}: {
-  defaultMarketCategory: MarketCategory;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const today = new Date().toISOString().split("T")[0];
-  const [marketCategory, setMarketCategory] =
-    useState<MarketCategory>(defaultMarketCategory);
-  const [transactionDate, setTransactionDate] = useState(today);
-  const [amount, setAmount] = useState("");
-  const [inputCurrency, setInputCurrency] = useState<"native" | "SGD">("native");
-  const [fxRate, setFxRate] = useState(String(DEFAULT_USD_SGD_RATE));
-  const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const isUsMarket = marketCategory === "us_etf" || marketCategory === "us_stock";
-  const nativeLabel = isUsMarket ? "USD" : "SGD";
-
-  const amountNative = useMemo(() => {
-    const raw = parseFloat(amount) || 0;
-    if (!isUsMarket || inputCurrency === "native") return raw;
-    const rate = parseFloat(fxRate) || DEFAULT_USD_SGD_RATE;
-    return rate > 0 ? raw / rate : 0;
-  }, [amount, fxRate, inputCurrency, isUsMarket]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    const result = await recordStockEtfMonthlyContribution({
-      marketCategory,
-      transactionDate,
-      amountNative,
-      fxRateToSgd:
-        isUsMarket && inputCurrency === "SGD"
-          ? parseFloat(fxRate) || DEFAULT_USD_SGD_RATE
-          : null,
-      notes: notes.trim() || null,
-    });
-    setSaving(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-    onSaved();
-    onClose();
-  }
-
-  return (
-    <ModalShell title="Monthly Contribution" onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-4 p-4">
-        <p className="text-xs text-terminal-muted">
-          Increases {categoryLabel(marketCategory)} Trading Cash. Does not change
-          holdings until you record a buy.
-        </p>
-        <MarketField value={marketCategory} onChange={setMarketCategory} />
-        <DateField value={transactionDate} onChange={setTransactionDate} />
-        {isUsMarket && (
-          <label className="block space-y-1">
-            <span className="text-[10px] uppercase text-terminal-muted">
-              Enter amount in
-            </span>
-            <select
-              className={inputClass}
-              value={inputCurrency}
-              onChange={(e) =>
-                setInputCurrency(e.target.value as "native" | "SGD")
-              }
-            >
-              <option value="native">USD</option>
-              <option value="SGD">SGD (convert via FX)</option>
-            </select>
-          </label>
-        )}
-        <AmountField
-          label={`Amount ${inputCurrency === "SGD" && isUsMarket ? "SGD" : nativeLabel}`}
-          value={amount}
-          onChange={setAmount}
-        />
-        {isUsMarket && inputCurrency === "SGD" && (
-          <AmountField label="FX Rate (SGD per USD)" value={fxRate} onChange={setFxRate} />
-        )}
-        {isUsMarket && inputCurrency === "SGD" && (
-          <p className="text-xs text-terminal-muted font-mono">
-            ≈ {formatNativeValue(amountNative, "USD")} credited to cash
-          </p>
-        )}
-        <NotesField value={notes} onChange={setNotes} />
-        {error && <p className="text-xs text-loss">{error}</p>}
-        <ModalActions saving={saving} onClose={onClose} submitLabel="Save" />
-      </form>
-    </ModalShell>
-  );
-}
-
 function BuyModal({
-  cashBalances,
   defaultMarketCategory,
   onClose,
   onSaved,
 }: {
-  cashBalances: Record<MarketCategory, number>;
   defaultMarketCategory: MarketCategory;
   onClose: () => void;
   onSaved: () => void;
@@ -185,7 +67,6 @@ function BuyModal({
   const totalAmount = sharesNum * priceNum;
   const totalCost = totalAmount + feeNum;
   const isUsMarket = marketCategory === "us_etf" || marketCategory === "us_stock";
-  const availableCash = cashBalances[marketCategory];
   const currencyLabel = isUsMarket ? "USD" : "SGD";
 
   async function handleSubmit(e: React.FormEvent) {
@@ -215,10 +96,8 @@ function BuyModal({
     <ModalShell title="Buy Stock / ETF" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <p className="text-xs text-terminal-muted">
-          {categoryLabel(marketCategory)} Trading Cash:{" "}
-          {isUsMarket
-            ? formatNativeValue(availableCash, "USD")
-            : formatSGD(availableCash)}
+          Position tracking only — records shares and cost. Trading Cash on the
+          Portfolio Dashboard is updated manually and is not validated here.
         </p>
         <MarketField value={marketCategory} onChange={setMarketCategory} />
         <DateField value={transactionDate} onChange={setTransactionDate} />

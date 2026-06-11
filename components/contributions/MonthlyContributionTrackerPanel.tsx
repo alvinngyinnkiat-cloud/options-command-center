@@ -79,9 +79,8 @@ export function MonthlyContributionTrackerPanel({
                 </Badge>
               </div>
               <CardDescription className="mt-1">
-                Stocks &amp; Options and Crypto only — US ETF, US Stock, SG
-                Stock, options cash, and crypto deposits combined into two
-                buckets
+                Performance tracking and deployment planning reference — not
+                broker cash accounting
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">

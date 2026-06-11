@@ -1,6 +1,5 @@
 import {
   applyBuyToHolding,
-  applyCashDelta,
   applySellToHolding,
   createEmptyHoldingRow,
   CryptoTransactionError,
@@ -98,8 +97,8 @@ export async function processCryptoDeposit(input: {
   });
 
   return {
-    cashSgd: input.cashSgd + input.payload.amountSgd,
-    contributionsSgd: input.contributionsSgd + input.payload.amountSgd,
+    cashSgd: input.cashSgd,
+    contributionsSgd: input.contributionsSgd,
   };
 }
 
@@ -111,13 +110,11 @@ export async function processCryptoBuy(input: {
   validateBuyTransaction({
     buyAmountSgd: input.payload.buyAmountSgd,
     feeSgd: input.payload.feeSgd,
-    availableCashSgd: input.cashSgd,
   });
 
   const rows = await getCryptoHoldingsRows();
   const existing = await findHoldingByTicker(input.payload.ticker, rows);
   const assetLabel = resolveAssetLabelFromTicker(input.payload.ticker);
-  const totalCost = input.payload.buyAmountSgd + input.payload.feeSgd;
 
   let holding: CryptoHolding;
   if (existing) {
@@ -159,7 +156,7 @@ export async function processCryptoBuy(input: {
     notes: input.payload.notes,
   });
 
-  return applyCashDelta(input.cashSgd, -totalCost);
+  return input.cashSgd;
 }
 
 export async function processCryptoSell(input: {
@@ -179,7 +176,6 @@ export async function processCryptoSell(input: {
   });
 
   const updated = applySellToHolding(holding, input.payload.sellAmountSgd);
-  const proceeds = input.payload.sellAmountSgd - input.payload.feeSgd;
 
   await persistCryptoHolding(
     {
@@ -203,7 +199,7 @@ export async function processCryptoSell(input: {
     notes: input.payload.notes,
   });
 
-  return applyCashDelta(input.cashSgd, proceeds);
+  return input.cashSgd;
 }
 
 export async function processCryptoFee(input: {
@@ -213,7 +209,6 @@ export async function processCryptoFee(input: {
 }): Promise<number> {
   validateFeeTransaction({
     feeSgd: input.payload.feeSgd,
-    availableCashSgd: input.cashSgd,
   });
 
   await recordTransaction({
@@ -225,7 +220,7 @@ export async function processCryptoFee(input: {
     notes: input.payload.notes,
   });
 
-  return applyCashDelta(input.cashSgd, -input.payload.feeSgd);
+  return input.cashSgd;
 }
 
 export async function processCryptoManualAdjustment(input: {

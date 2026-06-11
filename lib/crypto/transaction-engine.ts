@@ -11,12 +11,7 @@ export class CryptoTransactionError extends Error {
 export function validateBuyTransaction(input: {
   buyAmountSgd: number;
   feeSgd: number;
-  availableCashSgd: number;
 }): void {
-  const total = input.buyAmountSgd + input.feeSgd;
-  if (total > input.availableCashSgd) {
-    throw new CryptoTransactionError("Insufficient Exchange Cash");
-  }
   if (input.buyAmountSgd <= 0) {
     throw new CryptoTransactionError("Buy amount must be greater than zero");
   }
@@ -34,15 +29,9 @@ export function validateSellTransaction(input: {
   }
 }
 
-export function validateFeeTransaction(input: {
-  feeSgd: number;
-  availableCashSgd: number;
-}): void {
+export function validateFeeTransaction(input: { feeSgd: number }): void {
   if (input.feeSgd <= 0) {
     throw new CryptoTransactionError("Fee must be greater than zero");
-  }
-  if (input.feeSgd > input.availableCashSgd) {
-    throw new CryptoTransactionError("Insufficient Exchange Cash");
   }
 }
 

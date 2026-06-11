@@ -8,14 +8,9 @@ import {
   deriveCurrentValueNative,
 } from "@/lib/stocks-etfs/recalculate-position";
 import { toSgdAmount } from "@/lib/stocks-etfs/calculations";
-import { classifyHoldingCategory } from "@/lib/stocks-etfs/market-category";
-import { applyCashDelta } from "@/lib/stocks-etfs/cash-balances";
-import {
-  getStockEtfCashBalances,
-  updateStockEtfCashForCategory,
-} from "@/lib/supabase/queries/stock-etf-cash";
 import { insertStockEtfLedgerEntry } from "@/lib/supabase/queries/stock-etf-ledger";
 import { enrichStockEtfHolding } from "@/lib/stocks-etfs/map-holding";
+import { classifyHoldingCategory } from "@/lib/stocks-etfs/market-category";
 import {
   addMockStockEtfAdjustment,
   addMockStockEtfTransaction,
@@ -190,15 +185,6 @@ export async function insertStockEtfTransaction(
   const marketCategory = classifyHoldingCategory(enriched);
   const currency = holding.currency as CurrencyCode;
 
-  if (input.transactionType === "buy") {
-    const cashRows = await getStockEtfCashBalances(userId);
-    const cashRow = cashRows.find((r) => r.market_category === marketCategory);
-    const available = Number(cashRow?.cash_native ?? 0);
-    const totalCost = totalAmount + input.fees;
-    if (totalCost > available + 0.0001) {
-      throw new Error("Insufficient Exchange Cash");
-    }
-  }
   const now = new Date().toISOString();
   const tx: StockEtfTransaction = {
     id: crypto.randomUUID(),
@@ -247,19 +233,6 @@ export async function insertStockEtfTransaction(
 
   const updated = applyPositionToHolding(holding, position, currentValueNative);
   await persistHoldingRow(updated);
-
-  const cashRows = await getStockEtfCashBalances(userId);
-  const cashRow = cashRows.find((r) => r.market_category === marketCategory);
-  const currentCash = Number(cashRow?.cash_native ?? 0);
-  const cashDelta =
-    input.transactionType === "buy"
-      ? -(totalAmount + input.fees)
-      : totalAmount - input.fees;
-  await updateStockEtfCashForCategory(
-    userId,
-    marketCategory,
-    applyCashDelta(currentCash, cashDelta)
-  );
 
   await insertStockEtfLedgerEntry(userId, {
     holdingId: input.holdingId,

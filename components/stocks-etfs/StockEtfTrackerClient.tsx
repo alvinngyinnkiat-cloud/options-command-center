@@ -11,9 +11,8 @@ import type {
 } from "@/lib/stocks-etfs/types";
 import type { StockEtfTabId } from "./StockEtfCategoryTabs";
 import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/dividends/use-dividend-sync";
-import { Plus, PlusCircle, RefreshCw, ShoppingCart } from "lucide-react";
+import { Plus, RefreshCw, ShoppingCart } from "lucide-react";
 import { StockEtfCategoryTabs } from "./StockEtfCategoryTabs";
-import { StockEtfCashSyncCard } from "./StockEtfCashSyncCard";
 import { StockEtfFormModal } from "./StockEtfFormModal";
 import { StockEtfTransactionHistoryTable } from "./StockEtfTransactionHistoryTable";
 import {
@@ -67,7 +66,7 @@ export function StockEtfTrackerClient({
     <div className="space-y-6">
       <PageHeader
         title="Stock & ETF Tracker"
-        description="Transaction-based US ETF · US Stock · SG Stock — cash, buys, sells, and fees"
+        description="Position tracking for US ETF · US Stock · SG Stock — buys, sells, dividends, and fees"
         actions={
           <>
             <Badge
@@ -85,14 +84,6 @@ export function StockEtfTrackerClient({
                 className={`h-4 w-4 ${isPricePending ? "animate-spin" : ""}`}
               />
               {isPricePending ? "Updating…" : "Refresh Prices"}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setTxModal("monthly_contribution")}
-            >
-              <PlusCircle className="h-4 w-4" />
-              Contribution
             </Button>
             <Button
               variant="secondary"
@@ -166,8 +157,6 @@ export function StockEtfTrackerClient({
         />
       )}
 
-      <StockEtfCashSyncCard onSaved={handleRefresh} />
-
       <section>
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
           Transaction History
@@ -188,16 +177,14 @@ export function StockEtfTrackerClient({
 
       <StockEtfTransactionModals
         kind={txModal}
-        cashBalances={data.cashBalances}
         defaultMarketCategory={activeTab}
         onClose={() => setTxModal(null)}
         onSaved={handleRefresh}
       />
 
       <p className="text-[11px] text-terminal-muted">
-        Trading Cash funds buys; sells return proceeds net of fees. Sync from
-        Portfolio Dashboard to align with Manual Portfolio Breakdown. Dividend
-        income syncs from Dividend Tracker.
+        Position tracking only — Trading Cash is a portfolio asset updated on the
+        Portfolio Dashboard. Dividend income syncs from Dividend Tracker.
       </p>
     </div>
   );

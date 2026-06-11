@@ -13,21 +13,13 @@ import {
 } from "./transaction-types";
 
 describe("crypto transaction engine", () => {
-  it("blocks buy when cash insufficient", () => {
+  it("requires positive buy amount", () => {
     expect(() =>
       validateBuyTransaction({
-        buyAmountSgd: 100,
+        buyAmountSgd: 0,
         feeSgd: 5,
-        availableCashSgd: 50,
       })
     ).toThrow(CryptoTransactionError);
-    expect(() =>
-      validateBuyTransaction({
-        buyAmountSgd: 100,
-        feeSgd: 5,
-        availableCashSgd: 50,
-      })
-    ).toThrow("Insufficient Exchange Cash");
   });
 
   it("blocks sell when amount exceeds position", () => {
@@ -36,10 +28,10 @@ describe("crypto transaction engine", () => {
     ).toThrow("Sell Amount Exceeds Position Value");
   });
 
-  it("blocks fee when cash insufficient", () => {
-    expect(() =>
-      validateFeeTransaction({ feeSgd: 50, availableCashSgd: 20 })
-    ).toThrow("Insufficient Exchange Cash");
+  it("requires positive fee amount", () => {
+    expect(() => validateFeeTransaction({ feeSgd: 0 })).toThrow(
+      CryptoTransactionError
+    );
   });
 
   it("buy increases invested and current; fee adds to cost basis", () => {

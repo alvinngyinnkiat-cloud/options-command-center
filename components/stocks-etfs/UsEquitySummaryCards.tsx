@@ -63,7 +63,7 @@ export function UsEquitySummaryCards({
       <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
         {title} Summary
       </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Card
           label="Current Value"
           value={formatTickerCurrency(summary.currentValue)}
@@ -91,11 +91,6 @@ export function UsEquitySummaryCards({
           label="P&L With Dividend"
           value={plWithDividend.value}
           valueClassName={plWithDividend.valueClassName}
-        />
-        <Card
-          label="Trading Cash"
-          value={formatTickerCurrency(summary.tradingCash)}
-          sub="Available to deploy"
         />
       </div>
     </section>

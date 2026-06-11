@@ -48,7 +48,6 @@ export function CryptoTransactionModals({
   if (kind === "buy") {
     return (
       <BuyModal
-        availableCashSgd={availableCashSgd}
         onClose={onClose}
         onSaved={onSaved}
       />
@@ -58,7 +57,6 @@ export function CryptoTransactionModals({
   if (kind === "fee") {
     return (
       <FeeModal
-        availableCashSgd={availableCashSgd}
         onClose={onClose}
         onSaved={onSaved}
       />
@@ -119,7 +117,9 @@ function CashInModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <p className="text-xs text-terminal-muted">
-          Increases Available Exchange Cash and Total Contributions.
+          Records a transaction for history only. Update Crypto Cash and
+          contributions manually — use Monthly Contribution Tracker for
+          deployment planning.
         </p>
         <DateField value={transactionDate} onChange={setTransactionDate} />
         <AmountField value={amount} onChange={setAmount} label="Amount SGD" />
@@ -132,11 +132,9 @@ function CashInModal({
 }
 
 function BuyModal({
-  availableCashSgd,
   onClose,
   onSaved,
 }: {
-  availableCashSgd: number;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -179,7 +177,8 @@ function BuyModal({
     <ModalShell title="Buy Coin" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <p className="text-xs text-terminal-muted">
-          Available Exchange Cash: {formatSGD(availableCashSgd)}
+          Position tracking only — Crypto Cash is updated manually and is not
+          validated against buys.
         </p>
         <DateField value={transactionDate} onChange={setTransactionDate} />
         <div className="grid grid-cols-2 gap-3">
@@ -271,11 +270,9 @@ function SellModal({
 }
 
 function FeeModal({
-  availableCashSgd,
   onClose,
   onSaved,
 }: {
-  availableCashSgd: number;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -308,8 +305,8 @@ function FeeModal({
     <ModalShell title="Record Fee" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <p className="text-xs text-terminal-muted">
-          Deducts from Available Exchange Cash. Available:{" "}
-          {formatSGD(availableCashSgd)}
+          Records a fee transaction — Crypto Cash is updated manually on the
+          portfolio card, not here.
         </p>
         <DateField value={transactionDate} onChange={setTransactionDate} />
         <AmountField value={fee} onChange={setFee} label="Fee SGD" />

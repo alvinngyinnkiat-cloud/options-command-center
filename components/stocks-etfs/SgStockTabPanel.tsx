@@ -65,11 +65,11 @@ export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelPro
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
           SG Stock Summary
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <SummaryCard
             label="Current Value"
             value={formatSGD(summary.currentValue)}
-            sub="Positions + trading cash"
+            sub="Open positions"
           />
           <SummaryCard
             label="Capital Invested"
@@ -93,11 +93,6 @@ export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelPro
             label="P&L With Dividend"
             value={formatSignedSGD(summary.plWithDividend)}
             valueClassName={plWithDividend.valueClassName}
-          />
-          <SummaryCard
-            label="Trading Cash"
-            value={formatSGD(summary.tradingCash)}
-            sub="Available to deploy"
           />
         </div>
       </section>

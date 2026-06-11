@@ -14,9 +14,13 @@ import {
   warnMissingDevUserIdForWrite,
   withSupabaseQuery,
 } from "@/lib/supabase/resolve-user";
-import type { PortfolioTradingCashSource } from "@/lib/stocks-etfs/trading-cash-sync";
 import { MOCK_PORTFOLIO_OVERRIDE } from "@/lib/mock/portfolio";
 import type { PortfolioOverride, StockEtfCashBalance } from "@/types/database";
+
+type PortfolioTradingCashSource = {
+  manualTradingCashUsd: number | null;
+  manualTradingCashSgd: number | null;
+};
 
 async function fetchCashRows(userId: string): Promise<StockEtfCashBalance[]> {
   return withSupabaseQuery(
