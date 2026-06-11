@@ -14,6 +14,7 @@ import type {
   DividendSource,
   DividendStatus,
 } from "@/types/database";
+import { isUsDividendCategory } from "@/lib/dividends/types";
 import { X } from "lucide-react";
 
 const CATEGORIES: DividendCategory[] = [
@@ -94,8 +95,31 @@ export function DividendFormModal({
     key: K,
     value: DividendFormInput[K]
   ) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === "market") {
+        next.category =
+          value === "US"
+            ? prev.category === "sg_stock" || prev.category === "sg_reit"
+              ? "us_stock"
+              : prev.category
+            : prev.category === "us_etf" || prev.category === "us_stock"
+              ? "sg_stock"
+              : prev.category;
+        next.currency = value === "US" ? "USD" : "SGD";
+      }
+      if (key === "category") {
+        next.market =
+          value === "us_etf" || value === "us_stock" ? "US" : "SG";
+        next.currency =
+          value === "us_etf" || value === "us_stock" ? "USD" : "SGD";
+      }
+      return next;
+    });
   }
+
+  const isUsRecord =
+    isUsDividendCategory(form.category) || form.market === "US";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -106,9 +130,13 @@ export function DividendFormModal({
     }
 
     setBusy(true);
+    const payload: DividendFormInput = {
+      ...form,
+      isReceived: form.status === "received" ? true : form.isReceived,
+    };
     const result = isEdit
-      ? await updateDividend(record!.id, form)
-      : await createDividend(form);
+      ? await updateDividend(record!.id, payload)
+      : await createDividend(payload);
     setBusy(false);
 
     if (!result.success) {
@@ -237,21 +265,71 @@ export function DividendFormModal({
                 }
               />
             </div>
-            <div>
-              <label className={labelClass}>SGD Equivalent</label>
-              <input
-                type="number"
-                className={`${inputClass} font-mono`}
-                value={form.sgdEquivalent ?? ""}
-                onChange={(e) =>
-                  set("sgdEquivalent", parseFloat(e.target.value) || 0)
-                }
-                placeholder={form.currency === "USD" ? "Manual SGD entry" : "Same as net (SGD)"}
-              />
-            </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {isUsRecord ? (
+              <>
+                <div>
+                  <label className={labelClass}>Net USD</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className={`${inputClass} font-mono`}
+                    value={form.netDividend ?? ""}
+                    onChange={(e) =>
+                      set(
+                        "netDividend",
+                        e.target.value === ""
+                          ? undefined
+                          : parseFloat(e.target.value)
+                      )
+                    }
+                    placeholder="e.g. 7.40"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Net SGD</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className={`${inputClass} font-mono`}
+                    value={form.sgdEquivalent ?? ""}
+                    onChange={(e) =>
+                      set(
+                        "sgdEquivalent",
+                        e.target.value === ""
+                          ? undefined
+                          : parseFloat(e.target.value)
+                      )
+                    }
+                    placeholder="Manual SGD entry"
+                  />
+                </div>
+              </>
+            ) : (
+              <div>
+                <label className={labelClass}>Net SGD</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className={`${inputClass} font-mono`}
+                  value={form.netDividend ?? form.sgdEquivalent ?? ""}
+                  onChange={(e) => {
+                    const parsed =
+                      e.target.value === ""
+                        ? undefined
+                        : parseFloat(e.target.value);
+                    setForm((prev) => ({
+                      ...prev,
+                      netDividend: parsed,
+                      sgdEquivalent: parsed,
+                    }));
+                  }}
+                  placeholder="Net dividend in SGD"
+                />
+              </div>
+            )}
             <div>
               <label className={labelClass}>Currency</label>
               <select
@@ -263,6 +341,9 @@ export function DividendFormModal({
                 <option value="SGD">SGD</option>
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Source</label>
               <select

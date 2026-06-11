@@ -6,7 +6,7 @@ import type {
   DividendRecordView,
   TickerDividendTotals,
 } from "./types";
-import { dividendCategoryLabel, mapDividendRecordView } from "./types";
+import { dividendCategoryLabel, mapDividendRecordView, isUsDividendCategory, isSgDividendCategory } from "./types";
 
 export function calculateGrossDividend(
   dividendPerShare: number,
@@ -149,8 +149,10 @@ export function buildDividendPortfolioSummary(
   let usNetDividendsYtd = 0;
   let sgNetDividendsYtd = 0;
   let totalNetDividendsLifetime = 0;
+  let usDividendSgd = 0;
+  let usDividendUsd = 0;
+  let sgDividendSgd = 0;
   let usDividendSgdYtd = 0;
-  let usDividendUsdYtd = 0;
   let sgDividendSgdYtd = 0;
   let usDividendSgdTrailing = 0;
   let sgDividendSgdTrailing = 0;
@@ -160,36 +162,43 @@ export function buildDividendPortfolioSummary(
     if (!isReceivedRecord(row)) continue;
 
     const net = Number(row.net_dividend);
-    const sgd = Number(row.sgd_equivalent);
+    const sgd = Number(row.sgd_equivalent) || 0;
     const payDate = recordDateKey(row);
     const parsed = parseISO(payDate);
 
     totalNetDividendsLifetime += net;
 
+    if (isUsDividendCategory(row.category)) {
+      usDividendSgd += sgd;
+      usDividendUsd += net;
+    } else if (isSgDividendCategory(row.category)) {
+      sgDividendSgd += sgd;
+    }
+
     if (parsed >= yearStart) {
       totalNetDividendsYtd += net;
-      if (row.market === "US") {
+      if (isUsDividendCategory(row.category)) {
         usNetDividendsYtd += net;
         usDividendSgdYtd += sgd;
-        usDividendUsdYtd += net;
-      } else {
+      } else if (isSgDividendCategory(row.category)) {
         sgNetDividendsYtd += net;
         sgDividendSgdYtd += sgd;
       }
     }
     if (parsed >= trailingCutoff) {
-      if (row.market === "US") usDividendSgdTrailing += sgd;
-      else sgDividendSgdTrailing += sgd;
+      if (isUsDividendCategory(row.category)) usDividendSgdTrailing += sgd;
+      else if (isSgDividendCategory(row.category)) sgDividendSgdTrailing += sgd;
     }
   }
 
-  const totalDividendSgdYtd = usDividendSgdYtd + sgDividendSgdYtd;
+  const totalDividendSgd = usDividendSgd + sgDividendSgd;
+  const ytdSgdTotal = usDividendSgdYtd + sgDividendSgdYtd;
   const trailingSgdTotal = usDividendSgdTrailing + sgDividendSgdTrailing;
   const annualDividendSgd =
     records.length === 0
       ? 0
-      : totalDividendSgdYtd > 0
-        ? totalDividendSgdYtd
+      : ytdSgdTotal > 0
+        ? ytdSgdTotal
         : trailingSgdTotal;
 
   const upcoming = views
@@ -219,10 +228,12 @@ export function buildDividendPortfolioSummary(
     usNetDividendsYtd,
     sgNetDividendsYtd,
     totalNetDividendsLifetime,
+    usDividendSgd,
+    usDividendUsd,
+    sgDividendSgd,
+    totalDividendSgd,
     usDividendSgdYtd,
-    usDividendUsdYtd,
     sgDividendSgdYtd,
-    totalDividendSgdYtd,
     annualDividendSgd,
     byTicker,
     upcoming,

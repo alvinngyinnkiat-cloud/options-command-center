@@ -49,19 +49,31 @@ export interface TickerDividendTotals {
   hasManualOverride: boolean;
 }
 
+export function isUsDividendCategory(category: DividendCategory): boolean {
+  return category === "us_etf" || category === "us_stock";
+}
+
+export function isSgDividendCategory(category: DividendCategory): boolean {
+  return category === "sg_stock" || category === "sg_reit";
+}
+
 export interface DividendPortfolioSummary {
   totalNetDividendsYtd: number;
   usNetDividendsYtd: number;
   sgNetDividendsYtd: number;
   totalNetDividendsLifetime: number;
-  /** YTD received — US dividends in SGD (manual sgd_equivalent). */
+  /** All received US ETF + US Stock — SGD (manual sgd_equivalent). */
+  usDividendSgd: number;
+  /** All received US ETF + US Stock — USD (net_dividend). */
+  usDividendUsd: number;
+  /** All received SG Stock + REIT — SGD. */
+  sgDividendSgd: number;
+  /** US SGD + SG SGD (all received). */
+  totalDividendSgd: number;
+  /** YTD received — US dividends in SGD (passive income). */
   usDividendSgdYtd: number;
-  /** YTD received — US dividends in USD (net_dividend). */
-  usDividendUsdYtd: number;
-  /** YTD received — SG dividends in SGD. */
+  /** YTD received — SG dividends in SGD (passive income). */
   sgDividendSgdYtd: number;
-  /** US SGD + SG SGD (YTD received). */
-  totalDividendSgdYtd: number;
   /** Annual dividend total in SGD for passive income (YTD, else trailing 12mo). */
   annualDividendSgd: number;
   byTicker: Map<string, TickerDividendTotals>;

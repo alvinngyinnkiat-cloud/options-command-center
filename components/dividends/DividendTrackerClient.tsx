@@ -10,7 +10,11 @@ import {
   deleteDividend,
   syncDividendsFromApi,
 } from "@/app/actions/dividend-records";
-import type { DividendRecordView, DividendTrackerData } from "@/lib/dividends/types";
+import {
+  isUsDividendCategory,
+  type DividendRecordView,
+  type DividendTrackerData,
+} from "@/lib/dividends/types";
 import { formatSGD, formatUsd } from "@/lib/utils";
 import { Plus, RefreshCw, Trash2, Pencil } from "lucide-react";
 import { notifyDividendDataUpdated } from "@/lib/dividends/sync-events";
@@ -20,13 +24,11 @@ interface DividendTrackerClientProps {
   initialData: DividendTrackerData;
 }
 
-function RecordTable({
-  title,
+function UpcomingTable({
   records,
   onEdit,
   onDelete,
 }: {
-  title: string;
   records: DividendRecordView[];
   onEdit: (r: DividendRecordView) => void;
   onDelete: (r: DividendRecordView) => void;
@@ -35,7 +37,7 @@ function RecordTable({
     return (
       <div className="rounded-lg border border-terminal-border p-4">
         <h3 className="text-xs font-medium uppercase tracking-wider text-terminal-muted mb-2">
-          {title}
+          Upcoming Dividends
         </h3>
         <p className="text-sm text-terminal-muted">No records.</p>
       </div>
@@ -45,27 +47,18 @@ function RecordTable({
   return (
     <div className="rounded-lg border border-terminal-border overflow-x-auto">
       <h3 className="px-4 pt-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
-        {title}
+        Upcoming Dividends
       </h3>
-      <table className="w-full min-w-[960px] text-xs mt-2">
+      <table className="w-full min-w-[880px] text-xs mt-2">
         <thead className="bg-terminal-elevated/40 border-y border-terminal-border">
           <tr className="text-terminal-muted">
-            {[
-              "Ticker",
-              "Category",
-              "Ex-Date",
-              "Pay Date",
-              "DPS",
-              "Net",
-              "SGD",
-              "Source",
-              "Status",
-              "",
-            ].map((h) => (
-              <th key={h} className="px-2 py-2 text-left font-medium">
-                {h}
-              </th>
-            ))}
+            {["Ticker", "Category", "Ex-Date", "Pay Date", "DPS", "Net", "Status", ""].map(
+              (h) => (
+                <th key={h} className="px-2 py-2 text-left font-medium">
+                  {h}
+                </th>
+              )
+            )}
           </tr>
         </thead>
         <tbody>
@@ -80,13 +73,6 @@ function RecordTable({
               </td>
               <td className="px-2 py-2 font-mono">
                 {r.currency} {r.netDividend.toFixed(2)}
-              </td>
-              <td className="px-2 py-2 font-mono">{formatSGD(r.sgdEquivalent)}</td>
-              <td className="px-2 py-2">
-                {r.source}
-                {r.isManualOverride && (
-                  <span className="ml-1 text-accent">*</span>
-                )}
               </td>
               <td className="px-2 py-2">{r.status}</td>
               <td className="px-2 py-2">
@@ -111,6 +97,99 @@ function RecordTable({
               </td>
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ReceivedDividendsTable({
+  records,
+  onEdit,
+  onDelete,
+}: {
+  records: DividendRecordView[];
+  onEdit: (r: DividendRecordView) => void;
+  onDelete: (r: DividendRecordView) => void;
+}) {
+  if (records.length === 0) {
+    return (
+      <div className="rounded-lg border border-terminal-border p-4">
+        <h3 className="text-xs font-medium uppercase tracking-wider text-terminal-muted mb-2">
+          Received Dividends
+        </h3>
+        <p className="text-sm text-terminal-muted">No records.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-terminal-border overflow-x-auto">
+      <h3 className="px-4 pt-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
+        Received Dividends
+      </h3>
+      <table className="w-full min-w-[960px] text-xs mt-2">
+        <thead className="bg-terminal-elevated/40 border-y border-terminal-border">
+          <tr className="text-terminal-muted">
+            {[
+              "Ticker",
+              "Category",
+              "Ex-Date",
+              "Pay Date",
+              "DPS",
+              "Net USD",
+              "Net SGD",
+              "Status",
+              "",
+            ].map((h) => (
+              <th key={h} className="px-2 py-2 text-left font-medium">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((r) => {
+            const isUs = isUsDividendCategory(r.category);
+            return (
+              <tr key={r.id} className="border-b border-terminal-border/50">
+                <td className="px-2 py-2 font-mono font-semibold">{r.ticker}</td>
+                <td className="px-2 py-2">{r.categoryLabel}</td>
+                <td className="px-2 py-2 font-mono">{r.exDividendDate ?? "—"}</td>
+                <td className="px-2 py-2 font-mono">{r.paymentDate ?? "—"}</td>
+                <td className="px-2 py-2 font-mono">
+                  {r.currency} {r.dividendPerShare.toFixed(4)}
+                </td>
+                <td className="px-2 py-2 font-mono">
+                  {isUs ? formatUsd(r.netDividend) : "—"}
+                </td>
+                <td className="px-2 py-2 font-mono">
+                  {formatSGD(isUs ? r.sgdEquivalent : r.sgdEquivalent || r.netDividend)}
+                </td>
+                <td className="px-2 py-2">{r.status}</td>
+                <td className="px-2 py-2">
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => onEdit(r)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-loss"
+                      onClick={() => onDelete(r)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -143,8 +222,8 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
     }
   }
 
-  function handleSaved(data: DividendTrackerData) {
-    setData(data);
+  function handleSaved(next: DividendTrackerData) {
+    setData(next);
     notifyDividendDataUpdated();
   }
 
@@ -152,7 +231,7 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
     <div className="space-y-6">
       <PageHeader
         title="Dividend Tracker"
-        description="Automated dividend calendar with manual override — My portfolio only"
+        description="Summary cards auto-calculate from received dividend records"
         actions={
           <>
             {data.dataSource === "supabase" && (
@@ -181,18 +260,18 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
       <MetricCardsGrid>
         <StatCard
           label="US Dividend"
-          value={formatSGD(data.summary.usDividendSgdYtd)}
-          change={`USD Total: ${formatUsd(data.summary.usDividendUsdYtd)}`}
+          value={formatSGD(data.summary.usDividendSgd)}
+          change={`USD Total: ${formatUsd(data.summary.usDividendUsd)}`}
           changeType="neutral"
         />
         <StatCard
           label="SG Dividend"
-          value={formatSGD(data.summary.sgDividendSgdYtd)}
+          value={formatSGD(data.summary.sgDividendSgd)}
           changeType="neutral"
         />
         <StatCard
           label="Total Dividend"
-          value={formatSGD(data.summary.totalDividendSgdYtd)}
+          value={formatSGD(data.summary.totalDividendSgd)}
           changeType="neutral"
         />
         <StatCard
@@ -203,15 +282,13 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
         />
       </MetricCardsGrid>
 
-      <RecordTable
-        title="Upcoming Dividends"
+      <UpcomingTable
         records={data.summary.upcoming}
         onEdit={setFormRecord}
         onDelete={handleDelete}
       />
 
-      <RecordTable
-        title="Received Dividends"
+      <ReceivedDividendsTable
         records={data.summary.received}
         onEdit={setFormRecord}
         onDelete={handleDelete}
@@ -244,9 +321,9 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
       )}
 
       <p className="text-[11px] text-terminal-muted">
-        * Manual override — API sync will not overwrite edited records. Gross =
-        DPS × Shares. Net = Gross − Withholding. SG stocks: dividends only (no
-        options premium).
+        Top cards sum received dividends automatically. US records need manual Net
+        SGD entry; USD totals use Net USD. Edit individual records below to
+        update summaries.
       </p>
 
       {formRecord !== undefined && (
