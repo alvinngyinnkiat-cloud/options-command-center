@@ -14,6 +14,8 @@ import {
   type ManagedFinancialGoal,
 } from "./goal-models";
 import { resolveGoalCurrentValue } from "./resolve-current-value";
+import { formatPassiveIncomeCalculationSource } from "./passive-income-breakdown";
+import type { PassiveIncomeBreakdown } from "./passive-income-breakdown";
 
 function daysUntil(targetDate: string | null, asOfDate: string): number | null {
   if (!targetDate) return null;
@@ -94,6 +96,10 @@ export function buildManagedGoal(
       ? ctx.asOfDate
       : projectCompletionForGoal(goal, currentValue, ctx),
     isCompleted,
+    calculationSource:
+      goal.goal_type === "income"
+        ? formatPassiveIncomeCalculationSource(ctx.passiveIncomeBreakdown)
+        : undefined,
   };
 }
 
@@ -109,6 +115,7 @@ export function buildManagedGoals(
 export function buildGoalLiveContext(input: {
   portfolioCurrentSgd: number;
   passiveIncomeMonthlySgd: number;
+  passiveIncomeBreakdown: PassiveIncomeBreakdown;
   asOfDate: string;
   inceptionDate: string;
   netContributions: number;
@@ -124,6 +131,7 @@ export function buildGoalLiveContext(input: {
   return {
     portfolioCurrentSgd: input.portfolioCurrentSgd,
     passiveIncomeMonthlySgd: input.passiveIncomeMonthlySgd,
+    passiveIncomeBreakdown: input.passiveIncomeBreakdown,
     asOfDate: input.asOfDate,
     inceptionDate: input.inceptionDate,
     averageMonthlyContribution: input.averageMonthlyContribution,

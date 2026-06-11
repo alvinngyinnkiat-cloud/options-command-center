@@ -1,5 +1,5 @@
 /**
- * Dividend data providers: FMP (primary), Alpha Vantage (fallback), Mock.
+ * Dividend data providers: FMP (primary), Alpha Vantage (fallback).
  */
 
 export interface ProviderDividendEvent {
@@ -13,11 +13,11 @@ export interface ProviderDividendEvent {
 
 export interface DividendProviderResult {
   events: ProviderDividendEvent[];
-  source: "fmp" | "alpha_vantage" | "mock";
+  source: "fmp" | "alpha_vantage" | "none";
 }
 
 export interface DividendDataProvider {
-  readonly name: "fmp" | "alpha_vantage" | "mock";
+  readonly name: "fmp" | "alpha_vantage";
   fetchHistoricalDividends(
     ticker: string,
     from?: string,
@@ -27,59 +27,6 @@ export interface DividendDataProvider {
     from: string,
     to: string
   ): Promise<ProviderDividendEvent[]>;
-}
-
-const MOCK_DIVIDENDS: Record<string, ProviderDividendEvent[]> = {
-  SPY: [
-    {
-      ticker: "SPY",
-      exDividendDate: "2026-03-20",
-      recordDate: "2026-03-21",
-      paymentDate: "2026-04-30",
-      dividendPerShare: 1.58,
-      apiReferenceId: "mock-spy-2026-q1",
-    },
-    {
-      ticker: "SPY",
-      exDividendDate: "2025-12-20",
-      recordDate: "2025-12-21",
-      paymentDate: "2026-01-31",
-      dividendPerShare: 1.63,
-      apiReferenceId: "mock-spy-2025-q4",
-    },
-  ],
-  AAPL: [
-    {
-      ticker: "AAPL",
-      exDividendDate: "2026-02-10",
-      recordDate: "2026-02-11",
-      paymentDate: "2026-02-14",
-      dividendPerShare: 0.25,
-      apiReferenceId: "mock-aapl-2026-q1",
-    },
-  ],
-  DBS: [
-    {
-      ticker: "DBS",
-      exDividendDate: "2026-04-15",
-      recordDate: "2026-04-16",
-      paymentDate: "2026-04-28",
-      dividendPerShare: 0.54,
-      apiReferenceId: "mock-dbs-2026",
-    },
-  ],
-};
-
-export class MockDividendDataProvider implements DividendDataProvider {
-  readonly name = "mock" as const;
-
-  async fetchHistoricalDividends(
-    ticker: string,
-    _from?: string,
-    _to?: string
-  ): Promise<ProviderDividendEvent[]> {
-    return MOCK_DIVIDENDS[ticker.toUpperCase()] ?? [];
-  }
 }
 
 export class FmpDividendDataProvider implements DividendDataProvider {
@@ -185,14 +132,18 @@ export class AlphaVantageDividendDataProvider implements DividendDataProvider {
   }
 }
 
-export function getActiveDividendProvider(): DividendDataProvider {
+export function getActiveDividendProvider(): DividendDataProvider | null {
   const fmpKey = process.env.FMP_API_KEY;
   if (fmpKey) return new FmpDividendDataProvider(fmpKey);
 
   const avKey = process.env.ALPHA_VANTAGE_API_KEY;
   if (avKey) return new AlphaVantageDividendDataProvider(avKey);
 
-  return new MockDividendDataProvider();
+  return null;
+}
+
+export function resolveDividendProviderSource(): "fmp" | "alpha_vantage" | "none" {
+  return getActiveDividendProvider()?.name ?? "none";
 }
 
 export async function fetchDividendsForTicker(
@@ -201,6 +152,8 @@ export async function fetchDividendsForTicker(
   to?: string
 ): Promise<DividendProviderResult> {
   const primary = getActiveDividendProvider();
+  if (!primary) return { events: [], source: "none" };
+
   try {
     const events = await primary.fetchHistoricalDividends(ticker, from, to);
     return { events, source: primary.name };
@@ -215,8 +168,6 @@ export async function fetchDividendsForTicker(
         /* fall through */
       }
     }
-    const mock = new MockDividendDataProvider();
-    const events = await mock.fetchHistoricalDividends(ticker, from, to);
-    return { events, source: "mock" };
+    return { events: [], source: "none" };
   }
 }

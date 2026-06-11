@@ -1,5 +1,6 @@
 import { calculateProgressPercent } from "@/lib/goals/calculations";
-import { computePassiveIncomeMonthlySgd } from "@/lib/goals/resolve-current-value";
+import { computePassiveIncomeFromDividendSummary } from "@/lib/goals/passive-income-breakdown";
+import type { DividendPortfolioSummary } from "@/lib/dividends/types";
 import { DEFAULT_PASSIVE_INCOME_TARGET_SGD } from "@/lib/goals/types";
 import { calculateIncomeYieldPct } from "./income-yield";
 import type {
@@ -182,11 +183,14 @@ export function buildIncomeTabSummary(
 }
 
 export function buildPassiveIncomeGoalProgress(
-  usSummary: UsMarketSummary,
-  sgSummary: SgMarketSummary,
+  dividendSummary: Pick<
+    DividendPortfolioSummary,
+    "annualDividendSgd" | "usDividendSgdYtd" | "sgDividendSgdYtd"
+  >,
   targetMonthlySgd = DEFAULT_PASSIVE_INCOME_TARGET_SGD
 ): PassiveIncomeGoalProgress {
-  const currentMonthlySgd = computePassiveIncomeMonthlySgd(usSummary, sgSummary);
+  const currentMonthlySgd =
+    computePassiveIncomeFromDividendSummary(dividendSummary).monthlySgd;
   const progressPercent = calculateProgressPercent(
     currentMonthlySgd,
     targetMonthlySgd

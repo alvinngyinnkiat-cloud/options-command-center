@@ -246,7 +246,7 @@ export function DividendFormModal({
                 onChange={(e) =>
                   set("sgdEquivalent", parseFloat(e.target.value) || 0)
                 }
-                placeholder="Auto if blank"
+                placeholder={form.currency === "USD" ? "Manual SGD entry" : "Same as net (SGD)"}
               />
             </div>
           </div>

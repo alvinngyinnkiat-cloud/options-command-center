@@ -8,7 +8,10 @@ import type {
   GoalChangeRecord,
 } from "@/lib/goals/goal-models";
 import { buildDividendPortfolioSummary } from "@/lib/dividends/calculations";
-import { computePassiveIncomeMonthlySgd } from "@/lib/goals/resolve-current-value";
+import {
+  computePassiveIncomeFromDividendSummary,
+} from "@/lib/goals/passive-income-breakdown";
+import type { PassiveIncomeBreakdown } from "@/lib/goals/passive-income-breakdown";
 import {
   appendMockGoalChange,
   deleteMockFinancialGoal,
@@ -21,10 +24,6 @@ import { MOCK_GOALS_RAW } from "@/lib/mock/goals";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
 import { getEnrichedPortfolioMetrics } from "@/lib/portfolio/enrich-capital-pools";
 import { buildCategoryValuesSgd } from "@/lib/stocks-etfs/build-tab-data";
-import {
-  buildSgMarketData,
-  buildUsMarketData,
-} from "@/lib/ticker-positions/market-aggregate";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import {
   MOCK_USER_ID,
@@ -34,8 +33,6 @@ import {
 import { getLatestDailySnapshot } from "@/lib/supabase/queries/daily-portfolio-snapshots";
 import { listDividendRecordRows } from "@/lib/supabase/queries/dividend-records";
 import { getMonthlyContributionTrackerData } from "@/lib/supabase/queries/monthly-contributions";
-import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
-import { getStockEtfTrackerData } from "@/lib/supabase/queries/stock-etf-holdings";
 import type {
   FinancialGoal,
   FinancialGoalChange,
@@ -93,18 +90,17 @@ function goalFromForm(
 async function resolveLiveMetrics(userId: string): Promise<{
   portfolioCurrentSgd: number;
   passiveIncomeMonthlySgd: number;
+  passiveIncomeBreakdown: PassiveIncomeBreakdown;
   asOfDate: string;
   netContributions: number;
   averageMonthlyContribution: number;
   inceptionDate: string;
 }> {
-  const [enriched, contributionTracker, latestSnapshot, tradesData, stockData, dividendRows] =
+  const [enriched, contributionTracker, latestSnapshot, dividendRows] =
     await Promise.all([
       getEnrichedPortfolioMetrics(),
       getMonthlyContributionTrackerData(),
       getLatestDailySnapshot(userId),
-      getOptionsTradesData(),
-      getStockEtfTrackerData(),
       listDividendRecordRows(userId),
     ]);
 
@@ -119,20 +115,10 @@ async function resolveLiveMetrics(userId: string): Promise<{
   const portfolioCurrentSgd =
     latestSnapshot?.portfolioValueSgd ?? capitalPools.myPortfolioValue;
 
-  const usMarket = buildUsMarketData(
-    stockData.holdings,
-    tradesData.trades,
-    dividendSummary.byTicker
+  const passiveIncomeBreakdown = computePassiveIncomeFromDividendSummary(
+    dividendSummary
   );
-  const sgMarket = buildSgMarketData(
-    stockData.holdings,
-    dividendSummary.byTicker
-  );
-
-  const passiveIncomeMonthlySgd = computePassiveIncomeMonthlySgd(
-    usMarket.summary,
-    sgMarket.summary
-  );
+  const passiveIncomeMonthlySgd = passiveIncomeBreakdown.monthlySgd;
 
   const asOfDate =
     latestSnapshot?.snapshotDate ??
@@ -149,6 +135,7 @@ async function resolveLiveMetrics(userId: string): Promise<{
   return {
     portfolioCurrentSgd,
     passiveIncomeMonthlySgd,
+    passiveIncomeBreakdown,
     asOfDate,
     netContributions:
       metrics.dataSource === "supabase"

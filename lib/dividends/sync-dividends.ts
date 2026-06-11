@@ -22,7 +22,7 @@ import { parseISO, isBefore } from "date-fns";
 export interface SyncDividendsResult {
   synced: number;
   skipped: number;
-  providerSource: "fmp" | "alpha_vantage" | "mock";
+  providerSource: "fmp" | "alpha_vantage" | "none";
 }
 
 function defaultWithholding(market: "US" | "SG", gross: number): number {
@@ -40,7 +40,7 @@ export async function syncDividendsForUser(
 
   let synced = 0;
   let skipped = 0;
-  let providerSource: "fmp" | "alpha_vantage" | "mock" = "mock";
+  let providerSource: "fmp" | "alpha_vantage" | "none" = "none";
 
   for (const holding of holdings) {
     const { events, source } = await fetchDividendsForTicker(

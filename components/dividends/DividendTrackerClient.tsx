@@ -11,7 +11,7 @@ import {
   syncDividendsFromApi,
 } from "@/app/actions/dividend-records";
 import type { DividendRecordView, DividendTrackerData } from "@/lib/dividends/types";
-import { formatSGD } from "@/lib/utils";
+import { formatSGD, formatUsd } from "@/lib/utils";
 import { Plus, RefreshCw, Trash2, Pencil } from "lucide-react";
 import { notifyDividendDataUpdated } from "@/lib/dividends/sync-events";
 import { DividendFormModal } from "./DividendFormModal";
@@ -155,12 +155,12 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
         description="Automated dividend calendar with manual override — My portfolio only"
         actions={
           <>
-            <Badge
-              variant={data.dataSource === "supabase" ? "success" : "outline"}
-            >
-              {data.dataSource === "supabase" ? "Live data" : "Mock data"}
-            </Badge>
-            <Badge variant="outline">Provider: {data.providerSource}</Badge>
+            {data.dataSource === "supabase" && (
+              <Badge variant="success">Live data</Badge>
+            )}
+            {data.providerSource !== "none" && (
+              <Badge variant="outline">Provider: {data.providerSource}</Badge>
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -180,27 +180,25 @@ export function DividendTrackerClient({ initialData }: DividendTrackerClientProp
 
       <MetricCardsGrid>
         <StatCard
-          label="YTD Net Dividends"
-          value={formatSGD(data.summary.totalNetDividendsYtd)}
-          change="All markets"
+          label="US Dividend"
+          value={formatSGD(data.summary.usDividendSgdYtd)}
+          change={`USD Total: ${formatUsd(data.summary.usDividendUsdYtd)}`}
           changeType="neutral"
         />
         <StatCard
-          label="US Dividends YTD"
-          value={formatSGD(data.summary.usNetDividendsYtd)}
-          change="ETF + Stock"
+          label="SG Dividend"
+          value={formatSGD(data.summary.sgDividendSgdYtd)}
           changeType="neutral"
         />
         <StatCard
-          label="SG Dividends YTD"
-          value={formatSGD(data.summary.sgNetDividendsYtd)}
-          change="Stock + REIT"
+          label="Total Dividend"
+          value={formatSGD(data.summary.totalDividendSgdYtd)}
           changeType="neutral"
         />
         <StatCard
-          label="Upcoming"
+          label="Upcoming Dividends"
           value={String(data.summary.upcoming.length)}
-          change="Estimated payments"
+          change="Scheduled payments"
           changeType="neutral"
         />
       </MetricCardsGrid>

@@ -22,6 +22,7 @@ import type {
   GoalsDashboardData,
   PassiveIncomeGoalMetrics,
 } from "@/lib/goals/types";
+import { formatPassiveIncomeCalculationSource } from "@/lib/goals/passive-income-breakdown";
 import { DEFAULT_ASSUMED_YIELD_PCT } from "@/lib/goals/types";
 import { cn } from "@/lib/utils";
 import { GoalProgressCard } from "./GoalProgressCard";
@@ -169,6 +170,10 @@ export function PassiveIncomeGoalPanel({
           changeType="neutral"
         />
       </MetricCardsGrid>
+
+      <p className="text-[10px] text-terminal-muted leading-snug break-words">
+        {formatPassiveIncomeCalculationSource(data.passiveIncomeBreakdown)}
+      </p>
 
       <Card variant="default">
         <CardHeader>

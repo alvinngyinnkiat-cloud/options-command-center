@@ -3,6 +3,7 @@ import type {
   GoalChangeRecord,
   ManagedFinancialGoal,
 } from "./goal-models";
+import type { PassiveIncomeBreakdown } from "./passive-income-breakdown";
 
 export type {
   FinancialGoalFormInput,
@@ -34,6 +35,7 @@ export interface GoalsRawInput {
   assumedYieldPct: number;
   monthlyContributions: MonthlyContribution[];
   averageMonthlyContribution: number;
+  passiveIncomeBreakdown: PassiveIncomeBreakdown;
 }
 
 export interface GoalProgress {
@@ -88,6 +90,7 @@ export interface GoalsDashboardData {
   };
   dataSource: DataSource;
   raw: GoalsRawInput;
+  passiveIncomeBreakdown: PassiveIncomeBreakdown;
   managedGoals: ManagedFinancialGoal[];
   changeHistory: GoalChangeRecord[];
 }

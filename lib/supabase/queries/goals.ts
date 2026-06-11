@@ -22,11 +22,14 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import { resolveAuthenticatedUserId } from "@/lib/supabase/resolve-user";
 import type { FinancialGoal } from "@/types/database";
+import type { PassiveIncomeBreakdown } from "@/lib/goals/passive-income-breakdown";
+import { EMPTY_PASSIVE_INCOME_BREAKDOWN } from "@/lib/goals/passive-income-breakdown";
 
 function mapGoalsFromRows(
   goals: FinancialGoal[],
   portfolioCurrentSgd: number,
   passiveIncomeMonthlySgd: number,
+  passiveIncomeBreakdown: PassiveIncomeBreakdown,
   netContributionsSgd: number,
   inceptionDate: string,
   asOfDate: string,
@@ -61,6 +64,7 @@ function mapGoalsFromRows(
     assumedYieldPct: assumedYield,
     monthlyContributions,
     averageMonthlyContribution: contributionTracker.averageMonthlyContribution,
+    passiveIncomeBreakdown,
   };
 }
 
@@ -82,6 +86,7 @@ async function fetchGoalsFromSupabase(
     await listFinancialGoalRows(userId),
     management.liveContext.portfolioCurrentSgd,
     management.liveContext.passiveIncomeMonthlySgd,
+    management.liveContext.passiveIncomeBreakdown,
     netContributionsSgd,
     management.liveContext.inceptionDate,
     management.liveContext.asOfDate,
@@ -113,6 +118,7 @@ async function buildMockGoalsDashboard(): Promise<GoalsDashboardData> {
     await listFinancialGoalRows("mock-user"),
     latestValue,
     management.liveContext.passiveIncomeMonthlySgd,
+    management.liveContext.passiveIncomeBreakdown,
     MOCK_GOALS_RAW.netContributions,
     management.liveContext.inceptionDate,
     asOfDate,
@@ -139,6 +145,7 @@ export async function getFinancialGoalsData(): Promise<GoalsDashboardData> {
         [],
         0,
         0,
+        EMPTY_PASSIVE_INCOME_BREAKDOWN,
         0,
         MOCK_GOALS_RAW.inceptionDate,
         MOCK_REFERENCE_DATE,

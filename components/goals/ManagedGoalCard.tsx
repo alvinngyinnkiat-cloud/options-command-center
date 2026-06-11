@@ -65,6 +65,12 @@ export function ManagedGoalCard({
           </p>
         )}
 
+        {goal.calculationSource && (
+          <p className="text-[10px] text-terminal-muted leading-snug break-words">
+            {goal.calculationSource}
+          </p>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-terminal-muted">

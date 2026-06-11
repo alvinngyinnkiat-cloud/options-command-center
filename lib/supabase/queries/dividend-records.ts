@@ -3,6 +3,7 @@ import {
   buildYieldRanking,
   formToComputedAmounts,
 } from "@/lib/dividends/calculations";
+import { resolveDividendProviderSource } from "@/lib/dividends/dividend-data-service";
 import {
   classifyDividendCategory,
   dividendCategoryLabel,
@@ -11,18 +12,11 @@ import {
   type DividendFormInput,
   type DividendTrackerData,
 } from "@/lib/dividends/types";
-import {
-  deleteMockDividendRecord,
-  findMockByApiRef,
-  getMockDividendRecords,
-  upsertMockDividendRecord,
-} from "@/lib/mock/dividend-records-store";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
 import { enrichAllStockEtfHoldings } from "@/lib/stocks-etfs/map-holding";
 import type { EnrichedStockEtfHolding } from "@/lib/stocks-etfs/types";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import {
-  MOCK_USER_ID,
   warnMissingDevUserIdForWrite,
   withSupabaseQuery,
 } from "@/lib/supabase/resolve-user";
@@ -79,11 +73,19 @@ function rowFromForm(
   };
 }
 
+function requireSupabaseForWrite(): void {
+  if (!isSupabaseConfigured()) {
+    throw new Error(
+      "Dividend records require Supabase. Configure the database to add or edit dividends."
+    );
+  }
+}
+
 export async function listDividendRecordRows(
   _userId: string
 ): Promise<DividendRecordRow[]> {
   if (!isSupabaseConfigured()) {
-    return getMockDividendRecords(_userId).map(normalizeRow);
+    return [];
   }
 
   return withSupabaseQuery(
@@ -105,9 +107,7 @@ async function persistDividendRow(
   row: DividendRecordRow,
   userId: string
 ): Promise<DividendRecordRow> {
-  if (!isSupabaseConfigured()) {
-    return upsertMockDividendRecord({ ...row, user_id: userId });
-  }
+  requireSupabaseForWrite();
 
   return withSupabaseQuery(
     async ({ userId: effectiveUserId, supabase }) => {
@@ -122,7 +122,7 @@ async function persistDividendRow(
     },
     () => {
       warnMissingDevUserIdForWrite();
-      return upsertMockDividendRecord({ ...row, user_id: MOCK_USER_ID });
+      throw new Error("Unable to save dividend record without an authenticated user.");
     }
   );
 }
@@ -156,10 +156,7 @@ export async function removeDividendRecord(
   id: string,
   userId: string
 ): Promise<void> {
-  if (!isSupabaseConfigured()) {
-    deleteMockDividendRecord(id);
-    return;
-  }
+  requireSupabaseForWrite();
 
   await withSupabaseQuery(
     async ({ userId: effectiveUserId, supabase }) => {
@@ -173,7 +170,7 @@ export async function removeDividendRecord(
     },
     () => {
       warnMissingDevUserIdForWrite();
-      deleteMockDividendRecord(id);
+      throw new Error("Unable to delete dividend record without an authenticated user.");
     }
   );
 }
@@ -183,27 +180,22 @@ export async function upsertApiDividendRecord(
   userId: string
 ): Promise<DividendRecordRow | null> {
   const apiRef = row.api_reference_id;
-  if (apiRef) {
-    if (!isSupabaseConfigured()) {
-      const existing = findMockByApiRef(userId, apiRef);
-      if (existing?.is_manual_override) return null;
-    } else {
-      const blocked = await withSupabaseQuery(
-        async ({ userId: queryUserId, supabase }) => {
-          const { data } = await supabase
-            .from("dividend_records")
-            .select("*")
-            .eq("user_id", queryUserId)
-            .eq("api_reference_id", apiRef)
-            .maybeSingle();
-          return Boolean(
-            data && (data as DividendRecordRow).is_manual_override
-          );
-        },
-        () => false
-      );
-      if (blocked) return null;
-    }
+  if (apiRef && isSupabaseConfigured()) {
+    const blocked = await withSupabaseQuery(
+      async ({ userId: queryUserId, supabase }) => {
+        const { data } = await supabase
+          .from("dividend_records")
+          .select("*")
+          .eq("user_id", queryUserId)
+          .eq("api_reference_id", apiRef)
+          .maybeSingle();
+        return Boolean(
+          data && (data as DividendRecordRow).is_manual_override
+        );
+      },
+      () => false
+    );
+    if (blocked) return null;
   }
 
   return persistDividendRow({ ...row, user_id: userId }, userId);
@@ -211,7 +203,7 @@ export async function upsertApiDividendRecord(
 
 export async function getDividendTrackerData(
   userId: string,
-  providerSource: "fmp" | "alpha_vantage" | "mock" = "mock"
+  providerSource?: "fmp" | "alpha_vantage" | "none"
 ): Promise<DividendTrackerData> {
   const referenceDate = MOCK_REFERENCE_DATE;
   const referenceYear = Number(referenceDate.slice(0, 4));
@@ -250,8 +242,8 @@ export async function getDividendTrackerData(
     summary,
     byMarket,
     yieldRanking: buildYieldRanking(summary.byTicker, marketValues),
-    dataSource: isSupabaseConfigured() ? "supabase" : "mock",
-    providerSource,
+    dataSource: isSupabaseConfigured() ? "supabase" : "unconfigured",
+    providerSource: providerSource ?? resolveDividendProviderSource(),
   };
 }
 

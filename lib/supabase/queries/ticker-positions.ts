@@ -103,8 +103,7 @@ export async function getTickerPositionManagerData(): Promise<TickerPositionMana
       sgMarket.summary
     ),
     passiveIncomeGoal: buildPassiveIncomeGoalProgress(
-      usMarket.summary,
-      sgMarket.summary,
+      dividendSummary,
       targetMonthlySgd
     ),
     report: buildMarketPerformanceReport(usMarket.rows, sgMarket.rows),

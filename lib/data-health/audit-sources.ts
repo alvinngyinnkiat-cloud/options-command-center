@@ -254,7 +254,7 @@ export async function auditDividendData(
   const stale = isStaleCalendarDays(lastSync?.slice(0, 10) ?? null, REF, 7);
 
   let status: DataSourceHealthStatus = "healthy";
-  if (provider.name === "mock") status = "warning";
+  if (!provider) status = "warning";
   if (stale && records.length > 0) status = worstStatus(status, "warning");
   if (logs.failed && !logs.success) status = "failed";
 
@@ -262,9 +262,9 @@ export async function auditDividendData(
     id: "dividend_data",
     title: "Dividend Data",
     status,
-    summary: `${records.length} records · provider ${provider.name.toUpperCase()}`,
+    summary: `${records.length} records · provider ${(provider?.name ?? "none").toUpperCase()}`,
     details: [
-      { label: "Dividend provider", value: provider.name.toUpperCase() },
+      { label: "Dividend provider", value: (provider?.name ?? "none").toUpperCase() },
       {
         label: "Last dividend sync",
         value: formatRelativeAge(lastSync?.slice(0, 10) ?? null, REF),

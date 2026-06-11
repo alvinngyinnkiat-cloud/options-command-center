@@ -42,14 +42,12 @@ export function calculateIncomeYieldPct(
 export function computeSgdEquivalent(
   netDividend: number,
   currency: string,
-  fxRateToSgd: number | null,
-  marketValueNative?: number
+  _fxRateToSgd: number | null,
+  explicitSgd?: number | null
 ): number {
+  if (explicitSgd != null && explicitSgd > 0) return explicitSgd;
   if (currency === "SGD") return netDividend;
-  if (fxRateToSgd != null && fxRateToSgd > 0) {
-    return Math.round(netDividend * fxRateToSgd * 100) / 100;
-  }
-  return marketValueNative ?? netDividend;
+  return 0;
 }
 
 export function formToComputedAmounts(input: DividendFormInput): {
@@ -61,9 +59,12 @@ export function formToComputedAmounts(input: DividendFormInput): {
     input.grossDividend ??
     calculateGrossDividend(input.dividendPerShare, input.sharesHeld);
   const net = input.netDividend ?? calculateNetDividend(gross, input.withholdingTax);
-  const sgd =
-    input.sgdEquivalent ??
-    computeSgdEquivalent(net, input.currency, input.fxRateToSgd);
+  const sgd = computeSgdEquivalent(
+    net,
+    input.currency,
+    input.fxRateToSgd,
+    input.sgdEquivalent
+  );
   return { grossDividend: gross, netDividend: net, sgdEquivalent: sgd };
 }
 
@@ -141,17 +142,55 @@ export function buildDividendPortfolioSummary(
   const views = records.map(mapDividendRecordView);
   const byTicker = buildTickerDividendTotals(records, referenceDate, referenceYear);
 
+  const yearStart = startOfYear(parseISO(`${referenceYear}-01-01`));
+  const trailingCutoff = subYears(parseISO(referenceDate), 1);
+
   let totalNetDividendsYtd = 0;
   let usNetDividendsYtd = 0;
   let sgNetDividendsYtd = 0;
   let totalNetDividendsLifetime = 0;
+  let usDividendSgdYtd = 0;
+  let usDividendUsdYtd = 0;
+  let sgDividendSgdYtd = 0;
+  let usDividendSgdTrailing = 0;
+  let sgDividendSgdTrailing = 0;
 
-  for (const totals of byTicker.values()) {
-    totalNetDividendsYtd += totals.netReceivedYtd;
-    totalNetDividendsLifetime += totals.netReceivedLifetime;
-    if (totals.market === "US") usNetDividendsYtd += totals.netReceivedYtd;
-    else sgNetDividendsYtd += totals.netReceivedYtd;
+  for (const row of records) {
+    if (row.status === "upcoming" || row.status === "estimated") continue;
+    if (!isReceivedRecord(row)) continue;
+
+    const net = Number(row.net_dividend);
+    const sgd = Number(row.sgd_equivalent);
+    const payDate = recordDateKey(row);
+    const parsed = parseISO(payDate);
+
+    totalNetDividendsLifetime += net;
+
+    if (parsed >= yearStart) {
+      totalNetDividendsYtd += net;
+      if (row.market === "US") {
+        usNetDividendsYtd += net;
+        usDividendSgdYtd += sgd;
+        usDividendUsdYtd += net;
+      } else {
+        sgNetDividendsYtd += net;
+        sgDividendSgdYtd += sgd;
+      }
+    }
+    if (parsed >= trailingCutoff) {
+      if (row.market === "US") usDividendSgdTrailing += sgd;
+      else sgDividendSgdTrailing += sgd;
+    }
   }
+
+  const totalDividendSgdYtd = usDividendSgdYtd + sgDividendSgdYtd;
+  const trailingSgdTotal = usDividendSgdTrailing + sgDividendSgdTrailing;
+  const annualDividendSgd =
+    records.length === 0
+      ? 0
+      : totalDividendSgdYtd > 0
+        ? totalDividendSgdYtd
+        : trailingSgdTotal;
 
   const upcoming = views
     .filter((r) => r.status === "upcoming" || r.status === "estimated")
@@ -180,6 +219,11 @@ export function buildDividendPortfolioSummary(
     usNetDividendsYtd,
     sgNetDividendsYtd,
     totalNetDividendsLifetime,
+    usDividendSgdYtd,
+    usDividendUsdYtd,
+    sgDividendSgdYtd,
+    totalDividendSgdYtd,
+    annualDividendSgd,
     byTicker,
     upcoming,
     received,

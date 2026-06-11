@@ -54,6 +54,16 @@ export interface DividendPortfolioSummary {
   usNetDividendsYtd: number;
   sgNetDividendsYtd: number;
   totalNetDividendsLifetime: number;
+  /** YTD received — US dividends in SGD (manual sgd_equivalent). */
+  usDividendSgdYtd: number;
+  /** YTD received — US dividends in USD (net_dividend). */
+  usDividendUsdYtd: number;
+  /** YTD received — SG dividends in SGD. */
+  sgDividendSgdYtd: number;
+  /** US SGD + SG SGD (YTD received). */
+  totalDividendSgdYtd: number;
+  /** Annual dividend total in SGD for passive income (YTD, else trailing 12mo). */
+  annualDividendSgd: number;
   byTicker: Map<string, TickerDividendTotals>;
   upcoming: DividendRecordView[];
   received: DividendRecordView[];
@@ -92,8 +102,8 @@ export interface DividendTrackerData {
   summary: DividendPortfolioSummary;
   byMarket: { market: DividendMarket; totalNetYtd: number; count: number }[];
   yieldRanking: { ticker: string; categoryLabel: string; dividendYieldPct: number; annualIncome: number }[];
-  dataSource: "supabase" | "mock";
-  providerSource: "fmp" | "alpha_vantage" | "mock";
+  dataSource: "supabase" | "unconfigured";
+  providerSource: "fmp" | "alpha_vantage" | "none";
 }
 
 export function classifyDividendCategory(

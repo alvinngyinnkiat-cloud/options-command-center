@@ -1,4 +1,5 @@
 import type { GoalType } from "@/types/database";
+import type { PassiveIncomeBreakdown } from "./passive-income-breakdown";
 import {
   DEFAULT_ASSUMED_YIELD_PCT,
   DEFAULT_PASSIVE_INCOME_TARGET_SGD,
@@ -45,11 +46,14 @@ export interface ManagedFinancialGoal {
   daysRemaining: number | null;
   projectedCompletionDate: string | null;
   isCompleted: boolean;
+  /** Shown on income goals — how current monthly passive income is derived. */
+  calculationSource?: string;
 }
 
 export interface GoalLiveContext {
   portfolioCurrentSgd: number;
   passiveIncomeMonthlySgd: number;
+  passiveIncomeBreakdown: PassiveIncomeBreakdown;
   asOfDate: string;
   inceptionDate: string;
   averageMonthlyContribution: number;

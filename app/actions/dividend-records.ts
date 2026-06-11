@@ -31,7 +31,7 @@ export type DividendSyncResult =
   | { success: false; error: string };
 
 async function finish(
-  providerSource?: "fmp" | "alpha_vantage" | "mock"
+  providerSource?: "fmp" | "alpha_vantage" | "none"
 ): Promise<DividendTrackerData> {
   const userId = await requireUserId();
   const data = await getDividendTrackerData(userId, providerSource);

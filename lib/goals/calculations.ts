@@ -330,6 +330,7 @@ export function buildGoalsDashboardData(
     ytdContributionBreakdown,
     dataSource,
     raw: { ...raw, assumedYieldPct: yieldPct },
+    passiveIncomeBreakdown: raw.passiveIncomeBreakdown,
     managedGoals: [],
     changeHistory: [],
   };
