@@ -8,6 +8,14 @@ import {
   deriveCurrentValueNative,
 } from "@/lib/stocks-etfs/recalculate-position";
 import { toSgdAmount } from "@/lib/stocks-etfs/calculations";
+import { classifyHoldingCategory } from "@/lib/stocks-etfs/market-category";
+import { applyCashDelta } from "@/lib/stocks-etfs/cash-balances";
+import {
+  getStockEtfCashBalances,
+  updateStockEtfCashForCategory,
+} from "@/lib/supabase/queries/stock-etf-cash";
+import { insertStockEtfLedgerEntry } from "@/lib/supabase/queries/stock-etf-ledger";
+import { enrichStockEtfHolding } from "@/lib/stocks-etfs/map-holding";
 import {
   addMockStockEtfAdjustment,
   addMockStockEtfTransaction,
@@ -173,13 +181,24 @@ export async function insertStockEtfTransaction(
   if (input.transactionType === "sell") {
     const currentShares = Number(holding.shares_held ?? 0);
     if (input.shares > currentShares + 0.0001) {
-      throw new Error(
-        `Cannot sell ${input.shares} shares — only ${currentShares} held.`
-      );
+      throw new Error("Sell Amount Exceeds Position Value");
     }
   }
 
   const totalAmount = input.shares * input.pricePerShare;
+  const enriched = enrichStockEtfHolding(holding, 0);
+  const marketCategory = classifyHoldingCategory(enriched);
+  const currency = holding.currency as CurrencyCode;
+
+  if (input.transactionType === "buy") {
+    const cashRows = await getStockEtfCashBalances(userId);
+    const cashRow = cashRows.find((r) => r.market_category === marketCategory);
+    const available = Number(cashRow?.cash_native ?? 0);
+    const totalCost = totalAmount + input.fees;
+    if (totalCost > available + 0.0001) {
+      throw new Error("Insufficient Exchange Cash");
+    }
+  }
   const now = new Date().toISOString();
   const tx: StockEtfTransaction = {
     id: crypto.randomUUID(),
@@ -228,6 +247,33 @@ export async function insertStockEtfTransaction(
 
   const updated = applyPositionToHolding(holding, position, currentValueNative);
   await persistHoldingRow(updated);
+
+  const cashRows = await getStockEtfCashBalances(userId);
+  const cashRow = cashRows.find((r) => r.market_category === marketCategory);
+  const currentCash = Number(cashRow?.cash_native ?? 0);
+  const cashDelta =
+    input.transactionType === "buy"
+      ? -(totalAmount + input.fees)
+      : totalAmount - input.fees;
+  await updateStockEtfCashForCategory(
+    userId,
+    marketCategory,
+    applyCashDelta(currentCash, cashDelta)
+  );
+
+  await insertStockEtfLedgerEntry(userId, {
+    holdingId: input.holdingId,
+    marketCategory,
+    transactionType: input.transactionType,
+    transactionDate: input.transactionDate,
+    ticker: holding.ticker,
+    shares: input.shares,
+    amountNative: totalAmount,
+    feeNative: input.fees,
+    currency,
+    fxRateToSgd: Number(holding.fx_rate_to_sgd),
+    notes: input.notes,
+  });
 }
 
 export async function insertStockEtfPositionAdjustment(
@@ -298,4 +344,27 @@ export async function insertStockEtfPositionAdjustment(
     currentValueNative
   );
   await persistHoldingRow(updated);
+
+  const enriched = enrichStockEtfHolding(holding, 0);
+  const marketCategory = classifyHoldingCategory(enriched);
+  await insertStockEtfLedgerEntry(userId, {
+    holdingId: input.holdingId,
+    marketCategory,
+    transactionType: "manual_adjustment",
+    transactionDate: today,
+    ticker: holding.ticker,
+    shares: input.shares,
+    amountNative: 0,
+    feeNative: 0,
+    currency: holding.currency as CurrencyCode,
+    fxRateToSgd: Number(holding.fx_rate_to_sgd),
+    notes: input.notes,
+    metadata: {
+      previousShares: holding.shares_held,
+      newShares: input.shares,
+      previousTotalCost: holding.total_invested_native,
+      newTotalCost: input.totalCost,
+      adjustmentReason: input.adjustmentReason.trim(),
+    },
+  });
 }

@@ -65,6 +65,8 @@ export interface UsEquityTabSummary {
   totalPremiumCollected: number;
   adjustedCostBasis: number;
   netPositionPnl: number;
+  cashBalance: number;
+  totalFeesPaid: number;
 }
 
 function isOpenTrade(trade: EnrichedTrade): boolean {
@@ -259,24 +261,31 @@ export function buildUsEquityTabData(
     .filter((r): r is UsEquityPositionRow => r != null)
     .sort((a, b) => stockOnlyPnl(b) - stockOnlyPnl(a));
 
+  const openRows = rows.filter((r) => r.shares > 0);
+
   const summary: UsEquityTabSummary = {
-    totalMarketValue: rows.reduce((s, r) => s + r.marketValue, 0),
-    totalCapital: rows.reduce(
+    totalMarketValue: openRows.reduce((s, r) => s + r.marketValue, 0),
+    totalCapital: openRows.reduce(
       (s, r) => s + (r.holding?.totalInvestedNative ?? 0),
       0
     ),
-    totalDividendIncome: rows.reduce((s, r) => s + r.dividendIncome, 0),
-    totalPnl: rows.reduce((s, r) => s + stockOnlyPnl(r), 0),
+    totalDividendIncome: openRows.reduce((s, r) => s + r.dividendIncome, 0),
+    totalPnl: openRows.reduce((s, r) => s + stockOnlyPnl(r), 0),
     totalReturnPct: 0,
     totalPremiumCollected: rows.reduce(
       (s, r) => s + r.totalPremiumCollected,
       0
     ),
-    adjustedCostBasis: rows.reduce((s, r) => s + r.holding!.totalInvestedNative, 0),
-    netPositionPnl: rows.reduce(
+    adjustedCostBasis: openRows.reduce(
+      (s, r) => s + r.holding!.totalInvestedNative,
+      0
+    ),
+    netPositionPnl: openRows.reduce(
       (s, r) => s + (r.marketValue - (r.holding?.totalInvestedNative ?? 0)),
       0
     ),
+    cashBalance: 0,
+    totalFeesPaid: 0,
   };
   summary.totalReturnPct = calculateRoiPct(
     summary.totalPnl,

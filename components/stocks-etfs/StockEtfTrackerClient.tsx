@@ -9,11 +9,17 @@ import type {
   EnrichedStockEtfHolding,
   StockEtfTrackerData,
 } from "@/lib/stocks-etfs/types";
-import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/dividends/use-dividend-sync";
 import type { StockEtfTabId } from "./StockEtfCategoryTabs";
-import { Plus, RefreshCw } from "lucide-react";
+import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/dividends/use-dividend-sync";
+import { Plus, PlusCircle, RefreshCw, ShoppingCart } from "lucide-react";
 import { StockEtfCategoryTabs } from "./StockEtfCategoryTabs";
+import { StockEtfCashSyncCard } from "./StockEtfCashSyncCard";
 import { StockEtfFormModal } from "./StockEtfFormModal";
+import { StockEtfTransactionHistoryTable } from "./StockEtfTransactionHistoryTable";
+import {
+  StockEtfTransactionModals,
+  type StockEtfModalKind,
+} from "./StockEtfTransactionModals";
 import { SgStockTabPanel } from "./SgStockTabPanel";
 import { UsEquitySummaryCards } from "./UsEquitySummaryCards";
 import { UsEquityHoldingsViews } from "./UsEquityHoldingsViews";
@@ -32,6 +38,7 @@ export function StockEtfTrackerClient({
   const [formHolding, setFormHolding] = useState<
     EnrichedStockEtfHolding | null | undefined
   >(undefined);
+  const [txModal, setTxModal] = useState<StockEtfModalKind | null>(null);
 
   const handleDividendSync = useCallback((refresh: DividendDependentRefreshData) => {
     setData(refresh.stockData);
@@ -60,7 +67,7 @@ export function StockEtfTrackerClient({
     <div className="space-y-6">
       <PageHeader
         title="Stock & ETF Tracker"
-        description="US ETF · US Stock · SG Stock — position ownership, capital, dividends, and ROI"
+        description="Transaction-based US ETF · US Stock · SG Stock — cash, buys, sells, and fees"
         actions={
           <>
             <Badge
@@ -80,12 +87,28 @@ export function StockEtfTrackerClient({
               {isPricePending ? "Updating…" : "Refresh Prices"}
             </Button>
             <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setTxModal("monthly_contribution")}
+            >
+              <PlusCircle className="h-4 w-4" />
+              Contribution
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setTxModal("buy")}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Buy
+            </Button>
+            <Button
               variant="primary"
               size="sm"
               onClick={() => setFormHolding(null)}
             >
               <Plus className="h-4 w-4" />
-              Add Holding
+              Manual Adjust
             </Button>
           </>
         }
@@ -143,6 +166,18 @@ export function StockEtfTrackerClient({
         />
       )}
 
+      <StockEtfCashSyncCard onSaved={handleRefresh} />
+
+      <section>
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
+          Transaction History
+        </h2>
+        <StockEtfTransactionHistoryTable
+          ledger={data.ledger}
+          onRefresh={handleRefresh}
+        />
+      </section>
+
       {formHolding !== undefined && (
         <StockEtfFormModal
           holding={formHolding}
@@ -151,10 +186,18 @@ export function StockEtfTrackerClient({
         />
       )}
 
+      <StockEtfTransactionModals
+        kind={txModal}
+        cashBalances={data.cashBalances}
+        defaultMarketCategory={activeTab}
+        onClose={() => setTxModal(null)}
+        onSaved={handleRefresh}
+      />
+
       <p className="text-[11px] text-terminal-muted">
-        Stock and ETF holdings only — options premium and combined performance
-        live in Options Trade Tracker and Portfolio Income &amp; Position Manager.
-        Dividend income syncs from Dividend Tracker.
+        Cash balances fund buys; sells return proceeds net of fees. Manual
+        portfolio sync updates cash only. Dividend income syncs from Dividend
+        Tracker.
       </p>
     </div>
   );

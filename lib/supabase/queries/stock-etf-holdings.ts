@@ -1,4 +1,5 @@
 import { buildStockEtfTabData } from "@/lib/stocks-etfs/build-tab-data";
+import { cashByCategory, calculateTotalFeesPaid } from "@/lib/stocks-etfs/cash-balances";
 import { buildDividendPortfolioSummary } from "@/lib/dividends/calculations";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
 import { listDividendRecordRows } from "@/lib/supabase/queries/dividend-records";
@@ -10,8 +11,14 @@ import {
   buildConcentrationWarnings,
   buildTopHoldings,
 } from "@/lib/stocks-etfs/concentration";
-import { enrichAllStockEtfHoldings } from "@/lib/stocks-etfs/map-holding";
+import { enrichAllStockEtfHoldings, enrichStockEtfHolding, stockEtfRowFromForm } from "@/lib/stocks-etfs/map-holding";
+import { classifyHoldingCategory } from "@/lib/stocks-etfs/market-category";
+import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
+import { DEFAULT_USD_SGD_RATE } from "@/lib/portfolio/currency";
+import type { StockEtfHoldingFormInput } from "@/lib/stocks-etfs/types";
 import type { StockEtfTrackerData } from "@/lib/stocks-etfs/types";
+import { getStockEtfCashBalances } from "@/lib/supabase/queries/stock-etf-cash";
+import { listStockEtfLedgerEntries } from "@/lib/supabase/queries/stock-etf-ledger";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
   deleteMockStockEtfHolding,
@@ -57,17 +64,37 @@ async function buildFullData(
   );
   const holdings = enrichAllStockEtfHoldings(rows, dividendSummary.byTicker);
   const sectorAllocation = buildSectorAllocation(holdings);
+  const [cashRows, ledger] = await Promise.all([
+    getStockEtfCashBalances(userId),
+    listStockEtfLedgerEntries(),
+  ]);
+  const cashBalances = cashByCategory(cashRows);
+  const feesFor = (cat: "us_etf" | "us_stock" | "sg_stock") =>
+    calculateTotalFeesPaid(
+      ledger.filter((e) => e.market_category === cat)
+    );
+  const tabs = buildStockEtfTabData(
+    holdings,
+    tradesData.trades,
+    dividendSummary.byTicker
+  );
+  tabs.usEtf.summary.cashBalance = cashBalances.us_etf;
+  tabs.usEtf.summary.totalFeesPaid = feesFor("us_etf");
+  tabs.usStock.summary.cashBalance = cashBalances.us_stock;
+  tabs.usStock.summary.totalFeesPaid = feesFor("us_stock");
+  tabs.sgStock.summary.cashBalance = cashBalances.sg_stock;
+  tabs.sgStock.summary.totalFeesPaid = feesFor("sg_stock");
+
   return {
     holdings,
     summary: buildStockEtfTrackerSummary(holdings),
     sectorAllocation,
     topHoldings: buildTopHoldings(holdings),
     warnings: buildConcentrationWarnings(holdings, sectorAllocation),
-    tabs: buildStockEtfTabData(
-      holdings,
-      tradesData.trades,
-      dividendSummary.byTicker
-    ),
+    tabs,
+    cashBalances,
+    ledger,
+    totalFeesPaid: calculateTotalFeesPaid(ledger),
     dataSource,
   };
 }
@@ -160,4 +187,58 @@ export async function removeStockEtfHolding(
       deleteMockStockEtfHolding(id);
     }
   );
+}
+
+function formDefaultsForCategory(
+  category: MarketCategory
+): Pick<StockEtfHoldingFormInput, "assetType" | "currency"> {
+  switch (category) {
+    case "us_etf":
+      return { assetType: "etf", currency: "USD" };
+    case "us_stock":
+      return { assetType: "stock", currency: "USD" };
+    case "sg_stock":
+      return { assetType: "stock", currency: "SGD" };
+  }
+}
+
+export async function ensureStockEtfHoldingForBuy(
+  userId: string,
+  input: {
+    marketCategory: MarketCategory;
+    ticker: string;
+    fxRateToSgd?: number;
+  }
+): Promise<StockEtfHolding> {
+  const ticker = input.ticker.toUpperCase();
+  const rows = isSupabaseConfigured()
+    ? await fetchStockEtfRows(userId)
+    : getMockStockEtfHoldings();
+  const existing = rows.find((r) => r.ticker === ticker);
+
+  if (existing) {
+    const enriched = enrichStockEtfHolding(existing, 0);
+    const category = classifyHoldingCategory(enriched);
+    if (category !== input.marketCategory) {
+      throw new Error(
+        `${ticker} is tracked as ${category.replace("_", " ")} — use that market type.`
+      );
+    }
+    return existing;
+  }
+
+  const defaults = formDefaultsForCategory(input.marketCategory);
+  const form: StockEtfHoldingFormInput = {
+    ticker,
+    ...defaults,
+    sector: "Others",
+    totalInvestedNative: 0,
+    currentValueNative: 0,
+    fxRateToSgd: input.fxRateToSgd ?? DEFAULT_USD_SGD_RATE,
+    sharesHeld: 0,
+    averageCost: 0,
+    notes: null,
+  };
+  const row = stockEtfRowFromForm(form, userId);
+  return persistStockEtfHolding(row, userId);
 }

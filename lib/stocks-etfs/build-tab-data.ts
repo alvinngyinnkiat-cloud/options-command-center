@@ -69,19 +69,22 @@ function buildSgStockTab(
 ): { rows: SgStockRow[]; summary: SgStockTabSummary } {
   const sgHoldings = filterHoldingsByCategory(holdings, "sg_stock");
   const rows = sgHoldings.map((h) => buildSgStockRow(h, dividendTotals));
-  const totalCapital = rows.reduce(
+  const openRows = rows.filter((r) => r.shares > 0);
+  const totalCapital = openRows.reduce(
     (s, r) => s + r.holding.totalInvestedNative,
     0
   );
-  const totalPnl = rows.reduce((s, r) => s + r.totalPnl, 0);
+  const totalPnl = openRows.reduce((s, r) => s + r.totalPnl, 0);
   return {
     rows,
     summary: {
-      totalMarketValue: rows.reduce((s, r) => s + r.marketValue, 0),
+      totalMarketValue: openRows.reduce((s, r) => s + r.marketValue, 0),
       totalCapital,
-      totalDividendIncome: rows.reduce((s, r) => s + r.dividendIncome, 0),
+      totalDividendIncome: openRows.reduce((s, r) => s + r.dividendIncome, 0),
       totalPnl,
       totalReturnPct: calculateRoiPct(totalPnl, totalCapital),
+      cashBalance: 0,
+      totalFeesPaid: 0,
     },
   };
 }

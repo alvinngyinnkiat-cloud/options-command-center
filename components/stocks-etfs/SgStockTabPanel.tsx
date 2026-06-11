@@ -1,6 +1,7 @@
 "use client";
 
 import { pnlPercentStatProps, pnlStatProps } from "@/lib/format/pnl";
+import { splitSgStockRows } from "@/lib/stocks-etfs/open-closed";
 import { mapSgStockRowsToTable } from "@/lib/stocks-etfs/table-rows";
 import type { SgStockRow, SgStockTabSummary } from "@/lib/stocks-etfs/types";
 import { cn, formatSGD, formatSignedSGD } from "@/lib/utils";
@@ -55,6 +56,7 @@ function SummaryCard({
 export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelProps) {
   const totalPnl = pnlStatProps(summary.totalPnl);
   const returnPct = pnlPercentStatProps(summary.totalReturnPct, 1);
+  const { open, closed } = splitSgStockRows(rows);
 
   return (
     <div className="space-y-4">
@@ -62,7 +64,11 @@ export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelPro
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
           SG Stock Summary
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+          <SummaryCard
+            label="Cash Balance"
+            value={formatSGD(summary.cashBalance)}
+          />
           <SummaryCard
             label="Total Market Value"
             value={formatSGD(summary.totalMarketValue)}
@@ -76,7 +82,12 @@ export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelPro
             value={formatSGD(summary.totalDividendIncome)}
           />
           <SummaryCard
-            label="PERFORMANCE"
+            label="Total Fees Paid"
+            value={formatSGD(summary.totalFeesPaid)}
+            className="hidden sm:block"
+          />
+          <SummaryCard
+            label="Performance"
             value={formatSignedSGD(summary.totalPnl)}
             sub={`ROI ${returnPct.value}`}
             valueClassName={totalPnl.valueClassName}
@@ -101,11 +112,28 @@ export function SgStockTabPanel({ rows, summary, onRefresh }: SgStockTabPanelPro
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
           SG Stock Positions
         </h2>
-        <StockEtfHoldingsTable
-          rows={mapSgStockRowsToTable(rows)}
-          emptyLabel="SG Stock"
-          onRefresh={onRefresh}
-        />
+        <div className="space-y-6">
+          <div>
+            <h3 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-terminal-muted">
+              Open Positions
+            </h3>
+            <StockEtfHoldingsTable
+              rows={mapSgStockRowsToTable(open)}
+              emptyLabel="open SG Stock"
+              onRefresh={onRefresh}
+            />
+          </div>
+          <div>
+            <h3 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-terminal-muted">
+              Closed Positions
+            </h3>
+            <StockEtfHoldingsTable
+              rows={mapSgStockRowsToTable(closed)}
+              emptyLabel="closed SG Stock"
+              onRefresh={onRefresh}
+            />
+          </div>
+        </div>
       </section>
     </div>
   );

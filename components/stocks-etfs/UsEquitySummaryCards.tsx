@@ -62,11 +62,16 @@ export function UsEquitySummaryCards({
       <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-terminal-muted">
         {title} Summary
       </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+        <Card
+          label="Cash Balance"
+          value={formatTickerCurrency(summary.cashBalance)}
+          sub="USD · available to deploy"
+        />
         <Card
           label="Total Market Value"
           value={formatTickerCurrency(summary.totalMarketValue)}
-          sub="USD · holdings only"
+          sub="USD · open holdings"
         />
         <Card
           label="Total Capital"
@@ -77,7 +82,12 @@ export function UsEquitySummaryCards({
           value={formatTickerCurrency(summary.totalDividendIncome)}
         />
         <Card
-          label="PERFORMANCE"
+          label="Total Fees Paid"
+          value={formatTickerCurrency(summary.totalFeesPaid)}
+          className="hidden sm:block"
+        />
+        <Card
+          label="Performance"
           value={totalPnl.value}
           sub={`ROI ${returnPct.value}`}
           valueClassName={totalPnl.valueClassName}

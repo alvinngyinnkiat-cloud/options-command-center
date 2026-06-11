@@ -1,0 +1,128 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  getStockEtfCashSyncPreview,
+  syncStockEtfCashFromPortfolio,
+} from "@/app/actions/stock-etf-cash";
+import { Button } from "@/components/ui/Button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/Card";
+import { formatSGD } from "@/lib/utils";
+import { formatNativeValue } from "@/lib/portfolio/format-holdings";
+
+interface StockEtfCashSyncCardProps {
+  onSaved: () => void;
+}
+
+export function StockEtfCashSyncCard({ onSaved }: StockEtfCashSyncCardProps) {
+  const [usEtf, setUsEtf] = useState("");
+  const [usStock, setUsStock] = useState("");
+  const [sgStock, setSgStock] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const inputClass =
+    "w-full h-9 rounded-md border border-terminal-border bg-terminal-surface px-3 font-mono text-sm";
+
+  useEffect(() => {
+    getStockEtfCashSyncPreview().then((preview) => {
+      if ("error" in preview) return;
+      setUsEtf(String(preview.usEtfCashUsd));
+      setUsStock(String(preview.usStockCashUsd));
+      setSgStock(String(preview.sgStockCashSgd));
+    });
+  }, []);
+
+  async function handleSync() {
+    setSaving(true);
+    setError(null);
+    const result = await syncStockEtfCashFromPortfolio({
+      usEtfCashUsd: parseFloat(usEtf) || 0,
+      usStockCashUsd: parseFloat(usStock) || 0,
+      sgStockCashSgd: parseFloat(sgStock) || 0,
+      notes: notes.trim() || null,
+    });
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    onSaved();
+  }
+
+  return (
+    <Card variant="bordered">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">Sync Cash From Manual Portfolio</CardTitle>
+        <CardDescription>
+          Update market cash balances from manual portfolio breakdown. Does not
+          overwrite holdings.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="space-y-1 text-xs">
+            <span className="text-terminal-muted uppercase tracking-wider">
+              US ETF Cash (USD)
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className={inputClass}
+              value={usEtf}
+              onChange={(e) => setUsEtf(e.target.value)}
+            />
+          </label>
+          <label className="space-y-1 text-xs">
+            <span className="text-terminal-muted uppercase tracking-wider">
+              US Stock Cash (USD)
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className={inputClass}
+              value={usStock}
+              onChange={(e) => setUsStock(e.target.value)}
+            />
+          </label>
+          <label className="space-y-1 text-xs">
+            <span className="text-terminal-muted uppercase tracking-wider">
+              SG Stock Cash (SGD)
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className={inputClass}
+              value={sgStock}
+              onChange={(e) => setSgStock(e.target.value)}
+            />
+          </label>
+        </div>
+        <textarea
+          className={`${inputClass} min-h-[56px]`}
+          placeholder="Notes (optional)"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+        {error && <p className="text-xs text-loss">{error}</p>}
+        <Button variant="secondary" size="sm" disabled={saving} onClick={handleSync}>
+          {saving ? "Syncing…" : "Sync Cash From Manual Portfolio"}
+        </Button>
+        <p className="text-[10px] text-terminal-muted">
+          Preview prefills from manual trading cash (USD split 50/50) and SG cash.
+          Edit before confirming.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}

@@ -931,6 +931,44 @@ export interface StockEtfPositionAdjustment {
   created_at: string;
 }
 
+export type StockEtfLedgerTransactionType =
+  | "monthly_contribution"
+  | "manual_cash_sync"
+  | "buy"
+  | "sell"
+  | "dividend"
+  | "manual_adjustment";
+
+export interface StockEtfCashBalance {
+  id: string;
+  user_id: string;
+  market_category: "us_etf" | "us_stock" | "sg_stock";
+  cash_native: number;
+  currency: CurrencyCode;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockEtfLedgerEntry {
+  id: string;
+  user_id: string;
+  holding_id: string | null;
+  market_category: "us_etf" | "us_stock" | "sg_stock";
+  transaction_type: StockEtfLedgerTransactionType;
+  transaction_date: string;
+  ticker: string | null;
+  shares: number | null;
+  amount_native: number;
+  fee_native: number;
+  net_amount_native: number;
+  currency: CurrencyCode;
+  fx_rate_to_sgd: number | null;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 export type DividendMarket = "US" | "SG";
 
 export type DividendCategory =
@@ -1198,6 +1236,16 @@ export type StockEtfPositionAdjustmentInsert = Omit<
   StockEtfPositionAdjustment,
   "id" | "created_at"
 > & { id?: string; created_at?: string };
+
+export type StockEtfCashBalanceInsert = Omit<
+  StockEtfCashBalance,
+  "id" | "created_at" | "updated_at"
+> & { id?: string; created_at?: string; updated_at?: string };
+
+export type StockEtfLedgerEntryInsert = Omit<
+  StockEtfLedgerEntry,
+  "id" | "created_at" | "updated_at"
+> & { id?: string; created_at?: string; updated_at?: string };
 
 export type AutoWatchlistResultInsert = Omit<
   AutoWatchlistResult,

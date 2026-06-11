@@ -42,90 +42,165 @@ export function StockEtfHoldingsTable({
   }
 
   return (
-    <div className="rounded-lg border border-terminal-border w-full min-w-0">
-      <table className="w-full table-fixed text-xs">
-        <colgroup>
-          <col className="w-[12%]" />
-          <col className="w-[14%]" />
-          <col className="w-[14%]" />
-          <col className="w-[14%]" />
-          <col className="w-[14%]" />
-          <col className="w-[12%]" />
-          <col className="w-[20%]" />
-        </colgroup>
-        <thead className="bg-terminal-elevated/40 border-b border-terminal-border">
-          <tr>
-            {[
-              "Ticker",
-              "Shares",
-              "Capital",
-              "Current Value",
-              "Dividend",
-              "P/L",
-              "ROI",
-              "Actions",
-            ].map((header) => (
-              <th
-                key={header}
-                className="px-2 py-2 text-left text-[9px] sm:text-[10px] font-medium uppercase tracking-wider text-terminal-muted"
-              >
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.id}
-              className="border-b border-terminal-border/50 hover:bg-terminal-elevated/20"
-            >
-              <td className="px-2 py-2 font-mono font-semibold truncate">
-                {row.ticker}
-              </td>
-              <td className="px-2 py-2 font-mono tabular-nums truncate">
-                {row.shares > 0 ? row.shares.toLocaleString() : "—"}
-              </td>
-              <td className="px-2 py-2 font-mono tabular-nums truncate">
-                {formatMoney(row, row.capital)}
-              </td>
-              <td className="px-2 py-2 font-mono tabular-nums truncate">
-                {formatMoney(row, row.currentValue)}
-              </td>
-              <td
-                className={cn(
-                  "px-2 py-2 font-mono tabular-nums truncate",
-                  pnlClass(row.dividend)
-                )}
-              >
-                {formatSignedMoney(row, row.dividend)}
-              </td>
-              <td
-                className={cn(
-                  "px-2 py-2 font-mono tabular-nums whitespace-normal break-words",
-                  pnlClass(row.pl)
-                )}
-              >
-                {formatSignedMoney(row, row.pl)}
-              </td>
-              <td
-                className={cn(
-                  "px-2 py-2 font-mono tabular-nums truncate",
-                  pnlClass(row.roiPct)
-                )}
-              >
-                {formatRoiPct(row.roiPct)}
-              </td>
-              <td className="px-2 py-2">
-                <StockEtfPositionActionsMenu
-                  holding={row.holding}
-                  onRefresh={onRefresh}
-                />
-              </td>
+    <>
+      <div className="space-y-3 md:hidden">
+        {rows.map((row) => (
+          <article
+            key={row.id}
+            className="rounded-lg border border-terminal-border bg-terminal-surface p-3 space-y-2"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-mono text-sm font-semibold text-accent">{row.ticker}</p>
+              <StockEtfPositionActionsMenu
+                holding={row.holding}
+                onRefresh={onRefresh}
+              />
+            </div>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              <Field
+                label="Shares"
+                value={row.shares > 0 ? row.shares.toLocaleString() : "—"}
+              />
+              <Field label="Capital" value={formatMoney(row, row.capital)} />
+              <Field
+                label="Current Value"
+                value={formatMoney(row, row.currentValue)}
+              />
+              <Field
+                label="Dividend"
+                value={formatSignedMoney(row, row.dividend)}
+                valueClassName={pnlClass(row.dividend)}
+              />
+              <Field
+                label="Performance"
+                value={formatSignedMoney(row, row.pl)}
+                sub={`ROI ${formatRoiPct(row.roiPct)}`}
+                valueClassName={pnlClass(row.pl)}
+                className="col-span-2"
+              />
+            </dl>
+          </article>
+        ))}
+      </div>
+
+      <div className="hidden md:block rounded-lg border border-terminal-border w-full min-w-0">
+        <table className="w-full table-fixed text-xs">
+          <colgroup>
+            <col className="w-[12%]" />
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
+            <col className="w-[12%]" />
+            <col className="w-[20%]" />
+          </colgroup>
+          <thead className="bg-terminal-elevated/40 border-b border-terminal-border">
+            <tr>
+              {[
+                "Ticker",
+                "Shares",
+                "Capital",
+                "Current Value",
+                "Dividend",
+                "P/L",
+                "ROI",
+                "Actions",
+              ].map((header) => (
+                <th
+                  key={header}
+                  className="px-2 py-2 text-left text-[9px] sm:text-[10px] font-medium uppercase tracking-wider text-terminal-muted"
+                >
+                  {header}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.id}
+                className="border-b border-terminal-border/50 hover:bg-terminal-elevated/20"
+              >
+                <td className="px-2 py-2 font-mono font-semibold truncate">
+                  {row.ticker}
+                </td>
+                <td className="px-2 py-2 font-mono tabular-nums truncate">
+                  {row.shares > 0 ? row.shares.toLocaleString() : "—"}
+                </td>
+                <td className="px-2 py-2 font-mono tabular-nums truncate">
+                  {formatMoney(row, row.capital)}
+                </td>
+                <td className="px-2 py-2 font-mono tabular-nums truncate">
+                  {formatMoney(row, row.currentValue)}
+                </td>
+                <td
+                  className={cn(
+                    "px-2 py-2 font-mono tabular-nums truncate",
+                    pnlClass(row.dividend)
+                  )}
+                >
+                  {formatSignedMoney(row, row.dividend)}
+                </td>
+                <td
+                  className={cn(
+                    "px-2 py-2 font-mono tabular-nums whitespace-normal break-words",
+                    pnlClass(row.pl)
+                  )}
+                >
+                  {formatSignedMoney(row, row.pl)}
+                </td>
+                <td
+                  className={cn(
+                    "px-2 py-2 font-mono tabular-nums truncate",
+                    pnlClass(row.roiPct)
+                  )}
+                >
+                  {formatRoiPct(row.roiPct)}
+                </td>
+                <td className="px-2 py-2">
+                  <StockEtfPositionActionsMenu
+                    holding={row.holding}
+                    onRefresh={onRefresh}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function Field({
+  label,
+  value,
+  sub,
+  valueClassName,
+  className,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  valueClassName?: string;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <dt className="text-terminal-muted">{label}</dt>
+      <dd
+        className={cn(
+          "font-mono text-terminal-text tabular-nums break-words",
+          valueClassName
+        )}
+      >
+        {value}
+      </dd>
+      {sub && (
+        <dd className="font-mono text-[10px] text-terminal-muted tabular-nums break-words">
+          {sub}
+        </dd>
+      )}
     </div>
   );
 }

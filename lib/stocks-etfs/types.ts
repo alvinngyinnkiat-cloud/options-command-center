@@ -1,4 +1,6 @@
+import type { StockEtfLedgerEntry } from "@/types/database";
 import type { DataSource } from "@/lib/portfolio/types";
+import type { MarketCategory } from "./market-category";
 import type { CurrencyCode } from "@/types/database";
 import type { STOCK_ETF_SECTORS } from "./constants";
 import type {
@@ -79,6 +81,8 @@ export interface SgStockTabSummary {
   totalDividendIncome: number;
   totalPnl: number;
   totalReturnPct: number;
+  cashBalance: number;
+  totalFeesPaid: number;
 }
 
 export interface StockEtfTabData {
@@ -133,6 +137,9 @@ export interface StockEtfTrackerData {
   topHoldings: ConcentrationEntry[];
   warnings: ConcentrationWarning[];
   tabs: StockEtfTabData;
+  cashBalances: Record<MarketCategory, number>;
+  ledger: StockEtfLedgerEntry[];
+  totalFeesPaid: number;
   dataSource: DataSource;
 }
 
