@@ -17,7 +17,6 @@ import { mapContributionsToGoals } from "@/lib/contributions/map-to-goals";
 import type { MonthlyContributionTrackerData } from "@/lib/contributions/types";
 import type { PortfolioHistoryData } from "@/lib/portfolio/daily-snapshot-types";
 import { MonthlyContributionTrackerPanel } from "@/components/contributions/MonthlyContributionTrackerPanel";
-import { CategoryGoalsPanel } from "./CategoryGoalsPanel";
 import { GoalChangeHistoryPanel } from "./GoalChangeHistoryPanel";
 import { GoalSettingsPanel } from "./GoalSettingsPanel";
 import { GoalsProjectionChart } from "./GoalsProjectionChart";
@@ -28,18 +27,12 @@ import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/di
 
 interface FinancialGoalsClientProps {
   initialData: GoalsDashboardData;
-  categoryValues: {
-    usEtfValueSgd: number;
-    usStockValueSgd: number;
-    sgStockValueSgd: number;
-  };
   portfolioHistory: PortfolioHistoryData;
   contributionData: MonthlyContributionTrackerData;
 }
 
 export function FinancialGoalsClient({
   initialData,
-  categoryValues,
   portfolioHistory,
   contributionData: initialContributionData,
 }: FinancialGoalsClientProps) {
@@ -113,43 +106,32 @@ export function FinancialGoalsClient({
 
       {(portfolioGoal || data.portfolioGoal) && (
         <section className="space-y-4">
-          <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
-            Portfolio Breakdown
-          </h2>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <CategoryGoalsPanel
-              usEtfValueSgd={categoryValues.usEtfValueSgd}
-              usStockValueSgd={categoryValues.usStockValueSgd}
-              sgStockValueSgd={categoryValues.sgStockValueSgd}
-              portfolioTargetSgd={data.portfolioGoal.targetValue}
+          <MetricCardsGrid>
+            <StatCard
+              label="Total Contribution"
+              value={formatSGD(contributionData.allTimeContributions)}
+              change="Monthly Contribution Tracker — all years"
+              changeType="neutral"
             />
-            <MetricCardsGrid>
-              <StatCard
-                label="Progress"
-                value={formatProgressPercent(data.portfolioGoal.progressPercent)}
-                change={`${formatSGD(data.portfolioGoal.currentValue)} of ${formatSGD(data.portfolioGoal.targetValue)}`}
-                changeType="neutral"
-              />
-              <StatCard
-                label="YTD Contributions"
-                value={formatSGD(data.ytdContributions)}
-                change={`S/O ${data.ytdContributionBreakdown.stockOptionsPct.toFixed(0)}% · Crypto ${data.ytdContributionBreakdown.cryptoPct.toFixed(0)}%`}
-                changeType="neutral"
-              />
-              <StatCard
-                label="Gap to Goal"
-                value={formatSGD(
-                  Math.max(
-                    0,
-                    data.portfolioGoal.targetValue -
-                      data.portfolioGoal.currentValue
-                  )
-                )}
-                change="Remaining"
-                changeType="neutral"
-              />
-            </MetricCardsGrid>
-          </div>
+            <StatCard
+              label="Progress"
+              value={formatProgressPercent(data.portfolioGoal.progressPercent)}
+              change={`${formatSGD(data.portfolioGoal.currentValue)} of ${formatSGD(data.portfolioGoal.targetValue)}`}
+              changeType="neutral"
+            />
+            <StatCard
+              label="Gap to Goal"
+              value={formatSGD(
+                Math.max(
+                  0,
+                  data.portfolioGoal.targetValue -
+                    data.portfolioGoal.currentValue
+                )
+              )}
+              change="Goal − My Portfolio Value"
+              changeType="neutral"
+            />
+          </MetricCardsGrid>
         </section>
       )}
 

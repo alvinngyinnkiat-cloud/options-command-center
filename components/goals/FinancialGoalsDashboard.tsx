@@ -1,10 +1,8 @@
 import { getEnrichedPortfolioMetrics } from "@/lib/portfolio/enrich-capital-pools";
 import { getFinancialGoalsData } from "@/lib/supabase/queries/goals";
 import { getMonthlyContributionTrackerData } from "@/lib/supabase/queries/monthly-contributions";
-import { getStockEtfTrackerData } from "@/lib/supabase/queries/stock-etf-holdings";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import { getPortfolioHistoryData } from "@/lib/supabase/queries/daily-portfolio-snapshots";
-import { buildCategoryValuesSgd } from "@/lib/stocks-etfs/build-tab-data";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
 import { MOCK_USER_ID, resolveAuthenticatedUserId } from "@/lib/supabase/resolve-user";
 import { FinancialGoalsClient } from "./FinancialGoalsClient";
@@ -16,12 +14,10 @@ async function resolveUserId(): Promise<string> {
 
 export async function FinancialGoalsDashboard() {
   const userId = await resolveUserId();
-  const [contributionData, stockData, tradesData] =
-    await Promise.all([
-      getMonthlyContributionTrackerData(),
-      getStockEtfTrackerData(),
-      getOptionsTradesData(),
-    ]);
+  const [contributionData, tradesData] = await Promise.all([
+    getMonthlyContributionTrackerData(),
+    getOptionsTradesData(),
+  ]);
 
   const [{ metrics, capitalPools }, data] = await Promise.all([
     getEnrichedPortfolioMetrics(),
@@ -35,11 +31,9 @@ export async function FinancialGoalsDashboard() {
     capitalPools,
   });
 
-  const categories = buildCategoryValuesSgd(stockData.holdings);
   return (
     <FinancialGoalsClient
       initialData={data}
-      categoryValues={categories}
       portfolioHistory={portfolioHistory}
       contributionData={contributionData}
     />
