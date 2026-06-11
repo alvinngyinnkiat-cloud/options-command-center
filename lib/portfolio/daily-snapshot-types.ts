@@ -19,9 +19,14 @@ export interface DailyPortfolioSnapshot {
   clientInitialCapitalSgd: number;
   clientCurrentValueSgd: number;
   totalAssetsManagedSgd: number;
+  totalPortfolioSgd: number;
+  totalContributionsSgd: number;
+  myPortfolioPnlSgd: number;
+  myReturnPct: number;
   portfolioHealthScore: number | null;
   notes: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface PortfolioHistoryTableRow {

@@ -255,10 +255,19 @@ export function filterSnapshotsByPeriod(
 
 export function toChartSeries(
   snapshots: DailyPortfolioSnapshot[]
-): { date: string; value: number }[] {
+): {
+  date: string;
+  value: number;
+  pnl: number;
+  returnPct: number;
+  recordedAt: string;
+}[] {
   return snapshots.map((s) => ({
     date: s.snapshotDate,
     value: s.portfolioValueSgd,
+    pnl: s.myPortfolioPnlSgd,
+    returnPct: s.myReturnPct,
+    recordedAt: s.updatedAt ?? s.createdAt,
   }));
 }
 
@@ -300,9 +309,14 @@ export function generateMockSnapshotHistory(
       clientInitialCapitalSgd: 3_000,
       clientCurrentValueSgd: 3_340,
       totalAssetsManagedSgd: portfolioValue + 3_340,
+      totalPortfolioSgd: portfolioValue + 3_340,
+      totalContributionsSgd: portfolioValue * 0.85,
+      myPortfolioPnlSgd: portfolioValue - portfolioValue * 0.85,
+      myReturnPct: ((portfolioValue - portfolioValue * 0.85) / (portfolioValue * 0.85)) * 100,
       portfolioHealthScore: 78,
       notes: null,
-      createdAt: `${date}T08:00:00.000Z`,
+      createdAt: `${date}T15:59:00.000Z`,
+      updatedAt: `${date}T15:59:00.000Z`,
     });
   }
 

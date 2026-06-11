@@ -35,9 +35,14 @@ function snap(date: string, value: number): DailyPortfolioSnapshot {
     clientInitialCapitalSgd: 3000,
     clientCurrentValueSgd: 3340,
     totalAssetsManagedSgd: value + 3340,
+    totalPortfolioSgd: value + 3340,
+    totalContributionsSgd: value * 0.9,
+    myPortfolioPnlSgd: value * 0.1,
+    myReturnPct: 11.11,
     portfolioHealthScore: 80,
     notes: null,
     createdAt: `${date}T00:00:00.000Z`,
+    updatedAt: `${date}T00:00:00.000Z`,
   };
 }
 

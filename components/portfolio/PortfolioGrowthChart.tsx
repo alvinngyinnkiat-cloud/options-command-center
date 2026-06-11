@@ -24,7 +24,9 @@ import {
   savePortfolioChartPeriod,
 } from "@/lib/portfolio/history-preferences";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
-import { formatCurrency } from "@/lib/utils";
+import { formatSingaporeTimestamp } from "@/lib/time/singapore-time";
+import { formatCurrency, formatSGD } from "@/lib/utils";
+import { format, parseISO } from "date-fns";
 import {
   CartesianGrid,
   Line,
@@ -44,6 +46,17 @@ const PERIODS: PortfolioHistoryPeriod[] = [
   "1Y",
   "ALL",
 ];
+
+function formatChartDateLabel(date: string, period: PortfolioHistoryPeriod): string {
+  const parsed = parseISO(date);
+  if (period === "7D" || period === "30D") {
+    return format(parsed, "d MMM");
+  }
+  if (period === "90D" || period === "YTD") {
+    return format(parsed, "d MMM");
+  }
+  return format(parsed, "MMM yy");
+}
 
 interface PortfolioGrowthChartProps {
   snapshots: DailyPortfolioSnapshot[];
@@ -75,14 +88,17 @@ export function PortfolioGrowthChart({
     return toChartSeries(filtered);
   }, [snapshots, period, asOfDate]);
 
+  const showDailyDots = chartData.length > 0 && chartData.length <= 90;
+
   return (
     <Card variant="default" className="h-full">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Portfolio Value Over Time</CardTitle>
+            <CardTitle>Portfolio Performance</CardTitle>
             <CardDescription>
-              My Portfolio Value over time — SGD, client capital excluded
+              Daily My Portfolio Value from automated snapshots — one point per
+              Singapore calendar day
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-1">
@@ -105,7 +121,7 @@ export function PortfolioGrowthChart({
           height={256}
           minHeightClass="min-h-[256px]"
           empty={chartData.length === 0}
-          emptyMessage="No snapshot history yet"
+          emptyMessage="No daily snapshot history yet — snapshots are recorded automatically at 11:59 PM SGT"
         >
           <ResponsiveContainer width="100%" height={256}>
             <LineChart data={chartData}>
@@ -119,7 +135,10 @@ export function PortfolioGrowthChart({
                 tick={{ fill: "#7a8ba3", fontSize: 10 }}
                 axisLine={{ stroke: "#1e2736" }}
                 tickLine={false}
-                minTickGap={32}
+                minTickGap={period === "7D" ? 16 : 32}
+                tickFormatter={(value) =>
+                  formatChartDateLabel(String(value), period)
+                }
               />
               <YAxis
                 tick={{ fill: "#7a8ba3", fontSize: 10 }}
@@ -135,17 +154,39 @@ export function PortfolioGrowthChart({
                   borderRadius: "6px",
                   fontSize: "12px",
                 }}
-                formatter={(value) => [
-                  formatCurrency(Number(value)),
-                  "My Portfolio Value",
-                ]}
+                labelFormatter={(label) => {
+                  const point = chartData.find((d) => d.date === label);
+                  const timeLabel = point?.recordedAt
+                    ? formatSingaporeTimestamp(point.recordedAt)
+                    : null;
+                  return timeLabel
+                    ? `${label} · ${timeLabel} SGT`
+                    : String(label);
+                }}
+                formatter={(value, _name, item) => {
+                  const point = item.payload as (typeof chartData)[number];
+                  return [
+                    <span key="value" className="block space-y-0.5">
+                      <span className="block">
+                        {formatCurrency(Number(value))} My Portfolio Value
+                      </span>
+                      {point.pnl !== 0 || point.returnPct !== 0 ? (
+                        <span className="block text-[10px] text-terminal-muted">
+                          P/L {formatSGD(point.pnl)} · Return{" "}
+                          {point.returnPct.toFixed(1)}%
+                        </span>
+                      ) : null}
+                    </span>,
+                    "",
+                  ];
+                }}
               />
               <Line
                 type="monotone"
                 dataKey="value"
                 stroke="#3b82f6"
                 strokeWidth={2}
-                dot={false}
+                dot={showDailyDots ? { r: 2, fill: "#3b82f6" } : false}
                 activeDot={{ r: 4, fill: "#3b82f6" }}
               />
               {targetValue != null && targetValue > 0 && (
@@ -167,7 +208,7 @@ export function PortfolioGrowthChart({
         {chartData.length > 0 && (
           <p className="mt-2 text-[10px] text-terminal-muted">
             {chartData.length} daily snapshot{chartData.length !== 1 ? "s" : ""}{" "}
-            in range · My Portfolio Value only
+            in range · My Portfolio Value only · recorded 11:59 PM SGT
           </p>
         )}
       </CardContent>

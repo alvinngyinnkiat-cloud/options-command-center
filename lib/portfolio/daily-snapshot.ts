@@ -5,6 +5,7 @@ import type { PortfolioPnlBreakdown } from "@/lib/trades/pnl-allocation";
 import type { DailyPortfolioSnapshot as DailyPortfolioSnapshotRow, DailyPortfolioSnapshotWrite } from "@/types/database";
 import type { CapitalPoolsBreakdown } from "./capital-pools";
 import { extractTradingCash } from "./capital-pools";
+import { buildPersonalPortfolioProfitLoss } from "./personal-profit-loss";
 import { getSingaporeSnapshotDate } from "./snapshot-date";
 import { snapshotOnOrBefore } from "./snapshot-history";
 
@@ -61,6 +62,7 @@ export function buildDailySnapshotPayload(input: {
   pnl: PortfolioPnlBreakdown;
   snapshotDate?: string;
   capitalPools?: CapitalPoolsBreakdown;
+  totalContributionsSgd?: number;
 }): DailySnapshotWritablePayload {
   const { metrics, openRisk, pnl, capitalPools } = input;
   const tradingCash = capitalPools
@@ -84,10 +86,21 @@ export function buildDailySnapshotPayload(input: {
 
   const clientInitialCapital = capitalPools?.clientInitialCapital ?? 0;
   const clientPortfolioSgd = capitalPools?.clientPortfolioSgd ?? 0;
+  const totalPortfolioSgd =
+    capitalPools?.totalPortfolioSgd ?? portfolioValue + clientPortfolioSgd;
+  const totalContributionsSgd = input.totalContributionsSgd ?? 0;
+  const personalPl = buildPersonalPortfolioProfitLoss(
+    portfolioValue,
+    totalContributionsSgd
+  );
 
   return {
     snapshot_date: input.snapshotDate ?? getSingaporeSnapshotDate(),
     portfolio_value_sgd: portfolioValue,
+    total_portfolio_sgd: totalPortfolioSgd,
+    total_contributions_sgd: totalContributionsSgd,
+    my_portfolio_pnl_sgd: personalPl.myPortfolioPnl,
+    my_return_pct: personalPl.myReturnPct,
     stock_options_value_sgd:
       usEtfValueSgd +
       usStockValueSgd +
@@ -174,11 +187,16 @@ export function mapDailySnapshotRow(
     clientInitialCapitalSgd: Number(row.client_initial_capital_sgd ?? 0),
     clientCurrentValueSgd: Number(row.client_current_value_sgd ?? 0),
     totalAssetsManagedSgd: Number(row.total_assets_managed_sgd),
+    totalPortfolioSgd: Number(row.total_portfolio_sgd ?? 0),
+    totalContributionsSgd: Number(row.total_contributions_sgd ?? 0),
+    myPortfolioPnlSgd: Number(row.my_portfolio_pnl_sgd ?? 0),
+    myReturnPct: Number(row.my_return_pct ?? 0),
     portfolioHealthScore:
       row.portfolio_health_score != null
         ? Number(row.portfolio_health_score)
         : null,
     notes: row.notes ?? null,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

@@ -544,6 +544,10 @@ export interface DailyPortfolioSnapshot {
   client_pnl: number;
   client_initial_capital_sgd: number;
   client_current_value_sgd: number;
+  total_portfolio_sgd: number;
+  total_contributions_sgd: number;
+  my_portfolio_pnl_sgd: number;
+  my_return_pct: number;
   total_assets_managed_sgd: number;
   portfolio_health_score: number | null;
   notes: string | null;

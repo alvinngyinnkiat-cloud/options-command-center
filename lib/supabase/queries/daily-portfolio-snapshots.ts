@@ -36,10 +36,43 @@ import {
   warnMissingDevUserIdForWrite,
 } from "@/lib/supabase/resolve-user";
 import { getServerSupabaseClient } from "@/lib/supabase/server-write";
+import { calculateAllTimeContributions } from "@/lib/contributions/calculations";
+import { mapContributionRow } from "@/lib/contributions/map-contribution";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   DailyPortfolioSnapshot as DailyPortfolioSnapshotRow,
   DailyPortfolioSnapshotWrite,
+  Database,
+  MonthlyContribution,
 } from "@/types/database";
+
+type AdminClient = SupabaseClient<Database>;
+
+async function fetchTotalContributionsSgd(
+  userId: string,
+  supabase?: AdminClient | Awaited<ReturnType<typeof getServerSupabaseClient>>
+): Promise<number> {
+  if (!isSupabaseConfigured()) {
+    const { getMockMonthlyContributions } = await import(
+      "@/lib/mock/monthly-contributions-store"
+    );
+    return calculateAllTimeContributions(
+      getMockMonthlyContributions().map(mapContributionRow)
+    );
+  }
+
+  if (!supabase) return 0;
+
+  const { data, error } = await supabase
+    .from("monthly_contributions")
+    .select("*")
+    .eq("user_id", userId);
+
+  if (error) return 0;
+  return calculateAllTimeContributions(
+    ((data ?? []) as MonthlyContribution[]).map(mapContributionRow)
+  );
+}
 
 export interface DailyPortfolioRecordFormInput {
   snapshotDate: string;
@@ -105,22 +138,25 @@ export async function upsertDailyPortfolioSnapshot(input: {
   const pnl = buildPortfolioPnlBreakdown(input.trades);
   const capitalPools =
     input.capitalPools ?? (await buildPortfolioCapitalPools(input.metrics));
-  const payload = buildDailySnapshotPayload({
-    metrics: input.metrics,
-    openRisk: summary.totalOpenRisk,
-    pnl,
-    snapshotDate: input.snapshotDate,
-    capitalPools,
-  });
-
-  const today = getSingaporeSnapshotDate();
-  if (payload.snapshot_date !== today) {
-    throw new Error(
-      "Snapshots can only be created or updated for today (Singapore date)."
-    );
-  }
 
   if (!isSupabaseConfigured()) {
+    const totalContributionsSgd = await fetchTotalContributionsSgd(input.userId);
+    const payload = buildDailySnapshotPayload({
+      metrics: input.metrics,
+      openRisk: summary.totalOpenRisk,
+      pnl,
+      snapshotDate: input.snapshotDate,
+      capitalPools,
+      totalContributionsSgd,
+    });
+
+    const today = getSingaporeSnapshotDate();
+    if (payload.snapshot_date !== today) {
+      throw new Error(
+        "Snapshots can only be created or updated for today (Singapore date)."
+      );
+    }
+
     return upsertMockDailyPortfolioSnapshot({
       id: crypto.randomUUID(),
       user_id: input.userId === MOCK_USER_ID ? MOCK_USER_ID : input.userId,
@@ -135,10 +171,39 @@ export async function upsertDailyPortfolioSnapshot(input: {
   const access = await resolveSupabaseServerAccess();
   if (!access) {
     warnMissingDevUserIdForWrite();
+    const totalContributionsSgd = await fetchTotalContributionsSgd(input.userId);
+    const payload = buildDailySnapshotPayload({
+      metrics: input.metrics,
+      openRisk: summary.totalOpenRisk,
+      pnl,
+      snapshotDate: input.snapshotDate,
+      capitalPools,
+      totalContributionsSgd,
+    });
     return mockSystemSnapshot(MOCK_USER_ID, payload);
   }
 
   const supabase = await getServerSupabaseClient(access);
+  const totalContributionsSgd = await fetchTotalContributionsSgd(
+    access.userId,
+    supabase
+  );
+  const payload = buildDailySnapshotPayload({
+    metrics: input.metrics,
+    openRisk: summary.totalOpenRisk,
+    pnl,
+    snapshotDate: input.snapshotDate,
+    capitalPools,
+    totalContributionsSgd,
+  });
+
+  const today = getSingaporeSnapshotDate();
+  if (payload.snapshot_date !== today) {
+    throw new Error(
+      "Snapshots can only be created or updated for today (Singapore date)."
+    );
+  }
+
   const effectiveUserId = access.userId;
 
   const { data: existing } = await supabase
@@ -567,4 +632,31 @@ export async function removeDailyPortfolioSnapshot(
     .eq("user_id", access.userId);
 
   if (error) throw new Error(error.message);
+}
+
+/** Service-role upsert for scheduled daily snapshot cron (one row per Singapore date). */
+export async function upsertDailyPortfolioSnapshotAsAdmin(input: {
+  admin: AdminClient;
+  userId: string;
+  payload: ReturnType<typeof buildDailySnapshotPayload>;
+  existingCreatedAt?: string;
+}): Promise<DailyPortfolioSnapshotRow> {
+  const writable: DailyPortfolioSnapshotWrite = {
+    id: crypto.randomUUID(),
+    user_id: input.userId,
+    ...input.payload,
+    is_manual_entry: false,
+    entered_by: "system",
+    created_at: input.existingCreatedAt ?? new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await input.admin
+    .from("daily_portfolio_snapshots")
+    .upsert(writable as never, { onConflict: "user_id,snapshot_date" })
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as DailyPortfolioSnapshotRow;
 }

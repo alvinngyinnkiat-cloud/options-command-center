@@ -37,8 +37,8 @@ export function PortfolioGrowthHistorySection({
             Portfolio Performance
           </h2>
           <p className="mt-1 text-[11px] text-terminal-muted">
-            Historical My Portfolio Value from saved snapshots — create snapshots
-            on the Portfolio Dashboard
+            Daily My Portfolio Value from automated snapshots (11:59 PM SGT) and
+            manual Create Snapshot — client capital excluded
           </p>
         </div>
         <Badge

@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/sg-stock-prices",
       "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/portfolio-daily-snapshot",
+      "schedule": "59 15 * * *"
     }
   ]
 }
