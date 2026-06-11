@@ -19,7 +19,10 @@ import type { StockEtfHoldingFormInput } from "@/lib/stocks-etfs/types";
 import type { StockEtfTrackerData } from "@/lib/stocks-etfs/types";
 import { getStockEtfCashBalances } from "@/lib/supabase/queries/stock-etf-cash";
 import { tradingCashFromStoredBalances } from "@/lib/stocks-etfs/trading-cash-sync";
-import { removeStockEtfLedgerEntriesForHolding } from "@/lib/supabase/queries/stock-etf-ledger";
+import {
+  removeStockEtfPositionAdjustmentsForHolding,
+  removeStockEtfTransactionsForHolding,
+} from "@/lib/supabase/queries/stock-etf-positions";
 import { listStockEtfLedgerEntries } from "@/lib/supabase/queries/stock-etf-ledger";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
@@ -171,7 +174,9 @@ export async function persistStockEtfHolding(
 }
 
 export interface RemoveStockEtfHoldingOptions {
-  /** When true, also removes ledger entries linked to this holding. */
+  /** When true, also removes buy/sell and adjustment history for this holding. */
+  deleteTransactionHistory?: boolean;
+  /** @deprecated Use deleteTransactionHistory */
   deleteLedgerEntries?: boolean;
 }
 
@@ -180,17 +185,15 @@ export async function removeStockEtfHolding(
   userId?: string,
   options?: RemoveStockEtfHoldingOptions
 ): Promise<void> {
-  if (options?.deleteLedgerEntries) {
-    await removeStockEtfLedgerEntriesForHolding(id, userId);
+  const deleteHistory =
+    options?.deleteTransactionHistory ?? options?.deleteLedgerEntries ?? false;
+
+  if (deleteHistory) {
+    await removeStockEtfTransactionsForHolding(id, userId);
+    await removeStockEtfPositionAdjustmentsForHolding(id, userId);
   }
 
   if (!isSupabaseConfigured()) {
-    const {
-      deleteMockStockEtfTransactionsForHolding,
-      deleteMockStockEtfAdjustmentsForHolding,
-    } = await import("@/lib/mock/stock-etf-position-store");
-    deleteMockStockEtfTransactionsForHolding(id);
-    deleteMockStockEtfAdjustmentsForHolding(id);
     deleteMockStockEtfHolding(id);
     return;
   }

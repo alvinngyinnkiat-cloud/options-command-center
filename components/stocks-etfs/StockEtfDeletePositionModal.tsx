@@ -17,7 +17,7 @@ export function StockEtfDeletePositionModal({
   onClose,
   onDeleted,
 }: StockEtfDeletePositionModalProps) {
-  const [deleteLedger, setDeleteLedger] = useState(false);
+  const [deleteTransactions, setDeleteTransactions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -25,7 +25,7 @@ export function StockEtfDeletePositionModal({
     setDeleting(true);
     setError(null);
     const result = await deleteStockEtfHolding(holding.id, {
-      deleteLedgerEntries: deleteLedger,
+      deleteTransactionHistory: deleteTransactions,
     });
     setDeleting(false);
     if (!result.success) {
@@ -50,9 +50,8 @@ export function StockEtfDeletePositionModal({
 
         <div className="space-y-4 p-4">
           <p className="text-xs text-terminal-muted">
-            Remove this position from the tracker. Buy/sell transaction records
-            for the position are removed with the holding. Ledger entries may be
-            kept or removed based on your choice below.
+            Remove this position from the tracker. Transaction history is stored
+            in the same tables used by Buy, Sell, and Manual Adjustment.
           </p>
 
           <fieldset className="space-y-2">
@@ -64,15 +63,15 @@ export function StockEtfDeletePositionModal({
                 type="radio"
                 name="deleteScope"
                 className="mt-0.5"
-                checked={!deleteLedger}
-                onChange={() => setDeleteLedger(false)}
+                checked={!deleteTransactions}
+                onChange={() => setDeleteTransactions(false)}
               />
               <span>
                 <span className="font-medium text-terminal-text">
                   Delete Position Only
                 </span>
                 <span className="mt-0.5 block text-terminal-muted">
-                  Removes the position. Keeps ledger history (unlinked).
+                  Removes the position from your holdings list.
                 </span>
               </span>
             </label>
@@ -81,15 +80,16 @@ export function StockEtfDeletePositionModal({
                 type="radio"
                 name="deleteScope"
                 className="mt-0.5"
-                checked={deleteLedger}
-                onChange={() => setDeleteLedger(true)}
+                checked={deleteTransactions}
+                onChange={() => setDeleteTransactions(true)}
               />
               <span>
                 <span className="font-medium text-terminal-text">
                   Delete Position + Transactions
                 </span>
                 <span className="mt-0.5 block text-terminal-muted">
-                  Also removes ledger entries linked to this position.
+                  Also removes buy/sell transactions and manual adjustment
+                  history for this position.
                 </span>
               </span>
             </label>

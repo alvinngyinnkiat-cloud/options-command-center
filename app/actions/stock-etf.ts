@@ -79,7 +79,11 @@ export async function refreshStockMarketPricesAction(): Promise<StockEtfActionRe
 
 export async function deleteStockEtfHolding(
   id: string,
-  options?: { deleteLedgerEntries?: boolean }
+  options?: {
+    deleteTransactionHistory?: boolean;
+    /** @deprecated Use deleteTransactionHistory */
+    deleteLedgerEntries?: boolean;
+  }
 ): Promise<StockEtfActionResult> {
   try {
     const userId = await requireUserId();

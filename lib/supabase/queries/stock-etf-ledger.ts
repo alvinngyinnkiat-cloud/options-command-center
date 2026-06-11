@@ -97,7 +97,16 @@ export async function insertStockEtfLedgerEntry(
       const { error } = await supabase
         .from("stock_etf_ledger")
         .insert(payload as never);
-      if (error) throw new Error(error.message);
+      if (error) {
+        // Optional audit table — primary history is stock_etf_transactions.
+        if (
+          error.message.includes("stock_etf_ledger") ||
+          error.code === "PGRST205"
+        ) {
+          return payload;
+        }
+        throw new Error(error.message);
+      }
       return payload;
     },
     () => {

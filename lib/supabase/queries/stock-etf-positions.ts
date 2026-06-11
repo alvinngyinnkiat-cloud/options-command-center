@@ -368,3 +368,57 @@ export async function insertStockEtfPositionAdjustment(
     },
   });
 }
+
+export async function removeStockEtfTransactionsForHolding(
+  holdingId: string,
+  userId?: string
+): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    const { deleteMockStockEtfTransactionsForHolding } = await import(
+      "@/lib/mock/stock-etf-position-store"
+    );
+    deleteMockStockEtfTransactionsForHolding(holdingId);
+    return;
+  }
+
+  await withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error } = await supabase
+        .from("stock_etf_transactions")
+        .delete()
+        .eq("holding_id", holdingId)
+        .eq("user_id", effectiveUserId);
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+    }
+  );
+}
+
+export async function removeStockEtfPositionAdjustmentsForHolding(
+  holdingId: string,
+  userId?: string
+): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    const { deleteMockStockEtfAdjustmentsForHolding } = await import(
+      "@/lib/mock/stock-etf-position-store"
+    );
+    deleteMockStockEtfAdjustmentsForHolding(holdingId);
+    return;
+  }
+
+  await withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error } = await supabase
+        .from("stock_etf_position_adjustments")
+        .delete()
+        .eq("holding_id", holdingId)
+        .eq("user_id", effectiveUserId);
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+    }
+  );
+}
