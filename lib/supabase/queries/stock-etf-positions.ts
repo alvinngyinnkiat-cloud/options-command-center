@@ -10,6 +10,7 @@ import {
 import { toSgdAmount } from "@/lib/stocks-etfs/calculations";
 import { tryInsertStockEtfLedgerEntry } from "@/lib/supabase/queries/stock-etf-ledger";
 import { enrichStockEtfHolding } from "@/lib/stocks-etfs/map-holding";
+import { toStockEtfHoldingWritePayload } from "@/lib/stocks-etfs/holding-write-payload";
 import { classifyHoldingCategory } from "@/lib/stocks-etfs/market-category";
 import {
   addMockStockEtfAdjustment,
@@ -106,6 +107,8 @@ function applyPositionToHolding(
 }
 
 async function persistHoldingRow(row: StockEtfHolding): Promise<StockEtfHolding> {
+  const payload = toStockEtfHoldingWritePayload(row);
+
   if (!isSupabaseConfigured()) {
     return upsertMockStockEtfHolding(row);
   }
@@ -114,7 +117,7 @@ async function persistHoldingRow(row: StockEtfHolding): Promise<StockEtfHolding>
     async ({ supabase }) => {
       const { error } = await supabase
         .from("stock_etf_holdings")
-        .update(row as never)
+        .update(payload as never)
         .eq("id", row.id)
         .eq("user_id", row.user_id);
 
@@ -285,7 +288,6 @@ export async function insertStockEtfTransaction(
 
   const updated = {
     ...applyPositionToHolding(holding, position, currentValueNative),
-    tracking_mode: "transaction",
     manual_value_override: false,
   };
   await persistHoldingRow(updated);
@@ -374,7 +376,6 @@ export async function insertStockEtfPositionAdjustment(
     current_value_sgd: currentValueSgd,
     manual_total_dividend: input.manualTotalDividend,
     manual_total_fees: input.manualTotalFees,
-    tracking_mode: "transaction",
     manual_value_override: true,
     notes: input.notes,
     last_updated: today,

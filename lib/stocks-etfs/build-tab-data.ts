@@ -157,7 +157,6 @@ export function mapEnrichedToDbRow(
     last_price_date: null,
     price_source: null,
     manual_value_override: false,
-    tracking_mode: holding.trackingMode,
     manual_total_dividend: holding.manualTotalDividend,
     manual_total_fees: holding.manualTotalFees,
     notes: holding.notes,

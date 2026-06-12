@@ -7,9 +7,6 @@ import type {
   UsEquityPositionRow,
   UsEquityTabSummary,
 } from "./us-equity-positions";
-import type { StockEtfTrackingMode } from "./tracking-mode";
-
-export type { StockEtfTrackingMode };
 
 export type { UsEquityPositionRow, UsEquityTabSummary };
 
@@ -57,10 +54,9 @@ export interface EnrichedStockEtfHolding {
   averageCost: number | null;
   dividendYield: number | null;
   annualDividendIncome: number | null;
-  notes: string | null;
-  trackingMode: StockEtfTrackingMode;
   manualTotalDividend: number;
   manualTotalFees: number;
+  notes: string | null;
   lastUpdated: string;
   createdAt: string;
   updatedAt: string;

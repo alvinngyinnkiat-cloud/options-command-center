@@ -21,7 +21,6 @@ function mockHolding(overrides: Partial<StockEtfHolding> = {}): StockEtfHolding 
     last_price_date: null,
     price_source: null,
     manual_value_override: true,
-    tracking_mode: "manual",
     manual_total_dividend: 250,
     manual_total_fees: 50,
     notes: null,
@@ -41,14 +40,5 @@ describe("buildMigrationTransactions", () => {
     expect(txs[0].fees).toBe(50);
     expect(txs[1].transaction_type).toBe("dividend");
     expect(txs[1].total_amount).toBe(250);
-  });
-
-  it("rejects already migrated holdings", () => {
-    expect(() =>
-      buildMigrationTransactions(
-        mockHolding({ tracking_mode: "transaction" }),
-        "u1"
-      )
-    ).toThrow(/already/i);
   });
 });

@@ -16,6 +16,7 @@ import {
   enrichStockEtfHolding,
   stockEtfRowFromForm,
 } from "@/lib/stocks-etfs/map-holding";
+import { toStockEtfHoldingWritePayload } from "@/lib/stocks-etfs/holding-write-payload";
 import { classifyHoldingCategory } from "@/lib/stocks-etfs/market-category";
 import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
 import { DEFAULT_USD_SGD_RATE } from "@/lib/portfolio/currency";
@@ -166,7 +167,7 @@ export async function persistStockEtfHolding(
         .eq("ticker", row.ticker)
         .maybeSingle();
 
-      const payload = {
+      const payload = toStockEtfHoldingWritePayload({
         ...row,
         user_id: effectiveUserId,
         id: existing ? (existing as { id: string }).id : row.id,
@@ -174,7 +175,7 @@ export async function persistStockEtfHolding(
           ? (existing as { created_at: string }).created_at
           : row.created_at,
         updated_at: new Date().toISOString(),
-      };
+      });
 
       const { error } = await supabase
         .from("stock_etf_holdings")
@@ -285,8 +286,6 @@ export async function ensureStockEtfHoldingForBuy(
     manualTotalFees: 0,
     notes: null,
   };
-  const row = stockEtfRowFromForm(form, userId, undefined, undefined, {
-    trackingMode: "transaction",
-  });
+  const row = stockEtfRowFromForm(form, userId);
   return persistStockEtfHolding(row, userId);
 }

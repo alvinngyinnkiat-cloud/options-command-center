@@ -1,5 +1,4 @@
 import type { StockEtfHolding, StockEtfTransaction } from "@/types/database";
-import { resolveHoldingTrackingMode } from "./tracking-mode";
 
 export interface OpeningBalanceInput {
   shares: number;
@@ -15,10 +14,6 @@ export function buildMigrationTransactions(
   holding: StockEtfHolding,
   userId: string
 ): StockEtfTransaction[] {
-  if (resolveHoldingTrackingMode(holding) === "transaction") {
-    throw new Error("Position is already in Transaction Accounting mode.");
-  }
-
   const now = new Date().toISOString();
   const today = now.split("T")[0];
   const shares = Number(holding.shares_held ?? 0);

@@ -1,10 +1,6 @@
 import { resolveTickerDividendIncome } from "@/lib/dividends/calculations";
 import type { TickerDividendTotals } from "@/lib/dividends/types";
 import { toSgdAmount, buildStockEtfHoldingMetrics } from "./calculations";
-import {
-  resolveHoldingTrackingMode,
-  type StockEtfTrackingMode,
-} from "./tracking-mode";
 import type {
   EnrichedStockEtfHolding,
   StockEtfHoldingFormInput,
@@ -25,7 +21,6 @@ export function enrichStockEtfHolding(
   totalPortfolioValueSgd: number,
   dividendTotals?: Map<string, TickerDividendTotals>
 ): EnrichedStockEtfHolding {
-  const trackingMode = resolveHoldingTrackingMode(row);
   const shares = row.shares_held != null ? Number(row.shares_held) : null;
   const lastPrice =
     row.last_market_price_native != null
@@ -90,7 +85,6 @@ export function enrichStockEtfHolding(
     averageCost: row.average_cost != null ? Number(row.average_cost) : null,
     dividendYield,
     annualDividendIncome,
-    trackingMode,
     manualTotalDividend,
     manualTotalFees,
     notes: row.notes,
@@ -117,10 +111,7 @@ export function stockEtfRowFromForm(
   input: StockEtfHoldingFormInput,
   userId: string,
   existingId?: string,
-  existingCreatedAt?: string,
-  options?: {
-    trackingMode?: StockEtfTrackingMode;
-  }
+  existingCreatedAt?: string
 ): StockEtfHolding {
   const now = new Date().toISOString();
   const today = now.split("T")[0];
@@ -153,7 +144,6 @@ export function stockEtfRowFromForm(
     last_price_date: null,
     price_source: null,
     manual_value_override: true,
-    tracking_mode: options?.trackingMode ?? "transaction",
     manual_total_dividend: input.manualTotalDividend,
     manual_total_fees: input.manualTotalFees,
     notes: input.notes,

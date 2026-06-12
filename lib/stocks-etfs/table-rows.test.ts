@@ -26,7 +26,6 @@ function mockHolding(overrides: Partial<{ totalInvestedNative: number; currentVa
     dividendYield: null,
     annualDividendIncome: null,
     notes: null,
-    trackingMode: "transaction" as const,
     manualTotalDividend: 0,
     manualTotalFees: 0,
     lastUpdated: "2026-01-01",
