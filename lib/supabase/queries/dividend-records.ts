@@ -175,6 +175,41 @@ export async function removeDividendRecord(
   );
 }
 
+/** Remove dividend records linked to a stock/ETF holding (by id and ticker). */
+export async function removeDividendRecordsForStockHolding(
+  holdingId: string,
+  ticker: string,
+  userId?: string
+): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    return;
+  }
+
+  await withSupabaseQuery(
+    async ({ userId: effectiveUserId, supabase }) => {
+      const { error: byHoldingError } = await supabase
+        .from("dividend_records")
+        .delete()
+        .eq("holding_id", holdingId)
+        .eq("user_id", effectiveUserId);
+
+      if (byHoldingError) throw new Error(byHoldingError.message);
+
+      const { error: byTickerError } = await supabase
+        .from("dividend_records")
+        .delete()
+        .eq("ticker", ticker.toUpperCase())
+        .eq("user_id", effectiveUserId)
+        .is("holding_id", null);
+
+      if (byTickerError) throw new Error(byTickerError.message);
+    },
+    () => {
+      warnMissingDevUserIdForWrite();
+    }
+  );
+}
+
 export async function upsertApiDividendRecord(
   row: DividendRecordRow,
   userId: string

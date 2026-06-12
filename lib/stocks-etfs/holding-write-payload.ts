@@ -1,22 +1,47 @@
 import type { StockEtfHolding } from "@/types/database";
 
-/** Columns removed from stock_etf_holdings writes — not present in all deployments. */
-const OMITTED_HOLDING_WRITE_FIELDS = ["tracking_mode"] as const;
+/**
+ * Columns known to exist on stock_etf_holdings in production (base + market price).
+ * Omits hybrid-tracking columns (tracking_mode, manual_total_*) that may be absent.
+ */
+const STOCK_ETF_HOLDING_WRITE_COLUMNS = [
+  "id",
+  "user_id",
+  "ticker",
+  "asset_type",
+  "currency",
+  "sector",
+  "total_invested_native",
+  "current_value_native",
+  "fx_rate_to_sgd",
+  "total_invested_sgd",
+  "current_value_sgd",
+  "shares_held",
+  "average_cost",
+  "notes",
+  "last_updated",
+  "created_at",
+  "updated_at",
+  "last_market_price_native",
+  "last_price_date",
+  "price_source",
+  "manual_value_override",
+] as const satisfies readonly (keyof StockEtfHolding)[];
 
-type OmittedHoldingField = (typeof OMITTED_HOLDING_WRITE_FIELDS)[number];
-
-export type StockEtfHoldingWritePayload = Omit<
+export type StockEtfHoldingWritePayload = Pick<
   StockEtfHolding,
-  OmittedHoldingField
+  (typeof STOCK_ETF_HOLDING_WRITE_COLUMNS)[number]
 >;
 
-/** Strip obsolete columns before insert/update/upsert to stock_etf_holdings. */
+/** Strip unknown/obsolete columns before insert/update/upsert to stock_etf_holdings. */
 export function toStockEtfHoldingWritePayload(
   row: StockEtfHolding
 ): StockEtfHoldingWritePayload {
-  const payload = { ...row } as Record<string, unknown>;
-  for (const field of OMITTED_HOLDING_WRITE_FIELDS) {
-    delete payload[field];
+  const payload = {} as StockEtfHoldingWritePayload;
+  for (const key of STOCK_ETF_HOLDING_WRITE_COLUMNS) {
+    if (key in row) {
+      (payload as Record<string, unknown>)[key] = row[key];
+    }
   }
-  return payload as StockEtfHoldingWritePayload;
+  return payload;
 }

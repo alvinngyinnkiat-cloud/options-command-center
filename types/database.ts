@@ -896,8 +896,8 @@ export interface StockEtfHolding {
   last_price_date: string | null;
   price_source: string | null;
   manual_value_override: boolean;
-  manual_total_dividend: number;
-  manual_total_fees: number;
+  manual_total_dividend?: number;
+  manual_total_fees?: number;
   notes: string | null;
   last_updated: string;
   created_at: string;

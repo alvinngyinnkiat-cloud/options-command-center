@@ -24,24 +24,6 @@ async function finish(): Promise<StockEtfActionResult> {
   return { success: true, data };
 }
 
-export async function deleteStockEtfLedgerEntry(
-  id: string
-): Promise<StockEtfActionResult> {
-  try {
-    const userId = await requireUserId();
-    const { removeStockEtfLedgerEntry } = await import(
-      "@/lib/supabase/queries/stock-etf-ledger"
-    );
-    await removeStockEtfLedgerEntry(id, userId);
-    return finish();
-  } catch (e) {
-    return {
-      success: false,
-      error: e instanceof Error ? e.message : "Failed to delete ledger entry.",
-    };
-  }
-}
-
 export async function recordStockEtfBuy(input: {
   marketCategory: MarketCategory;
   transactionDate: string;

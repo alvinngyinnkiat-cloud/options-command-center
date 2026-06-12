@@ -1,5 +1,4 @@
 import { buildStockEtfTabData } from "@/lib/stocks-etfs/build-tab-data";
-import { calculateTotalFeesPaid } from "@/lib/stocks-etfs/cash-balances";
 import { buildDividendPortfolioSummary } from "@/lib/dividends/calculations";
 import { MOCK_REFERENCE_DATE } from "@/lib/mock/reference-dates";
 import { listDividendRecordRows } from "@/lib/supabase/queries/dividend-records";
@@ -29,11 +28,7 @@ import {
   removeStockEtfPositionAdjustmentsForHolding,
   removeStockEtfTransactionsForHolding,
 } from "@/lib/supabase/queries/stock-etf-positions";
-import {
-  listStockEtfLedgerEntries,
-  removeStockEtfLedgerEntriesForHolding,
-  isStockEtfLedgerAvailable,
-} from "@/lib/supabase/queries/stock-etf-ledger";
+import { removeDividendRecordsForStockHolding } from "@/lib/supabase/queries/dividend-records";
 import { getOptionsTradesData } from "@/lib/supabase/queries/options-trades";
 import {
   deleteMockStockEtfHolding,
@@ -68,11 +63,9 @@ async function buildFullData(
 ): Promise<StockEtfTrackerData> {
   const referenceDate = MOCK_REFERENCE_DATE;
   const referenceYear = Number(referenceDate.slice(0, 4));
-  const [tradesData, dividendRows, ledgerAvailable, transactions] =
-    await Promise.all([
+  const [tradesData, dividendRows, transactions] = await Promise.all([
       getOptionsTradesData(),
       listDividendRecordRows(userId),
-      isStockEtfLedgerAvailable(),
       listAllStockEtfTransactions(userId, rows),
     ]);
   const dividendSummary = buildDividendPortfolioSummary(
@@ -82,14 +75,6 @@ async function buildFullData(
   );
   const holdings = enrichAllStockEtfHoldings(rows, dividendSummary.byTicker);
   const sectorAllocation = buildSectorAllocation(holdings);
-  let ledger: Awaited<ReturnType<typeof listStockEtfLedgerEntries>> = [];
-  if (ledgerAvailable) {
-    try {
-      ledger = await listStockEtfLedgerEntries();
-    } catch {
-      ledger = [];
-    }
-  }
   const cashBalances = { us_etf: 0, us_stock: 0, sg_stock: 0 };
   const transactionFeesTotal = transactions.reduce((sum, tx) => sum + tx.fees, 0);
   const feesFor = (cat: "us_etf" | "us_stock" | "sg_stock") => {
@@ -119,10 +104,8 @@ async function buildFullData(
     warnings: buildConcentrationWarnings(holdings, sectorAllocation),
     tabs,
     cashBalances,
-    ledger,
     transactions,
-    totalFeesPaid: transactionFeesTotal || calculateTotalFeesPaid(ledger),
-    ledgerAvailable,
+    totalFeesPaid: transactionFeesTotal,
     dataSource,
   };
 }
@@ -192,10 +175,8 @@ export async function persistStockEtfHolding(
 }
 
 export interface RemoveStockEtfHoldingOptions {
-  /** When true, also removes buy/sell and adjustment history for this holding. */
+  /** When true, also removes buy/sell, adjustment, and dividend history for this holding. */
   deleteTransactionHistory?: boolean;
-  /** @deprecated Use deleteTransactionHistory */
-  deleteLedgerEntries?: boolean;
 }
 
 export async function removeStockEtfHolding(
@@ -203,13 +184,25 @@ export async function removeStockEtfHolding(
   userId?: string,
   options?: RemoveStockEtfHoldingOptions
 ): Promise<void> {
-  const deleteHistory =
-    options?.deleteTransactionHistory ?? options?.deleteLedgerEntries ?? false;
+  const deleteHistory = options?.deleteTransactionHistory ?? false;
 
   if (deleteHistory) {
+    const rows = isSupabaseConfigured()
+      ? userId
+        ? await fetchStockEtfRows(userId)
+        : await getStockEtfHoldingsRows()
+      : getMockStockEtfHoldings();
+    const holding = rows.find((row) => row.id === id);
+
     await removeStockEtfTransactionsForHolding(id, userId);
     await removeStockEtfPositionAdjustmentsForHolding(id, userId);
-    await removeStockEtfLedgerEntriesForHolding(id, userId);
+    if (holding) {
+      await removeDividendRecordsForStockHolding(
+        id,
+        holding.ticker,
+        userId
+      );
+    }
   }
 
   if (!isSupabaseConfigured()) {

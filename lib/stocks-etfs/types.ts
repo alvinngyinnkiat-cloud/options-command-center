@@ -1,4 +1,3 @@
-import type { StockEtfLedgerEntry } from "@/types/database";
 import type { DataSource } from "@/lib/portfolio/types";
 import type { MarketCategory } from "./market-category";
 import type { CurrencyCode } from "@/types/database";
@@ -156,10 +155,8 @@ export interface StockEtfTrackerData {
   warnings: ConcentrationWarning[];
   tabs: StockEtfTabData;
   cashBalances: Record<MarketCategory, number>;
-  ledger: StockEtfLedgerEntry[];
   transactions: import("@/lib/supabase/queries/stock-etf-positions").StockEtfTransactionWithTicker[];
   totalFeesPaid: number;
-  ledgerAvailable: boolean;
   dataSource: DataSource;
 }
 

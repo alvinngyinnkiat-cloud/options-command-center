@@ -42,8 +42,6 @@ export async function deleteStockEtfHolding(
   id: string,
   options?: {
     deleteTransactionHistory?: boolean;
-    /** @deprecated Use deleteTransactionHistory */
-    deleteLedgerEntries?: boolean;
   }
 ): Promise<StockEtfActionResult> {
   try {

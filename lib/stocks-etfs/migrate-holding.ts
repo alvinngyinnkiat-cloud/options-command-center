@@ -39,7 +39,7 @@ export function buildMigrationTransactions(
       price_per_share: pricePerShare,
       total_amount: totalAmount,
       fees,
-      notes: "Opening balance migrated from Manual Position mode",
+      notes: "Opening balance migrated from legacy snapshot",
       created_at: now,
       updated_at: now,
     },
@@ -56,7 +56,7 @@ export function buildMigrationTransactions(
       price_per_share: 0,
       total_amount: dividend,
       fees: 0,
-      notes: "Historical dividend migrated from Manual Position mode",
+      notes: "Historical dividend migrated from legacy snapshot",
       created_at: now,
       updated_at: now,
     });

@@ -88,8 +88,8 @@ export function StockEtfDeletePositionModal({
                   Delete Position + Transactions
                 </span>
                 <span className="mt-0.5 block text-terminal-muted">
-                  Also removes buy/sell transactions and manual adjustment
-                  history for this position.
+                  Also removes buy/sell transactions, manual adjustments, and
+                  dividend records for this position.
                 </span>
               </span>
             </label>

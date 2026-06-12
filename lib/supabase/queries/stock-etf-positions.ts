@@ -8,10 +8,7 @@ import {
   deriveCurrentValueNative,
 } from "@/lib/stocks-etfs/recalculate-position";
 import { toSgdAmount } from "@/lib/stocks-etfs/calculations";
-import { tryInsertStockEtfLedgerEntry } from "@/lib/supabase/queries/stock-etf-ledger";
-import { enrichStockEtfHolding } from "@/lib/stocks-etfs/map-holding";
 import { toStockEtfHoldingWritePayload } from "@/lib/stocks-etfs/holding-write-payload";
-import { classifyHoldingCategory } from "@/lib/stocks-etfs/market-category";
 import {
   addMockStockEtfAdjustment,
   addMockStockEtfTransaction,
@@ -236,9 +233,6 @@ export async function insertStockEtfTransaction(
   }
 
   const totalAmount = input.shares * input.pricePerShare;
-  const enriched = enrichStockEtfHolding(holding, 0);
-  const marketCategory = classifyHoldingCategory(enriched);
-  const currency = holding.currency as CurrencyCode;
 
   const now = new Date().toISOString();
   const tx: StockEtfTransaction = {
@@ -291,20 +285,6 @@ export async function insertStockEtfTransaction(
     manual_value_override: false,
   };
   await persistHoldingRow(updated);
-
-  await tryInsertStockEtfLedgerEntry(userId, {
-    holdingId: input.holdingId,
-    marketCategory,
-    transactionType: input.transactionType,
-    transactionDate: input.transactionDate,
-    ticker: holding.ticker,
-    shares: input.shares,
-    amountNative: totalAmount,
-    feeNative: input.fees,
-    currency,
-    fxRateToSgd: Number(holding.fx_rate_to_sgd),
-    notes: input.notes,
-  });
 }
 
 export async function insertStockEtfPositionAdjustment(
@@ -382,29 +362,6 @@ export async function insertStockEtfPositionAdjustment(
     updated_at: new Date().toISOString(),
   };
   await persistHoldingRow(updated);
-
-  const enriched = enrichStockEtfHolding(updated, 0);
-  const marketCategory = classifyHoldingCategory(enriched);
-  await tryInsertStockEtfLedgerEntry(userId, {
-    holdingId: input.holdingId,
-    marketCategory,
-    transactionType: "manual_adjustment",
-    transactionDate: adjustmentDate,
-    ticker: holding.ticker,
-    shares: input.shares,
-    amountNative: 0,
-    feeNative: 0,
-    currency: holding.currency as CurrencyCode,
-    fxRateToSgd: Number(holding.fx_rate_to_sgd),
-    notes: input.notes,
-    metadata: {
-      previousShares: holding.shares_held,
-      newShares: input.shares,
-      previousTotalCost: holding.total_invested_native,
-      newTotalCost: input.totalCost,
-      adjustmentReason: input.adjustmentReason.trim(),
-    },
-  });
 }
 
 export async function removeStockEtfTransactionsForHolding(
