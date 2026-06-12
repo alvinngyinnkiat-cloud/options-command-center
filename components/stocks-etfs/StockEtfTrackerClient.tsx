@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { refreshStockMarketPricesAction } from "@/app/actions/stock-etf";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import type { StockEtfTrackerData } from "@/lib/stocks-etfs/types";
 import type { StockEtfTabId } from "./StockEtfCategoryTabs";
 import { useDividendDataSync, type DividendDependentRefreshData } from "@/lib/dividends/use-dividend-sync";
-import { RefreshCw, ShoppingCart, TrendingDown } from "lucide-react";
+import { Banknote, RefreshCw, ShoppingCart, SlidersHorizontal, TrendingDown } from "lucide-react";
 import { StockEtfCategoryTabs } from "./StockEtfCategoryTabs";
 import { StockEtfTransactionHistoryTable } from "./StockEtfTransactionHistoryTable";
 import {
@@ -55,6 +55,14 @@ export function StockEtfTrackerClient({
 
   const { tabs } = data;
 
+  const allHoldings = useMemo(() => {
+    const fromUs = [...tabs.usEtf.rows, ...tabs.usStock.rows]
+      .map((row) => row.holding)
+      .filter((holding): holding is NonNullable<typeof holding> => holding != null);
+    const fromSg = tabs.sgStock.rows.map((row) => row.holding);
+    return [...fromUs, ...fromSg];
+  }, [tabs]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -93,6 +101,22 @@ export function StockEtfTrackerClient({
             >
               <TrendingDown className="h-4 w-4" />
               Sell
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setTxModal("dividend")}
+            >
+              <Banknote className="h-4 w-4" />
+              Dividend
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setTxModal("adjustment")}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Manual Adjustment
             </Button>
           </>
         }
@@ -148,28 +172,20 @@ export function StockEtfTrackerClient({
         <h2 className="text-xs font-medium uppercase tracking-wider text-terminal-muted">
           Transaction History
         </h2>
-        {!data.ledgerAvailable && (
-          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-            Optional ledger table is unavailable. Buy/sell history below is
-            saved to{" "}
-            <code className="font-mono">stock_etf_transactions</code> and is
-            the source of truth.
-          </p>
-        )}
         <StockEtfTransactionHistoryTable transactions={data.transactions} />
       </section>
 
       <StockEtfTransactionModals
         kind={txModal}
         defaultMarketCategory={activeTab}
+        holdings={allHoldings}
         onClose={() => setTxModal(null)}
         onSaved={handleRefresh}
       />
 
       <p className="text-[11px] text-terminal-muted">
-        Enter historical and new trades via Buy/Sell. Trading Cash is not
-        validated here — the broker handles buying power. Dividends sync from
-        Dividend Tracker unless corrected via Manual Adjustment.
+        Record buys, sells, and dividends via the action buttons above. Use
+        Manual Adjustment only to correct position summary values.
       </p>
     </div>
   );

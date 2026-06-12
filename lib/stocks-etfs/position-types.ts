@@ -16,6 +16,14 @@ export interface StockEtfTransactionInput {
   notes?: string | null;
 }
 
+export type StockEtfFieldAdjusted =
+  | "shares"
+  | "capital_invested"
+  | "current_value"
+  | "dividend"
+  | "fees"
+  | "pl";
+
 export interface StockEtfPositionAdjustInput {
   holdingId: string;
   shares: number;
@@ -26,6 +34,15 @@ export interface StockEtfPositionAdjustInput {
   manualTotalFees: number;
   notes: string | null;
   adjustmentReason: string;
+  adjustmentDate?: string;
+}
+
+export interface StockEtfFieldAdjustInput {
+  adjustmentDate: string;
+  ticker: string;
+  field: StockEtfFieldAdjusted;
+  newValue: number;
+  notes?: string | null;
 }
 
 export interface PositionFromTransactions {

@@ -317,17 +317,19 @@ export async function insertStockEtfPositionAdjustment(
     manualTotalFees: number;
     notes: string | null;
     adjustmentReason: string;
+    adjustmentDate?: string;
   }
 ): Promise<void> {
   const holding = await fetchHoldingById(input.holdingId, userId);
   if (!holding) throw new Error("Holding not found.");
 
   const today = new Date().toISOString().split("T")[0];
+  const adjustmentDate = input.adjustmentDate ?? today;
   const adjustment: StockEtfPositionAdjustment = {
     id: crypto.randomUUID(),
     user_id: userId,
     holding_id: input.holdingId,
-    adjustment_date: today,
+    adjustment_date: adjustmentDate,
     previous_shares: holding.shares_held,
     new_shares: input.shares,
     previous_average_cost: holding.average_cost,
@@ -386,7 +388,7 @@ export async function insertStockEtfPositionAdjustment(
     holdingId: input.holdingId,
     marketCategory,
     transactionType: "manual_adjustment",
-    transactionDate: today,
+    transactionDate: adjustmentDate,
     ticker: holding.ticker,
     shares: input.shares,
     amountNative: 0,

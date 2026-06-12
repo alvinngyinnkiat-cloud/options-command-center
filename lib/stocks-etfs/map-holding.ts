@@ -63,7 +63,7 @@ export function enrichStockEtfHolding(
     dividendTotals ?? new Map()
   );
   const dividendForYield =
-    trackingMode === "manual"
+    manualTotalDividend > 0
       ? manualTotalDividend
       : dividendResolved.lifetimeNetDividends;
   const annualDividendIncome = dividendResolved.annualDividendIncome;

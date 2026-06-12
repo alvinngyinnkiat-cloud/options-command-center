@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { recordStockEtfBuy, recordStockEtfSell } from "@/app/actions/stock-etf-cash";
+import { useEffect, useMemo, useState } from "react";
+import {
+  recordStockEtfBuy,
+  recordStockEtfDividend,
+  recordStockEtfSell,
+} from "@/app/actions/stock-etf-cash";
+import { recordStockEtfFieldAdjustment } from "@/app/actions/stock-etf-positions";
 import { Button } from "@/components/ui/Button";
 import type { MarketCategory } from "@/lib/stocks-etfs/market-category";
+import type { StockEtfFieldAdjusted } from "@/lib/stocks-etfs/position-types";
+import type { EnrichedStockEtfHolding } from "@/lib/stocks-etfs/types";
 import { DEFAULT_USD_SGD_RATE } from "@/lib/portfolio/currency";
 import { formatNativeValue } from "@/lib/portfolio/format-holdings";
 import { formatSGD } from "@/lib/utils";
@@ -12,11 +19,21 @@ import { X } from "lucide-react";
 const inputClass =
   "w-full rounded border border-terminal-border bg-terminal-elevated px-3 py-2 text-sm font-mono";
 
-export type StockEtfModalKind = "buy" | "sell";
+export type StockEtfModalKind = "buy" | "sell" | "dividend" | "adjustment";
+
+const ADJUSTMENT_FIELDS: { value: StockEtfFieldAdjusted; label: string }[] = [
+  { value: "shares", label: "Share count" },
+  { value: "capital_invested", label: "Capital invested" },
+  { value: "current_value", label: "Current value" },
+  { value: "dividend", label: "Total dividend" },
+  { value: "fees", label: "Total fees" },
+  { value: "pl", label: "P/L" },
+];
 
 interface StockEtfTransactionModalsProps {
   kind: StockEtfModalKind | null;
   defaultMarketCategory?: MarketCategory;
+  holdings?: EnrichedStockEtfHolding[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -24,6 +41,7 @@ interface StockEtfTransactionModalsProps {
 export function StockEtfTransactionModals({
   kind,
   defaultMarketCategory = "us_etf",
+  holdings = [],
   onClose,
   onSaved,
 }: StockEtfTransactionModalsProps) {
@@ -42,6 +60,24 @@ export function StockEtfTransactionModals({
       <TradeModal
         mode="sell"
         defaultMarketCategory={defaultMarketCategory}
+        onClose={onClose}
+        onSaved={onSaved}
+      />
+    );
+  }
+  if (kind === "dividend") {
+    return (
+      <DividendModal
+        defaultMarketCategory={defaultMarketCategory}
+        onClose={onClose}
+        onSaved={onSaved}
+      />
+    );
+  }
+  if (kind === "adjustment") {
+    return (
+      <FieldAdjustmentModal
+        holdings={holdings}
         onClose={onClose}
         onSaved={onSaved}
       />
@@ -192,6 +228,222 @@ function TradeModal({
   );
 }
 
+function DividendModal({
+  defaultMarketCategory,
+  onClose,
+  onSaved,
+}: {
+  defaultMarketCategory: MarketCategory;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const today = new Date().toISOString().split("T")[0];
+  const [marketCategory, setMarketCategory] =
+    useState<MarketCategory>(defaultMarketCategory);
+  const [paymentDate, setPaymentDate] = useState(today);
+  const [ticker, setTicker] = useState("");
+  const [dividendAmount, setDividendAmount] = useState("");
+  const [fxRate, setFxRate] = useState(String(DEFAULT_USD_SGD_RATE));
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const isUsMarket = marketCategory === "us_etf" || marketCategory === "us_stock";
+  const currencyLabel = isUsMarket ? "USD" : "SGD";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+
+    const result = await recordStockEtfDividend({
+      marketCategory,
+      paymentDate,
+      ticker: ticker.toUpperCase(),
+      dividendAmount: parseFloat(dividendAmount) || 0,
+      fxRateToSgd: isUsMarket ? parseFloat(fxRate) || DEFAULT_USD_SGD_RATE : null,
+      notes: notes.trim() || null,
+    });
+
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <ModalShell title="Record Dividend" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4 p-4">
+        <p className="text-xs text-terminal-muted">
+          Record a dividend payment. Saved to dividend history and included in
+          P/L With Dividend.
+        </p>
+        <MarketField value={marketCategory} onChange={setMarketCategory} />
+        <DateField label="Date" value={paymentDate} onChange={setPaymentDate} />
+        <label className="block space-y-1">
+          <span className="text-[10px] uppercase text-terminal-muted">Ticker</span>
+          <input
+            className={inputClass}
+            value={ticker}
+            onChange={(e) => setTicker(e.target.value.toUpperCase())}
+            required
+          />
+        </label>
+        <AmountField
+          label={`Dividend Amount (${currencyLabel})`}
+          value={dividendAmount}
+          onChange={setDividendAmount}
+        />
+        {isUsMarket && (
+          <AmountField label="FX Rate (SGD/USD)" value={fxRate} onChange={setFxRate} />
+        )}
+        <NotesField value={notes} onChange={setNotes} />
+        {error && <p className="text-xs text-loss">{error}</p>}
+        <ModalActions saving={saving} onClose={onClose} submitLabel="Save Dividend" />
+      </form>
+    </ModalShell>
+  );
+}
+
+function FieldAdjustmentModal({
+  holdings,
+  onClose,
+  onSaved,
+}: {
+  holdings: EnrichedStockEtfHolding[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const today = new Date().toISOString().split("T")[0];
+  const [adjustmentDate, setAdjustmentDate] = useState(today);
+  const [ticker, setTicker] = useState("");
+  const [field, setField] = useState<StockEtfFieldAdjusted>("shares");
+  const [newValue, setNewValue] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const holding = useMemo(
+    () => holdings.find((row) => row.ticker === ticker.toUpperCase()),
+    [holdings, ticker]
+  );
+
+  const oldValue = useMemo(() => {
+    if (!holding) return null;
+    const capital = holding.totalInvestedNative;
+    const current = holding.currentValueNative;
+    switch (field) {
+      case "shares":
+        return holding.sharesHeld ?? 0;
+      case "capital_invested":
+        return capital;
+      case "current_value":
+        return current;
+      case "dividend":
+        return holding.manualTotalDividend;
+      case "fees":
+        return holding.manualTotalFees;
+      case "pl":
+        return current - capital;
+    }
+  }, [holding, field]);
+
+  useEffect(() => {
+    if (oldValue != null) {
+      setNewValue(String(oldValue));
+    }
+  }, [oldValue, field, ticker]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+
+    const result = await recordStockEtfFieldAdjustment({
+      adjustmentDate,
+      ticker: ticker.toUpperCase(),
+      field,
+      newValue: parseFloat(newValue) || 0,
+      notes: notes.trim() || null,
+    });
+
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <ModalShell title="Manual Adjustment" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4 p-4">
+        <p className="text-xs text-terminal-muted">
+          Correct share count, capital, current value, dividend, fees, or P/L.
+          Use only when transaction history needs a correction.
+        </p>
+        <DateField
+          label="Date"
+          value={adjustmentDate}
+          onChange={setAdjustmentDate}
+        />
+        <label className="block space-y-1">
+          <span className="text-[10px] uppercase text-terminal-muted">Ticker</span>
+          <input
+            className={inputClass}
+            list="stock-etf-adjustment-tickers"
+            value={ticker}
+            onChange={(e) => setTicker(e.target.value.toUpperCase())}
+            required
+          />
+          <datalist id="stock-etf-adjustment-tickers">
+            {holdings.map((row) => (
+              <option key={row.id} value={row.ticker} />
+            ))}
+          </datalist>
+        </label>
+        <label className="block space-y-1">
+          <span className="text-[10px] uppercase text-terminal-muted">
+            Field Adjusted
+          </span>
+          <select
+            className={inputClass}
+            value={field}
+            onChange={(e) => setField(e.target.value as StockEtfFieldAdjusted)}
+          >
+            {ADJUSTMENT_FIELDS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block space-y-1">
+          <span className="text-[10px] uppercase text-terminal-muted">Old Value</span>
+          <input
+            className={`${inputClass} opacity-70`}
+            value={oldValue != null ? String(oldValue) : "—"}
+            readOnly
+            tabIndex={-1}
+          />
+        </label>
+        <AmountField label="New Value" value={newValue} onChange={setNewValue} />
+        <NotesField value={notes} onChange={setNotes} />
+        {error && <p className="text-xs text-loss">{error}</p>}
+        <ModalActions
+          saving={saving}
+          onClose={onClose}
+          submitLabel="Save Adjustment"
+        />
+      </form>
+    </ModalShell>
+  );
+}
+
 function MarketField({
   value,
   onChange,
@@ -240,15 +492,17 @@ function ModalShell({
 }
 
 function DateField({
+  label = "Date",
   value,
   onChange,
 }: {
+  label?: string;
   value: string;
   onChange: (v: string) => void;
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] uppercase text-terminal-muted">Date</span>
+      <span className="text-[10px] uppercase text-terminal-muted">{label}</span>
       <input
         type="date"
         className={inputClass}

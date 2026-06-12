@@ -613,7 +613,7 @@ export interface PortfolioOverride {
   manual_crypto_holdings_sgd: number | null;
   manual_crypto_contributions_sgd: number | null;
   manual_client_portfolio_sgd: number;
-  stock_etf_tracking_mode: string;
+  stock_etf_tracking_mode?: string;
   override_reason: string | null;
   override_updated_at: string | null;
   created_at: string;
